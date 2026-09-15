@@ -65,21 +65,42 @@ APP-MENSAJERIA-IES/
 
 ### Backend
 
-cd backend
-python -m venv venv
-source venv/bin/activate        # Linux/Mac
-venv\Scripts\activate           # Windows
-pip install -r requirements.txt
+# 1) python -m venv venv
+
+venv\Scripts\activate # Windows
+
+# 2) Instalar FastAPI (con extras estandar)
+
+pip install "fastapi[standard]"
+
+# 3) Levantar el servidor (desarrollo)
+
 fastapi dev main.py
-Backend disponible en: http://localhost:8000
-Documentación API: http://localhost:8000/docs
+
+# -> http://127.0.0.1:8000
+# -> Docs: http://127.0.0.1:8000/docs
 
 ### Frontend
-bash
+
+# 1. Entrar a la carpeta
+
 cd frontend
+
+# 2. Crear el proyecto
+
+npm create vite@latest . -- --template react
+
+# 3. Instalar dependencias
+
 npm install
+
+# 4. Iniciar el servidor de desarrollo
+
 npm run dev
-Frontend disponible en: http://localhost:5173
+
+# VITE v5.x ready in 300 ms
+
+# > Local: http://localhost:5173/
 
 #### Funcionalidades
 Obligatorias (Requisitos 1-5)
