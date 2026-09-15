@@ -1,0 +1,76 @@
+# ============================================
+# PYTHON (BACKEND)
+# ============================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ============================================
+# NODE (FRONTEND)
+# ============================================
+node_modules/
+dist/
+build/
+.vite/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ============================================
+# VARIABLES DE ENTORNO
+# ============================================
+.env
+.env.local
+.env.*.local
+*.env
+
+# ============================================
+# BASE DE DATOS
+# ============================================
+*.sqlite3
+*.db
+*.sql.gz
+
+# ============================================
+# EDITORES
+# ============================================
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# ============================================
+# SISTEMA OPERATIVO
+# ============================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================================
+# ALEMBIC / MIGRACIONES (opcional)
+# ============================================
+# alembic/versions/*.pyc
+
+# ============================================
+# ARCHIVOS DE PRUEBA / TEMPORALES
+# ============================================
+*.tmp
+*.bak
+*.old
