@@ -5,12 +5,14 @@ Documentación del modelo de datos del sistema.
 ## Entidades Principales
 
 Usuarios
-usuario(id_usuario, nombre_usuario, email, fecha_registro, activo)
+usuario(id_usuario, nombre_usuario, email, contrasenia,fecha_registro, activo)
 id_usuario: Identificador único del usuario (PK).
 
 nombre_usuario: Nombre único del usuario.
 
 email: Correo electrónico único.
+
+contrasenia: contrasenia del usuario(para login)
 
 fecha_registro: Fecha y hora de registro.
 
