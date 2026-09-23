@@ -1,0 +1,43 @@
+.card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  background-color: var(--color-blanco);
+  color: var(--texto-oscuro);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.card--padding-sm { padding: var(--space-sm); }
+.card--padding-md { padding: var(--space-md); }
+.card--padding-lg { padding: var(--space-lg); }
+
+.card__content {
+  flex: 1;
+  font-weight: 700;
+  color: inherit;
+}
+
+.card__chevron {
+  color: var(--texto-secundario);
+  flex-shrink: 0;
+}
+
+.card--clickable {
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.15s ease;
+}
+
+.card--clickable:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.card--clickable:active {
+  transform: scale(0.99);
+}
+
+@media (min-width: 768px) {
+  .card {
+    box-shadow: var(--shadow-md);
+  }
+} 
