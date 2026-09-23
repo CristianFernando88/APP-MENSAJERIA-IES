@@ -1,0 +1,22 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-md);
+}
+
+.sidebar__link {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  color: var(--text-on-dark);
+  font-weight: 600;
+  transition: background 0.2s ease;
+}
+
+.sidebar__link:hover {
+  background: var(--bg-surface);
+}
+
+.sidebar__link--active {
+  background: var(--bg-surface-hover);
+}

@@ -1,0 +1,12 @@
+body {
+  font-family: var(--font-base);
+  color: var(--text-primary);
+  background: var(--bg-gradient);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+/* Contenedor de la app cuando NO usás el layout (login, etc.) */
+#root {
+  min-height: 100vh;
+}
