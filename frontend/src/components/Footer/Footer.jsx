@@ -1,9 +1,12 @@
-import './Footer.css';
+// components/Footer/Footer.jsx
+import "./Footer.css";
 
-const Footer = () => (
-  <footer className="footer">
-    <span>© 2026 IES Connect</span>
-  </footer>
-);
+export default function Footer() {
+  const year = new Date().getFullYear();
 
-export default Footer;
+  return (
+    <footer className="footer">
+      <p className="footer__text">IES Conect © {year}</p>
+    </footer>
+  );
+}

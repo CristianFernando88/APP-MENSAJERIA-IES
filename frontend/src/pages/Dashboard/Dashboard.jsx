@@ -49,7 +49,6 @@ export default function Dashboard() {
         <CheckCircle2 size={20} />
         <span>Recordatorios</span>
       </div>
-//
       <div className="dashboard__reminders">
         {recordatorios.map(({ id, icon, texto }) => (
           <Card key={id} icon={icon}>
