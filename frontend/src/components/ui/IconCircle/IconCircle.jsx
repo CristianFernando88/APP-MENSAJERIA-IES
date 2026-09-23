@@ -1,3 +1,4 @@
+// components/ui/IconCircle/IconCircle.jsx
 import "./IconCircle.css";
 
 export default function IconCircle({ icon: Icon, size = 22 }) {

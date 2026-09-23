@@ -23,5 +23,5 @@ export default function Card({
       <div className="card__content">{children}</div>
       {chevron && <ChevronRight className="card__chevron" size={22} />}
     </div>
-  );
+  ); 
 }
