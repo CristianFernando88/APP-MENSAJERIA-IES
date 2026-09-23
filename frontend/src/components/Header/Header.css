@@ -1,13 +1,115 @@
 .header {
+  grid-area: header;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-md);
   padding: 0 var(--space-md);
-  color: var(--text-on-dark);
-  background: transparent;
+  background: var(--gradiente-app);
+  color: var(--texto-claro);
+  box-shadow: var(--shadow-sm);
+  z-index: var(--z-header);
+}
+
+.header__left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.header__menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--texto-claro);
+  cursor: pointer;
 }
 
 .header__logo {
-  font-weight: var(--font-black);
-  font-size: 1.1rem;
+  font-weight: 700;
+  font-size: var(--font-size-md);
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.header__nav {
+  display: none;
+}
+
+.header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.header__icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--texto-claro);
+  cursor: pointer;
+  opacity: 0.9;
+  transition: opacity 0.15s ease;
+}
+
+.header__icon-btn:hover {
+  opacity: 1;
+}
+
+.header__mobile-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-azul-marino);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-sm) 0;
+  z-index: var(--z-header);
+}
+
+.header__mobile-link {
+  padding: var(--space-md) var(--space-lg);
+  color: var(--texto-claro);
+  font-size: var(--font-size-md);
+}
+
+.header__mobile-link--active {
+  background-color: var(--color-teal-medio);
+  font-weight: 700;
+}
+
+@media (min-width: 768px) {
+  .header__menu-btn {
+    display: none;
+  }
+
+  .header__nav {
+    display: flex;
+    gap: var(--space-lg);
+  }
+
+  .header__nav-link {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-menta-palido);
+    padding: var(--space-sm) 0;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .header__nav-link:hover {
+    color: var(--texto-claro);
+  }
+
+  .header__nav-link--active {
+    color: var(--texto-claro);
+    border-bottom-color: var(--color-turquesa-claro);
+  }
+
+  .header__mobile-menu {
+    display: none;
+  }
 }

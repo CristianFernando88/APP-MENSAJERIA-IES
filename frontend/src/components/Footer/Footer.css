@@ -1,7 +1,14 @@
+/* components/Footer/Footer.css */
 .footer {
-  padding: var(--space-sm) var(--space-md);
-  color: var(--text-on-dark);
-  font-size: 0.85rem;
-  text-align: center;
-  opacity: 0.8;
+  grid-area: footer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-azul-marino);
+  border-top: 1px solid var(--color-teal-medio);
+}
+
+.footer__text {
+  font-size: var(--font-size-sm);
+  color: var(--color-celeste-gris);
 }
