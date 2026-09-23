@@ -1,0 +1,11 @@
+.icon-circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-color: var(--color-gris-azulado);
+  color: var(--color-verde-teal);
+  flex-shrink: 0;
+}
