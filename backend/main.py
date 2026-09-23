@@ -6,7 +6,7 @@ from app.core.db import Base, engine
 from app import models  # noqa: F401 — registra los modelos en Base.metadata
 
 # aca importamos las rutas
-# from app.api.v1.usuarios.router import router as usuarios_router
+from app.api.v1.usuarios.router import router as usuarios_router
 # from app.api.v1.servidores.router import router as servidores_router
 # from app.api.v1.categorias.router import router as categorias_router
 # from app.api.v1.canales.router import router as canales_router
@@ -32,7 +32,7 @@ app.add_middleware(
 Base.metadata.create_all(bind=engine)
 
 # Aca van los routers
-# app.include_router(usuarios_router, prefix="/api/v1/usuarios", tags=["Usuarios"])
+app.include_router(usuarios_router, prefix="/api/v1")
 # app.include_router(servidores_router, prefix="/api/v1/servidores", tags=["Servidores"])
 # app.include_router(categorias_router, prefix="/api/v1/categorias", tags=["Categorías"])
 # app.include_router(canales_router, prefix="/api/v1/canales", tags=["Canales"])
@@ -50,13 +50,6 @@ def root():
         "app": "APP MENSAJERÍA API",
         "version": "1.0.0",
         "docs": "/docs",
-        "endpoints": [
-            # "/api/v1/usuarios",
-            # "/api/v1/servidores",
-            # "/api/v1/categorias",
-            # "/api/v1/canales",
-            # "/api/v1/mensajes",
-        ],
     }
 
 
