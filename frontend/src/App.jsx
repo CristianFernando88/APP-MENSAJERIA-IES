@@ -1,22 +1,31 @@
-import './App.css';
-import Layout from './components/Layout/Layout';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import Dashboard from './pages/Dashboard/Dashboard';
-import NotFound from './pages/NotFound/NotFound';
+import { Routes, Route } from "react-router-dom";
+import Layout from "./components/Layout/Layout";
+import Dashboard from "./pages/Dashboard/Dashboard";
+import Servidores from "./pages/Servidores/servidores";
+//import Canales from "./pages/Canales/Canales";
+//import Usuarios from "./pages/Usuarios/Usuarios";
+//import Mensajes from "./pages/Mensajes/Mensajes";
+//import Calendario from "./pages/Calendario/Calendario";
+//import Tareas from "./pages/Tareas/Tareas";
+//import Comunicados from "./pages/Comunicados/Comunicados";
+//import Perfil from "./pages/Perfil/Perfil";
+//import Login from "./pages/Login/Login";
+import NotFound from "./pages/NotFound/NotFound";
 
-function App() {
+export default function App() {
   return (
-    <Layout>
-      <Routes>
-        <Route path='/' element={<Navigate to="/dashboard" replace />} />
-        <Route path='/dashboard' element={<Dashboard />} />
-        {/* <Route path='/servidores' element={<Servidores />} />
-        <Route path='/usuarios' element={<Usuarios />} />
-        <Route path='/mensajes' element={<Mensajes />} /> */}
-        <Route path='*' element={<NotFound />} />
-      </Routes>
-    </Layout>
+    <Routes>
+      {/*<Route path="/login" element={<Login />} />*/}
+      <Route path="/" element={<Layout><Dashboard /></Layout>} />
+      {/*<Route path="/calendario" element={<Layout><Calendario /></Layout>} />*/}
+      {/*<Route path="/tareas" element={<Layout><Tareas /></Layout>} />*/}
+      <Route path="/servidores" element={<Layout><Servidores /></Layout>} />
+      {/*<Route path="/canales" element={<Layout><Canales /></Layout>} />*/}
+      {/*<Route path="/usuarios" element={<Layout><Usuarios /></Layout>} />*/}
+      {/*<Route path="/mensajes" element={<Layout><Mensajes /></Layout>} />*/}
+      {/*<Route path="/comunicados" element={<Layout><Comunicados /></Layout>} />*/}
+      {/*<Route path="/perfil" element={<Layout><Perfil /></Layout>} />*/}
+      <Route path="*" element={<Layout><NotFound /></Layout>} />
+    </Routes>
   );
 }
-
-export default App;
