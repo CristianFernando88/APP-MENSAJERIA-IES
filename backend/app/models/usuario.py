@@ -19,5 +19,6 @@ class Usuario(Base):
 
     # Relaciones
     perfil = relationship("Perfil", back_populates="usuario", uselist=False)
+    roles = relationship("UsuarioRol", foreign_keys="UsuarioRol.usuario_id", back_populates="usuario")
     servidores = relationship("MiembroServidor", back_populates="usuario")
     mensajes = relationship("Mensaje", back_populates="usuario")
