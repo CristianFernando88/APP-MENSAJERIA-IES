@@ -34,15 +34,13 @@
   color: var(--texto-claro);
   font-weight: 700;
   cursor: pointer;
-  transition: transform 0.1s ease, background-color 0.15s ease;
+  transition: background-color 0.12s ease, transform 0.1s ease;
 }
 
-.dashboard__action:hover {
-  transform: translateY(-2px);
-}
-
-.dashboard__action--active {
+/* Efecto al presionar/clickear — mismo para los 3 */
+.dashboard__action:active {
   background-color: var(--color-turquesa-claro);
+  transform: scale(0.97);
 }
 
 .dashboard__section-title {
@@ -61,12 +59,10 @@
   gap: var(--space-md);
 }
 
-
 @media (min-width: 768px) {
   .dashboard {
     padding: var(--space-xl);
   }
-
 
   .dashboard__actions {
     grid-template-columns: repeat(3, minmax(0, 220px));
@@ -74,5 +70,9 @@
 
   .dashboard__reminders {
     max-width: 700px;
+  }
+
+  .dashboard__action:hover {
+    background-color: var(--color-teal-medio);
   }
 }

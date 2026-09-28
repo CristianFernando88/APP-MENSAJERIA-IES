@@ -1,12 +1,48 @@
 body {
-  font-family: var(--font-base);
-  color: var(--text-primary);
-  background: var(--bg-gradient);
-  background-attachment: fixed;
-  min-height: 100vh;
+  font-family: 'Arial', sans-serif;
+  background-color: var(--color-gris-azulado);
+  color: var(--texto-oscuro);
+  line-height: 1.5;
 }
 
-/* Contenedor de la app cuando NO usás el layout (login, etc.) */
-#root {
-  min-height: 100vh;
+/* ============================================================
+   Clases de contexto: se ponen en el CONTENEDOR (pantalla o
+   sección con fondo degradado) y el texto de adentro hereda
+   el color correcto automáticamente.
+   ============================================================ */
+
+.on-gradient {
+  background: var(--gradiente-app);
+  color: var(--texto-claro);
+}
+
+.on-gradient h1,
+.on-gradient h2,
+.on-gradient h3,
+.on-gradient p,
+.on-gradient span,
+.on-gradient label {
+  color: inherit;
+}
+
+.on-gradient .text-secondary {
+  color: var(--texto-claro-secundario);
+}
+
+.on-light {
+  background-color: var(--color-blanco);
+  color: var(--texto-oscuro);
+}
+
+.on-light .text-secondary {
+  color: var(--texto-secundario);
+}
+
+/* Scrollbar prolija (opcional) */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-azul-marino);
+  border-radius: var(--radius-pill);
 }

@@ -1,18 +1,28 @@
-import { useState } from "react";
-import { NavLink } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { useState, useRef, useEffect } from "react";
 import { Home, Bell, User, Menu, X } from "lucide-react";
+import UserMenu from "./UserMenu";
+import NotificationsPanel from "./NotificationsPanel";
 import "./Header.css";
 
-const NAV_LINKS = [
-  { to: "/", label: "Dashboard" },
-  { to: "/servidores", label: "Servidores" },
-  { to: "/canales", label: "Canales" },
-  { to: "/usuarios", label: "Usuarios" },
-  { to: "/mensajes", label: "Mensajes" },
-];
+export default function Header({ onMenuToggle, menuOpen }) {
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const userMenuRef = useRef(null);
+  const notifRef = useRef(null);
 
-export default function Header() {
-  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setUserMenuOpen(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setNotifOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   return (
     <header className="header">
@@ -20,59 +30,46 @@ export default function Header() {
         <button
           type="button"
           className="header__menu-btn"
-          onClick={() => setMenuOpen((prev) => !prev)}
+          onClick={onMenuToggle}
           aria-label={menuOpen ? "Cerrar menú" : "Abrir menú"}
           aria-expanded={menuOpen}
         >
           {menuOpen ? <X size={22} /> : <Menu size={22} />}
         </button>
-        <span className="header__logo">IES Conect</span>
+        <span className="header__logo">IES Connect</span>
       </div>
-
-      <nav className="header__nav">
-        {NAV_LINKS.map(({ to, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === "/"}
-            className={({ isActive }) =>
-              `header__nav-link${isActive ? " header__nav-link--active" : ""}`
-            }
-          >
-            {label}
-          </NavLink>
-        ))}
-      </nav>
 
       <div className="header__actions">
-        <button type="button" className="header__icon-btn" aria-label="Inicio">
+        <Link to="/" className="header__icon-btn" aria-label="Inicio">
           <Home size={22} />
-        </button>
-        <button type="button" className="header__icon-btn" aria-label="Notificaciones">
-          <Bell size={22} />
-        </button>
-        <button type="button" className="header__icon-btn" aria-label="Perfil">
-          <User size={22} />
-        </button>
-      </div>
+        </Link>
 
-      {menuOpen && (
-        <nav className="header__mobile-menu">
-          {NAV_LINKS.map(({ to, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === "/"}
-              className={({ isActive }) =>
-                `header__mobile-link${isActive ? " header__mobile-link--active" : ""}`
-              }
-              onClick={() => setMenuOpen(false)}
-            >
-              {label}
-            </NavLink>
-          ))}
-        </nav>
-      )}
+        <div className="header__user" ref={notifRef}>
+          <button
+            type="button"
+            className="header__icon-btn"
+            aria-label="Notificaciones"
+            aria-expanded={notifOpen}
+            onClick={() => setNotifOpen((prev) => !prev)}
+          >
+            <Bell size={22} />
+          </button>
+          {notifOpen && <NotificationsPanel />}
+        </div>
+
+        <div className="header__user" ref={userMenuRef}>
+          <button
+            type="button"
+            className="header__icon-btn"
+            aria-label="Perfil"
+            aria-expanded={userMenuOpen}
+            onClick={() => setUserMenuOpen((prev) => !prev)}
+          >
+            <User size={22} />
+          </button>
+          {userMenuOpen && <UserMenu onClose={() => setUserMenuOpen(false)} />}
+        </div>
+      </div>
     </header>
   );
 }
