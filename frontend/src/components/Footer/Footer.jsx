@@ -6,7 +6,7 @@ export default function Footer() {
 
   return (
     <footer className="footer">
-      <p className="footer__text">IES Conect © {year}</p>
+      <p className="footer__text">IES Connect © {year}</p>
     </footer>
   );
 }

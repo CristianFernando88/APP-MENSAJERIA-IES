@@ -1,0 +1,20 @@
+.canales__title {
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    margin-bottom: var(--space-md);
+}
+
+.canales__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.canales__item-name {
+    font-weight: 600;
+    margin-bottom: var(--space-xs);
+}
+
+@media (min-width: 768px) {
+    .canales__list { display: grid; grid-template-columns: repeat(3, 1fr); }
+}
