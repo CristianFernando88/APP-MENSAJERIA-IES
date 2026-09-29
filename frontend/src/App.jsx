@@ -4,7 +4,7 @@ import Dashboard from "./pages/Dashboard/Dashboard";
 import Servidores from "./pages/Servidores/servidores";
 import Canales from "./pages/Canales/Canales";
 //import Usuarios from "./pages/Usuarios/Usuarios";
-//import Mensajes from "./pages/Mensajes/Mensajes";
+import Mensajes from "./pages/Mensajes/Mensajes";
 //import Calendario from "./pages/Calendario/Calendario";
 //import Tareas from "./pages/Tareas/Tareas";
 //import Comunicados from "./pages/Comunicados/Comunicados";
@@ -22,7 +22,7 @@ export default function App() {
       <Route path="/servidores" element={<Layout><Servidores /></Layout>} />
       <Route path="/canales" element={<Layout><Canales /></Layout>} />
       {/*<Route path="/usuarios" element={<Layout><Usuarios /></Layout>} />*/}
-      {/*<Route path="/mensajes" element={<Layout><Mensajes /></Layout>} />*/}
+      {<Route path="/mensajes" element={<Layout><Mensajes /></Layout>} />}
       {/*<Route path="/comunicados" element={<Layout><Comunicados /></Layout>} />*/}
       {/*<Route path="/perfil" element={<Layout><Perfil /></Layout>} />*/}
       <Route path="*" element={<Layout><NotFound /></Layout>} />
