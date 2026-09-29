@@ -11,6 +11,7 @@ from app.api.v1.servidores.router import router as servidores_router
 from app.api.v1.categorias.router import router as categorias_router
 from app.api.v1.canales.router import router as canales_router
 from app.api.v1.mensajes.router import router as mensajes_router
+from app.api.v1.miembro_servidor.router import router as miembro_servidor_router
 
 
 app = FastAPI(
@@ -37,6 +38,7 @@ app.include_router(servidores_router, prefix="/api/v1")
 app.include_router(categorias_router, prefix="/api/v1")
 app.include_router(canales_router, prefix="/api/v1")
 app.include_router(mensajes_router, prefix="/api/v1")
+app.include_router(miembro_servidor_router, prefix="/api/v1")
 
 
 # ============================================
