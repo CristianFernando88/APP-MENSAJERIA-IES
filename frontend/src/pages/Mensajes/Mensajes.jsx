@@ -1,4 +1,3 @@
-// pages/Mensajes/Mensajes.jsx
 import { useState } from "react";
 import { Send, Plus, Search, X, Hash } from "lucide-react";
 import Modal from "../../components/ui/Modal/Modal";
@@ -93,7 +92,6 @@ export default function Mensajes() {
     return true;
   });
 
-  // Regla de roles: admin habla con tutores/alumnos; tutor/alumno solo con admins
   const contactosPermitidos = CONTACTOS.filter((c) =>
     rolPrueba === "admin" ? c.rol !== "admin" : c.rol === "admin"
   );
