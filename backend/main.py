@@ -43,6 +43,7 @@ app.include_router(mensajes_router, prefix="/api/v1")
 app.include_router(miembro_servidor_router, prefix="/api/v1")
 app.include_router(roles_router, prefix="/api/v1")
 app.include_router(recordatorios_router, prefix="/api/v1")
+app.include_router(notificaciones_router, prefix="/api/v1")
 
 
 # ============================================
