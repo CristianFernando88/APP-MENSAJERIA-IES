@@ -1,0 +1,27 @@
+.usuarios__title {
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    margin-bottom: var(--space-md);
+}
+
+.usuarios__list { display: flex; flex-direction: column; }
+
+.usuarios__item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm) 0;
+    border-bottom: 1px solid var(--color-gris-azulado);
+}
+
+.usuarios__item:last-child { border-bottom: none; }
+
+.usuarios__name {
+    font-weight: 600;
+    display: block;
+}
+
+.usuarios__email {
+    font-size: var(--font-size-sm);
+    color: var(--texto-secundario);
+}

@@ -3,6 +3,8 @@ import Layout from "./components/Layout/Layout";
 import Dashboard from "./pages/Dashboard/Dashboard";
 import Servidores from "./pages/Servidores/servidores";
 import Canales from "./pages/Canales/Canales";
+import Usuarios from "./pages/Usuarios/Usuarios";
+//import Mensajes from "./pages/Mensajes/Mensajes";
 //import Usuarios from "./pages/Usuarios/Usuarios";
 import Mensajes from "./pages/Mensajes/Mensajes";
 //import Calendario from "./pages/Calendario/Calendario";
@@ -21,6 +23,8 @@ export default function App() {
       {/*<Route path="/tareas" element={<Layout><Tareas /></Layout>} />*/}
       <Route path="/servidores" element={<Layout><Servidores /></Layout>} />
       <Route path="/canales" element={<Layout><Canales /></Layout>} />
+      <Route path="/usuarios" element={<Layout><Usuarios /></Layout>} />
+      {/*<Route path="/mensajes" element={<Layout><Mensajes /></Layout>} />*/}
       {/*<Route path="/usuarios" element={<Layout><Usuarios /></Layout>} />*/}
       {<Route path="/mensajes" element={<Layout><Mensajes /></Layout>} />}
       {/*<Route path="/comunicados" element={<Layout><Comunicados /></Layout>} />*/}
