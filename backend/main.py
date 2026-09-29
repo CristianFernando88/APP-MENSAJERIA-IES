@@ -14,6 +14,7 @@ from app.api.v1.mensajes.router import router as mensajes_router
 from app.api.v1.miembro_servidor.router import router as miembro_servidor_router
 from app.api.v1.roles.router import router as roles_router
 from app.api.v1.comunicados.router import router as comunicados_router
+from app.api.v1.recordatorios.router import router as recordatorios_router
 
 
 app = FastAPI(
@@ -43,6 +44,8 @@ app.include_router(mensajes_router, prefix="/api/v1")
 app.include_router(miembro_servidor_router, prefix="/api/v1")
 app.include_router(roles_router, prefix="/api/v1")
 app.include_router(comunicados_router, prefix="/api/v1")
+app.include_router(recordatorios_router, prefix="/api/v1")
+app.include_router(notificaciones_router, prefix="/api/v1")
 
 
 # ============================================
