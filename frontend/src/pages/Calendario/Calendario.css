@@ -1,0 +1,2 @@
+.calendario__title { font-size: var(--font-size-lg); font-weight: 700; margin-bottom: var(--space-md); }
+.calendario__list { display: flex; flex-direction: column; gap: var(--space-sm); }
