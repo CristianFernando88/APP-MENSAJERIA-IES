@@ -12,7 +12,7 @@ class Comunicado(Base):
     contenido = Column(Text, nullable=False)
     fecha_publicacion = Column(DateTime, default=datetime.utcnow)
     publicado_por = Column(Integer, ForeignKey("usuario.id_usuario"), nullable=False)
-        tipo = Column(String(20), nullable=False, default="global")
+    tipo = Column(String(20), nullable=False, default="global")
 
     # Relaciones
     autor = relationship("Usuario", foreign_keys=[publicado_por])
