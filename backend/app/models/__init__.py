@@ -11,6 +11,12 @@ from app.models.mensaje import Mensaje
 from app.models.comunicado import Comunicado
 from app.models.notificacion import Notificacion
 from app.models.recordatorio import Recordatorio
+from app.models.miembro_canal import MiembroCanal
+from app.models.mensaje_directo import MensajeDirecto
+from app.models.comunicado_destinatario import ComunicadoDestinatario
+from app.models.comunicado_visto import ComunicadoVisto
+from app.models.mensaje_visto import MensajeVisto
+from app.models.relacion_usuario import RelacionUsuario
 
 __all__ = [
     "Usuario",
