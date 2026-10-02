@@ -16,6 +16,5 @@ class Comunicado(Base):
 
     # Relaciones
     autor = relationship("Usuario", foreign_keys=[publicado_por])
-    servidor = relationship("Servidor")
     destinatarios = relationship("ComunicadoDestinatario", back_populates="comunicado")
     vistas = relationship("ComunicadoVisto", back_populates="comunicado")
