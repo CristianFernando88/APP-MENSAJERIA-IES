@@ -18,3 +18,5 @@ class Servidor(Base):
     categorias = relationship("Categoria", back_populates="servidor", cascade="all, delete-orphan")
     canales = relationship("Canal", back_populates="servidor", cascade="all, delete-orphan")
     miembros = relationship("MiembroServidor", back_populates="servidor", cascade="all, delete-orphan")
+    relacionados = relationship("RelacionUsuario", foreign_keys="RelacionUsuario.relacionado_id", back_populates="relacionado")
+    comunicados = relationship("Comunicado", back_populates="servidor")

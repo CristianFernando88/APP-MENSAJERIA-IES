@@ -17,3 +17,4 @@ class Mensaje(Base):
     # Relaciones
     usuario = relationship("Usuario", back_populates="mensajes")
     canal = relationship("Canal", back_populates="mensajes")
+    vistas = relationship("MensajeVisto", back_populates="mensaje", cascade="all, delete-orphan")

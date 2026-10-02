@@ -13,9 +13,11 @@ class Canal(Base):
     creador_id = Column(Integer, ForeignKey("usuario.id_usuario"), nullable=False)
     categoria_id = Column(Integer, ForeignKey("categoria.id_categoria"), nullable=True)
     orden = Column(Integer, default=0)
+    tipo = Column(String(20), nullable=False, default="chat")
 
     # Relaciones
     servidor = relationship("Servidor", back_populates="canales")
     creador = relationship("Usuario")
     categoria = relationship("Categoria", back_populates="canales")
     mensajes = relationship("Mensaje", back_populates="canal", cascade="all, delete-orphan")
+    miembros = relationship("MiembroCanal", back_populates="canal", cascade="all, delete-orphan")
