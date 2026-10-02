@@ -31,4 +31,10 @@ __all__ = [
     "Comunicado",
     "Notificacion",
     "Recordatorio",
+    "MiembroCanal",
+    "MensajeDirecto",
+    "ComunicadoDestinatario",
+    "ComunicadoVisto",
+    "MensajeVisto",
+    "RelacionUsuario",
 ]
