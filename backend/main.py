@@ -21,6 +21,7 @@ from app.api.v1.notificaciones.router import router as notificaciones_router
 from app.api.v1.mensaje_directo.router import router as mensaje_directo_router
 from app.api.v1.comunicado_destinatario.router import router as comunicado_destinatario_router
 from app.api.v1.comunicado_visto.router import router as comunicado_visto_router
+from app.api.v1.mensaje_visto.router import router as mensaje_visto_router
 
 
 app = FastAPI(
@@ -57,6 +58,7 @@ app.include_router(comunicado_destinatario_router, prefix="/api/v1")
 app.include_router(recordatorios_router, prefix="/api/v1")
 app.include_router(notificaciones_router, prefix="/api/v1")
 app.include_router(comunicado_visto_router, prefix="/api/v1")
+app.include_router(mensaje_visto_router, prefix="/api/v1")
 
 
 
