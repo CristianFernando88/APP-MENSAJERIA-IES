@@ -8,8 +8,7 @@ import Usuarios from "./pages/Usuarios/Usuarios";
 //import Usuarios from "./pages/Usuarios/Usuarios";
 import Mensajes from "./pages/Mensajes/Mensajes";
 import Calendario from "./pages/Calendario/Calendario";
-//import Tareas from "./pages/Tareas/Tareas";
-//import Comunicados from "./pages/Comunicados/Comunicados";
+import Comunicados from "./pages/Comunicados/Comunicados";
 //import Perfil from "./pages/Perfil/Perfil";
 //import Login from "./pages/Login/Login";
 import NotFound from "./pages/NotFound/NotFound";
@@ -20,14 +19,12 @@ export default function App() {
       {/*<Route path="/login" element={<Login />} />*/}
       <Route path="/" element={<Layout><Dashboard /></Layout>} />
       <Route path="/calendario" element={<Layout><Calendario /></Layout>} />
-      {/*<Route path="/tareas" element={<Layout><Tareas /></Layout>} />*/}
       <Route path="/servidores" element={<Layout><Servidores /></Layout>} />
       <Route path="/canales" element={<Layout><Canales /></Layout>} />
       <Route path="/usuarios" element={<Layout><Usuarios /></Layout>} />
       {/*<Route path="/mensajes" element={<Layout><Mensajes /></Layout>} />*/}
-      {/*<Route path="/usuarios" element={<Layout><Usuarios /></Layout>} />*/}
       {<Route path="/mensajes" element={<Layout><Mensajes /></Layout>} />}
-      {/*<Route path="/comunicados" element={<Layout><Comunicados /></Layout>} />*/}
+      {<Route path="/comunicados" element={<Layout><Comunicados /></Layout>} />}
       {/*<Route path="/perfil" element={<Layout><Perfil /></Layout>} />*/}
       <Route path="*" element={<Layout><NotFound /></Layout>} />
     </Routes>
