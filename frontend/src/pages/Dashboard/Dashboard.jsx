@@ -1,11 +1,11 @@
 import { useNavigate } from "react-router-dom";
-import { Calendar, ClipboardList, MessageCircle, Bell, CreditCard, CheckCircle2 } from "lucide-react";
+import { Calendar, Megaphone, MessageCircle, Bell, CreditCard, CheckCircle2 } from "lucide-react";
 import Card from "../../components/ui/Card/Card";
 import "./Dashboard.css";
 
 const accesos = [
   { key: "calendario", label: "Calendario", icon: Calendar, to: "/calendario" },
-  { key: "tareas", label: "Tareas", icon: ClipboardList, to: "/tareas" },
+  { key: "comunicados", label: "Comunicados", icon: Megaphone, to: "/comunicados" },
   { key: "mensajes", label: "Mensajes", icon: MessageCircle, to: "/mensajes" },
 ];
 
@@ -20,9 +20,7 @@ export default function Dashboard() {
   return (
     <section className="on-gradient dashboard">
       <div className="dashboard__greeting">
-        <h1>
-          HOLA <span className="dashboard__name">Carlos!</span>
-        </h1>
+        <h1>HOLA <span className="dashboard__name">Carlos!</span></h1>
         <p className="text-secondary">Hijo: Mateo Castro</p>
         <p className="text-secondary">Curso: 4to Grado A</p>
       </div>
@@ -43,9 +41,7 @@ export default function Dashboard() {
 
       <div className="dashboard__reminders">
         {recordatorios.map(({ id, icon, texto }) => (
-          <Card key={id} icon={icon}>
-            {texto}
-          </Card>
+          <Card key={id} icon={icon}>{texto}</Card>
         ))}
       </div>
     </section>

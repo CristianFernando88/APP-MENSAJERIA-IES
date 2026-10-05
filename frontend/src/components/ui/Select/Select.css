@@ -1,0 +1,26 @@
+.select {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  width: 100%;
+}
+
+.select__label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--texto-secundario);
+}
+
+.select__field {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-celeste-gris);
+  background-color: var(--color-blanco);
+  color: var(--texto-oscuro);
+  font-size: var(--font-size-md);
+}
+
+.select__field:focus {
+  outline: none;
+  border-color: var(--color-turquesa-claro);
+}
