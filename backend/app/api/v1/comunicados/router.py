@@ -30,12 +30,7 @@ def crear(data: ComunicadoCreate, db: Session = Depends(get_db)):
     ok, error = repo.ensure_usuario(db, data.publicado_por)
     if not ok:
         raise HTTPException(status_code=400, detail=error)
-
-    if data.servidor_id is not None:
-        ok, error = repo.ensure_servidor(db, data.servidor_id)
-        if not ok:
-            raise HTTPException(status_code=400, detail=error)
-
+    
     return repo.create(db, data)
 
 

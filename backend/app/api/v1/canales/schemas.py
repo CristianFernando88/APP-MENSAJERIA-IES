@@ -1,3 +1,4 @@
+from typing import Literal
 from pydantic import BaseModel, Field
 
 
@@ -5,6 +6,7 @@ class CanalBase(BaseModel):
     nombre: str = Field(min_length=2, max_length=100)
     descripcion: str | None = None
     orden: int = Field(default=0, ge=0)
+    tipo: Literal["informativo", "chat"] = "chat"
 
 
 class CanalCreate(CanalBase):
@@ -18,6 +20,7 @@ class CanalUpdate(BaseModel):
     descripcion: str | None = None
     categoria_id: int | None = Field(default=None, ge=1)
     orden: int | None = Field(default=None, ge=0)
+    tipo: Literal["informativo", "chat"] | None = None
 
 
 class CanalResponse(CanalBase):

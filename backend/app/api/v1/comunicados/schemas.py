@@ -1,11 +1,12 @@
 from datetime import datetime
+from typing import Literal
 from pydantic import BaseModel, Field
 
 
 class ComunicadoBase(BaseModel):
     titulo: str = Field(min_length=1, max_length=200)
     contenido: str = Field(min_length=1)
-    servidor_id: int | None = Field(default=None, ge=1)
+    tipo: Literal["global", "servidor", "canal", "usuario"] = "global"
 
 
 class ComunicadoCreate(ComunicadoBase):
@@ -15,7 +16,7 @@ class ComunicadoCreate(ComunicadoBase):
 class ComunicadoUpdate(BaseModel):
     titulo: str | None = Field(default=None, min_length=1, max_length=200)
     contenido: str | None = Field(default=None, min_length=1)
-    servidor_id: int | None = Field(default=None, ge=1)
+    tipo: Literal["global", "servidor", "canal", "usuario"] | None = None
 
 
 class ComunicadoResponse(ComunicadoBase):
