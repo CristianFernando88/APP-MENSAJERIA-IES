@@ -76,6 +76,7 @@ def create(db: Session, data: CanalCreate) -> Canal:
         creador_id=data.creador_id,
         categoria_id=data.categoria_id,
         orden=data.orden,
+        tipo=data.tipo,
     )
 
     db.add(nuevo)

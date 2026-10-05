@@ -2,7 +2,6 @@ from sqlalchemy.orm import Session
 
 from app.models.comunicado import Comunicado
 from app.models.usuario import Usuario
-from app.models.servidor import Servidor
 from .schemas import ComunicadoCreate, ComunicadoUpdate
 
 
@@ -25,13 +24,6 @@ def ensure_usuario(db: Session, usuario_id: int) -> tuple[bool, str]:
     return True, ""
 
 
-def ensure_servidor(db: Session, servidor_id: int) -> tuple[bool, str]:
-    servidor = db.query(Servidor).filter(
-        Servidor.id_servidor == servidor_id
-    ).first()
-    if servidor is None:
-        return False, f"El servidor {servidor_id} no existe"
-    return True, ""
 
 
 def create(db: Session, data: ComunicadoCreate) -> Comunicado:
@@ -39,7 +31,7 @@ def create(db: Session, data: ComunicadoCreate) -> Comunicado:
         titulo=data.titulo,
         contenido=data.contenido,
         publicado_por=data.publicado_por,
-        servidor_id=data.servidor_id,
+        tipo=data.tipo,
     )
     db.add(nuevo)
     db.commit()
