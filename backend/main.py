@@ -18,6 +18,7 @@ from app.api.v1.usuario_rol.router import router as usuario_rol_router
 from app.api.v1.comunicados.router import router as comunicados_router
 from app.api.v1.recordatorios.router import router as recordatorios_router
 from app.api.v1.notificaciones.router import router as notificaciones_router
+from app.api.v1.mensaje_directo.router import router as mensaje_directo_router
 
 
 app = FastAPI(
@@ -45,12 +46,14 @@ app.include_router(categorias_router, prefix="/api/v1")
 app.include_router(canales_router, prefix="/api/v1")
 app.include_router(mensajes_router, prefix="/api/v1")
 app.include_router(miembro_servidor_router, prefix="/api/v1")
+app.include_router(mensaje_directo_router, prefix="/api/v1")
 app.include_router(miembro_canal_router, prefix="/api/v1")
 app.include_router(roles_router, prefix="/api/v1")
 app.include_router(usuario_rol_router, prefix="/api/v1")
 app.include_router(comunicados_router, prefix="/api/v1")
 app.include_router(recordatorios_router, prefix="/api/v1")
 app.include_router(notificaciones_router, prefix="/api/v1")
+
 
 
 # ============================================
