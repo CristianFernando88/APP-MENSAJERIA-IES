@@ -8,15 +8,15 @@
 .input__label {
   font-size: var(--font-size-sm);
   font-weight: 600;
-  color: var(--texto-claro); /* pensado para fondos con gradiente, como el login */
+  color: var(--texto-secundario);
 }
 
 .input__field {
   padding: var(--space-md) var(--space-lg);
   border-radius: var(--radius-md);
-  border: none;
+  border: 1px solid var(--color-celeste-gris);
   background-color: var(--color-blanco);
-  color: var(--texto-secundario);
+  color: var(--texto-oscuro);
   font-size: var(--font-size-md);
   box-shadow: var(--shadow-sm);
 }
@@ -28,6 +28,12 @@
 .input__field:focus {
   outline: none;
   box-shadow: 0 0 0 2px var(--color-turquesa-claro);
+}
+
+.input__field:disabled {
+  background-color: var(--color-gris-azulado);
+  color: var(--texto-secundario);
+  cursor: not-allowed;
 }
 
 .input__field--error {

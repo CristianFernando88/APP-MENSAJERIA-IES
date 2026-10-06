@@ -5,24 +5,9 @@ body {
   line-height: 1.5;
 }
 
-/* ============================================================
-   Clases de contexto: se ponen en el CONTENEDOR (pantalla o
-   sección con fondo degradado) y el texto de adentro hereda
-   el color correcto automáticamente.
-   ============================================================ */
-
 .on-gradient {
   background: var(--gradiente-app);
   color: var(--texto-claro);
-}
-
-.on-gradient h1,
-.on-gradient h2,
-.on-gradient h3,
-.on-gradient p,
-.on-gradient span,
-.on-gradient label {
-  color: inherit;
 }
 
 .on-gradient .text-secondary {
@@ -38,7 +23,6 @@ body {
   color: var(--texto-secundario);
 }
 
-/* Scrollbar prolija (opcional) */
 ::-webkit-scrollbar {
   width: 8px;
 }

@@ -13,7 +13,7 @@
 }
 
 .dashboard__name {
-  color: var(--color-menta-palido);
+  color: var(--color-blanco);
 }
 
 .dashboard__actions {
@@ -37,7 +37,6 @@
   transition: background-color 0.12s ease, transform 0.1s ease;
 }
 
-/* Efecto al presionar/clickear — mismo para los 3 */
 .dashboard__action:active {
   background-color: var(--color-turquesa-claro);
   transform: scale(0.97);
