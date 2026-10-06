@@ -10,13 +10,13 @@ import Mensajes from "./pages/Mensajes/Mensajes";
 import Calendario from "./pages/Calendario/Calendario";
 import Comunicados from "./pages/Comunicados/Comunicados";
 //import Perfil from "./pages/Perfil/Perfil";
-//import Login from "./pages/Login/Login";
+import Login from "./pages/Login/Login";
 import NotFound from "./pages/NotFound/NotFound";
 
 export default function App() {
   return (
     <Routes>
-      {/*<Route path="/login" element={<Login />} />*/}
+      {<Route path="/login" element={<Login />} />}
       <Route path="/" element={<Layout><Dashboard /></Layout>} />
       <Route path="/calendario" element={<Layout><Calendario /></Layout>} />
       <Route path="/servidores" element={<Layout><Servidores /></Layout>} />

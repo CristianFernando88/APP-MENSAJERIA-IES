@@ -5,7 +5,7 @@ import "./Mensajes.css";
 
 
 const CONTACTOS = [
-  { id: 1, nombre: "Ayrton Díaz", rol: "admin", cargo: "Preceptor" },
+  { id: 1, nombre: "Martina Ruiz", rol: "admin", cargo: "Preceptor" },
   { id: 2, nombre: "Ana Pérez", rol: "admin", cargo: "Directora" },
   { id: 3, nombre: "Roberto Pérez", rol: "tutor", cargo: "Tutor de Mateo Castro" },
   { id: 4, nombre: "María Gómez", rol: "tutor", cargo: "Tutora de Sofía Gómez" },
