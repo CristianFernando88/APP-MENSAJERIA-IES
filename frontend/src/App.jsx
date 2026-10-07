@@ -11,6 +11,7 @@ import Calendario from "./pages/Calendario/Calendario";
 import Comunicados from "./pages/Comunicados/Comunicados";
 //import Perfil from "./pages/Perfil/Perfil";
 //import Login from "./pages/Login/Login";
+import Categorias from "./pages/Categorias/Categorias";
 import NotFound from "./pages/NotFound/NotFound";
 
 export default function App() {
@@ -22,9 +23,9 @@ export default function App() {
       <Route path="/servidores" element={<Layout><Servidores /></Layout>} />
       <Route path="/canales" element={<Layout><Canales /></Layout>} />
       <Route path="/usuarios" element={<Layout><Usuarios /></Layout>} />
+      <Route path="/categorias" element={<Layout><Categorias /></Layout>}/>
       {/*<Route path="/mensajes" element={<Layout><Mensajes /></Layout>} />*/}
-      {<Route path="/mensajes" element={<Layout><Mensajes /></Layout>} />}
-      {<Route path="/comunicados" element={<Layout><Comunicados /></Layout>} />}
+      <Route path="/comunicados" element={<Layout><Comunicados /></Layout>} />
       {/*<Route path="/perfil" element={<Layout><Perfil /></Layout>} />*/}
       <Route path="*" element={<Layout><NotFound /></Layout>} />
     </Routes>
