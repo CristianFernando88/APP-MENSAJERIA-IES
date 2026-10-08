@@ -12,7 +12,7 @@ class Usuario(Base):
     email = Column(String(100), unique=True, nullable=False)
     
     # Campo de contraseña. Por ahora es NULL porque no hay login.
-    contrasena_hash = Column(String(255), nullable=True)
+    contrasena_hash = Column(String(255), nullable=False)
     
     fecha_registro = Column(DateTime, default=datetime.utcnow)
     activo = Column(Boolean, default=True)

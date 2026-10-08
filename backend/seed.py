@@ -11,6 +11,7 @@ El script es idempotente: si los datos ya existen, no los duplica.
 """
 
 from app.core.db import SessionLocal, engine, Base
+from app.core.security import hashear_password  # ← NUEVO
 from app import models  # noqa: F401 — registra todos los modelos
 from app.models.usuario import Usuario
 from app.models.perfil import Perfil
@@ -71,24 +72,29 @@ def seed_roles():
 
 
 # ============================================
-# 2. USUARIOS
+# 2. USUARIOS (con contraseñas hasheadas)
 # ============================================
 def seed_usuarios():
     print("👤 Sembrando usuarios...")
     usuarios = [
-        {"nombre_usuario": "admin", "email": "admin@colegio.com"},
-        {"nombre_usuario": "director", "email": "director@colegio.com"},
-        {"nombre_usuario": "juanperez", "email": "juan@colegio.com"},
-        {"nombre_usuario": "mariagarcia", "email": "maria@colegio.com"},
-        {"nombre_usuario": "pedrolopez", "email": "pedro@colegio.com"},
-        {"nombre_usuario": "anamartinez", "email": "ana@colegio.com"},
-        {"nombre_usuario": "carloslopez", "email": "carlos@email.com"},
-        {"nombre_usuario": "luciafernandez", "email": "lucia@email.com"},
+        {"nombre_usuario": "admin", "email": "admin@colegio.com", "contrasena": "admin123"},
+        {"nombre_usuario": "director", "email": "director@colegio.com", "contrasena": "director123"},
+        {"nombre_usuario": "juanperez", "email": "juan@colegio.com", "contrasena": "profesor123"},
+        {"nombre_usuario": "mariagarcia", "email": "maria@colegio.com", "contrasena": "profesor123"},
+        {"nombre_usuario": "pedrolopez", "email": "pedro@colegio.com", "contrasena": "alumno123"},
+        {"nombre_usuario": "anamartinez", "email": "ana@colegio.com", "contrasena": "tutor123"},
+        {"nombre_usuario": "carloslopez", "email": "carlos@email.com", "contrasena": "tutor123"},
+        {"nombre_usuario": "luciafernandez", "email": "lucia@email.com", "contrasena": "tutor123"},
     ]
     for u in usuarios:
         if not existe(Usuario, nombre_usuario=u["nombre_usuario"]):
-            db.add(Usuario(**u, activo=True))
-            log(f"Usuario creado: {u['nombre_usuario']}")
+            db.add(Usuario(
+                nombre_usuario=u["nombre_usuario"],
+                email=u["email"],
+                contrasena_hash=hashear_password(u["contrasena"]),  # ← HASHEADA
+                activo=True,
+            ))
+            log(f"Usuario creado: {u['nombre_usuario']} (contraseña: {u['contrasena']})")
     db.commit()
 
 
