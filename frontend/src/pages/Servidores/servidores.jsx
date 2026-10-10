@@ -101,7 +101,7 @@ export default function Servidores() {
 
             <div className="servidores__item-actions">
               <Button size="sm" onClick={() => navigate("/canales")}>Ver canales</Button>
-              <Button size="sm" variant="outline" onClick={() => navigate("/miembros")}>Miembros</Button>
+              <Button size="sm" onClick={() => navigate("/miembros")}>Ver miembros</Button>
               <button className="servidores__icon-btn" onClick={() => abrirEditar(s)} aria-label="Editar">
                 <Pencil size={16} />
               </button>
