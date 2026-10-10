@@ -2,10 +2,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.db import Base, engine
+from app.core.db import engine
 from app import models  # noqa: F401 — registra los modelos en Base.metadata
 
 # aca importamos las rutas
+from app.api.v1.auth.router import router as auth_router
 from app.api.v1.usuarios.router import router as usuarios_router
 from app.api.v1.servidores.router import router as servidores_router
 from app.api.v1.categorias.router import router as categorias_router
@@ -44,6 +45,7 @@ app.add_middleware(
 #Base.metadata.create_all(bind=engine)
 
 # Aca van los routers
+app.include_router(auth_router, prefix="/api/v1")
 app.include_router(usuarios_router, prefix="/api/v1")
 app.include_router(servidores_router, prefix="/api/v1")
 app.include_router(categorias_router, prefix="/api/v1")
@@ -61,7 +63,6 @@ app.include_router(notificaciones_router, prefix="/api/v1")
 app.include_router(comunicado_visto_router, prefix="/api/v1")
 app.include_router(mensaje_visto_router, prefix="/api/v1")
 app.include_router(relacion_usuario_router, prefix="/api/v1")
-
 
 
 # ============================================

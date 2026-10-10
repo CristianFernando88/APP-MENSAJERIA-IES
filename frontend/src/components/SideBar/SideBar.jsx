@@ -8,6 +8,7 @@ import {
   Megaphone,
   Calendar,
   ClipboardList,
+  Tags,
 } from "lucide-react";
 import "./SideBar.css";
 
@@ -17,6 +18,7 @@ const NAV_LINKS = [
   { to: "/servidores", label: "Servidores", icon: Server },
   { to: "/canales", label: "Canales", icon: Hash },
   { to: "/usuarios", label: "Usuarios", icon: Users },
+  { to: "/categorias", label: "Categorias", icon: Tags},
   { to: "/mensajes", label: "Mensajes", icon: MessageSquare },
   { to: "/comunicados", label: "Comunicados", icon: Megaphone },
 ];

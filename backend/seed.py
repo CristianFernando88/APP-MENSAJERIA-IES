@@ -11,6 +11,7 @@ El script es idempotente: si los datos ya existen, no los duplica.
 """
 
 from app.core.db import SessionLocal, engine, Base
+from app.core.security import hashear_password
 from app import models  # noqa: F401 — registra todos los modelos
 from app.models.usuario import Usuario
 from app.models.perfil import Perfil
@@ -71,24 +72,29 @@ def seed_roles():
 
 
 # ============================================
-# 2. USUARIOS
+# 2. USUARIOS (con contraseñas hasheadas)
 # ============================================
 def seed_usuarios():
     print("👤 Sembrando usuarios...")
     usuarios = [
-        {"nombre_usuario": "admin", "email": "admin@colegio.com"},
-        {"nombre_usuario": "director", "email": "director@colegio.com"},
-        {"nombre_usuario": "juanperez", "email": "juan@colegio.com"},
-        {"nombre_usuario": "mariagarcia", "email": "maria@colegio.com"},
-        {"nombre_usuario": "pedrolopez", "email": "pedro@colegio.com"},
-        {"nombre_usuario": "anamartinez", "email": "ana@colegio.com"},
-        {"nombre_usuario": "carloslopez", "email": "carlos@email.com"},
-        {"nombre_usuario": "luciafernandez", "email": "lucia@email.com"},
+        {"nombre_usuario": "admin", "email": "admin@colegio.com", "contrasena": "admin123"},
+        {"nombre_usuario": "director", "email": "director@colegio.com", "contrasena": "director123"},
+        {"nombre_usuario": "juanperez", "email": "juan@colegio.com", "contrasena": "profesor123"},
+        {"nombre_usuario": "mariagarcia", "email": "maria@colegio.com", "contrasena": "profesor123"},
+        {"nombre_usuario": "pedrolopez", "email": "pedro@colegio.com", "contrasena": "alumno123"},
+        {"nombre_usuario": "anamartinez", "email": "ana@colegio.com", "contrasena": "tutor123"},
+        {"nombre_usuario": "carloslopez", "email": "carlos@email.com", "contrasena": "tutor123"},
+        {"nombre_usuario": "luciafernandez", "email": "lucia@email.com", "contrasena": "tutor123"},
     ]
     for u in usuarios:
         if not existe(Usuario, nombre_usuario=u["nombre_usuario"]):
-            db.add(Usuario(**u, activo=True))
-            log(f"Usuario creado: {u['nombre_usuario']}")
+            db.add(Usuario(
+                nombre_usuario=u["nombre_usuario"],
+                email=u["email"],
+                contrasena_hash=hashear_password(u["contrasena"]),
+                activo=True,
+            ))
+            log(f"Usuario creado: {u['nombre_usuario']} (contraseña: {u['contrasena']})")
     db.commit()
 
 
@@ -175,20 +181,34 @@ def seed_usuario_rol():
     if not secundaria:
         return
 
-    # Roles globales
-    rol_usuario = db.query(Rol).filter_by(nombre="usuario").first()
-    for nombre in ["director", "juanperez", "mariagarcia", "pedrolopez", "anamartinez", "carloslopez", "luciafernandez"]:
-        usuario = db.query(Usuario).filter_by(nombre_usuario=nombre).first()
-        if usuario and rol_usuario and not existe(UsuarioRol, usuario_id=usuario.id_usuario, rol_id=rol_usuario.id_rol, servidor_id=None):
+    # ==========================================
+    # ROLES GLOBALES
+    # ==========================================
+    asignaciones_globales = [
+        ("admin", "admin"),        # ← Admin del sistema
+        ("director", "usuario"),   # ← Usuario normal
+        ("juanperez", "usuario"),
+        ("mariagarcia", "usuario"),
+        ("pedrolopez", "usuario"),
+        ("anamartinez", "usuario"),
+        ("carloslopez", "usuario"),
+        ("luciafernandez", "usuario"),
+    ]
+    for nombre_usuario, nombre_rol in asignaciones_globales:
+        usuario = db.query(Usuario).filter_by(nombre_usuario=nombre_usuario).first()
+        rol = db.query(Rol).filter_by(nombre=nombre_rol).first()
+        if usuario and rol and not existe(UsuarioRol, usuario_id=usuario.id_usuario, rol_id=rol.id_rol, servidor_id=None):
             db.add(UsuarioRol(
                 usuario_id=usuario.id_usuario,
-                rol_id=rol_usuario.id_rol,
+                rol_id=rol.id_rol,
                 servidor_id=None,
             ))
-            log(f"Rol global 'usuario' asignado a: {nombre}")
+            log(f"Rol global '{nombre_rol}' asignado a: {nombre_usuario}")
 
-    # Roles de servidor
-    asignaciones = [
+    # ==========================================
+    # ROLES DE SERVIDOR
+    # ==========================================
+    asignaciones_servidor = [
         ("director", "director"),
         ("juanperez", "profesor"),
         ("mariagarcia", "profesor"),
@@ -197,7 +217,7 @@ def seed_usuario_rol():
         ("carloslopez", "tutor"),
         ("luciafernandez", "tutor"),
     ]
-    for nombre_usuario, nombre_rol in asignaciones:
+    for nombre_usuario, nombre_rol in asignaciones_servidor:
         usuario = db.query(Usuario).filter_by(nombre_usuario=nombre_usuario).first()
         rol = db.query(Rol).filter_by(nombre=nombre_rol).first()
         if usuario and rol and not existe(UsuarioRol, usuario_id=usuario.id_usuario, rol_id=rol.id_rol, servidor_id=secundaria.id_servidor):
