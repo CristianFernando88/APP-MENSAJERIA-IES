@@ -1,0 +1,14 @@
+.panel-admin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.panel-admin h1 {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+}
+
+.panel-admin p {
+  color: var(--texto-secundario);
+}
