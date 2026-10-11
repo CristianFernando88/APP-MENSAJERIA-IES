@@ -1,4 +1,3 @@
-// pages/Categorias/Categorias.jsx
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { FolderTree, ChevronRight, Plus } from "lucide-react";
@@ -41,13 +40,12 @@ export default function Categorias() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // TODO: reemplazar por POST real a services/api.js (servidor_id sale del servidor actual seleccionado)
     const nueva = {
       id_categoria: Date.now(),
       nombre: form.nombre,
       descripcion: form.descripcion,
       padre_id: form.padre_id ? Number(form.padre_id) : null,
-      servidor_id: 1, // TODO: servidor actual
+      servidor_id: 1,
       orden: categorias.length + 1,
     };
     setCategorias([...categorias, nueva]);
