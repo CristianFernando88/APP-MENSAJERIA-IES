@@ -55,7 +55,6 @@ export default function Canales() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // TODO: reemplazar por POST/PUT real a services/api.js
     const categoria_id = form.categoria_id ? Number(form.categoria_id) : null;
 
     if (editandoId) {

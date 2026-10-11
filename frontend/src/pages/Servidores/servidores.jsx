@@ -39,7 +39,6 @@ export default function Servidores() {
   };
 
   const handleEliminar = (servidor) => {
-    // TODO: reemplazar por confirm modal propio + DELETE real en services/api.js
     if (window.confirm(`¿Eliminar el servidor "${servidor.nombre}"?`)) {
       setServidores(servidores.filter((s) => s.id_servidor !== servidor.id_servidor));
     }
