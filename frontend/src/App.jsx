@@ -8,9 +8,8 @@ import Categorias from "./pages/Categorias/Categorias";
 import Usuarios from "./pages/Usuarios/Usuarios";
 import Mensajes from "./pages/Mensajes/Mensajes";
 import Calendario from "./pages/Calendario/Calendario";
-// import Tareas from "./pages/Tareas/Tareas";
 import Comunicados from "./pages/Comunicados/Comunicados";
-// import Perfil from "./pages/Perfil/Perfil";
+import Perfil from "./pages/Perfil/Perfil";
 import Miembros from "./pages/Miembros/Miembros";
 import PanelAdmin from "./pages/PanelAdmin/PanelAdmin";
 import Login from "./pages/Login/Login";
@@ -60,6 +59,17 @@ export default function App() {
           <RequireAuth>
             <Layout>
               <Comunicados />
+            </Layout>
+          </RequireAuth>
+        }
+      />
+      
+      <Route
+        path="/perfil"
+        element={
+          <RequireAuth>
+            <Layout>
+              <Perfil />
             </Layout>
           </RequireAuth>
         }
