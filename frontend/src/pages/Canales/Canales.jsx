@@ -4,85 +4,126 @@ import Button from "../../components/ui/Button/Button";
 import Input from "../../components/ui/Input/Input";
 import Select from "../../components/ui/Select/Select";
 import Modal from "../../components/ui/Modal/Modal";
-import { listarCanales } from "../../api/canales";
+import { listarCanales, crearCanal, actualizarCanal, eliminarCanal } from "../../api/canales";
+import { listarServidores } from "../../api/servidores";
+import { listarCategorias } from "../../api/categorias";
+import { useAuth } from "../../context/AuthContext";
 import "./Canales.css";
-
-const categoriasDisponibles = [
-  { value: 1, label: "Institucional" },
-  { value: 2, label: "Soporte" },
-];
 
 const tiposDisponibles = [
   { value: "informativo", label: "Informativo (solo admins escriben)" },
   { value: "chat", label: "Chat (todos escriben)" },
 ];
 
-const formVacio = { nombre: "", categoria_id: "", tipo: "chat" };
+const formVacio = { nombre: "", servidor_id: "", categoria_id: "", tipo: "chat" };
 
 export default function Canales() {
+  const { user } = useAuth();
+
   const [canales, setCanales] = useState([]);
+  const [servidores, setServidores] = useState([]);
+  const [categorias, setCategorias] = useState([]);
+  const [busqueda, setBusqueda] = useState("");
 
   useEffect(() => {
-    const cargar = async () => {
-      try {
-        const datos = await listarCanales();
-        setCanales(datos);
-      } catch (error) {
-        console.error("Error al cargar canales:", error);
-      }
-    };
+    listarServidores()
+      .then(setServidores)
+      .catch((error) => console.error("Error al cargar servidores:", error));
 
-    cargar();
+    listarCategorias()
+      .then(setCategorias)
+      .catch((error) => console.error("Error al cargar categorías:", error));
   }, []);
 
-  const [busqueda, setBusqueda] = useState("");
+  // Cada vez que cambia el texto del buscador, se lo pasamos al backend.
+  // El setTimeout evita pedir datos en cada tecla.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      listarCanales(busqueda)
+        .then(setCanales)
+        .catch((error) => console.error("Error al cargar canales:", error));
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [busqueda]);
+
   const [modalOpen, setModalOpen] = useState(false);
   const [editandoId, setEditandoId] = useState(null);
   const [form, setForm] = useState(formVacio);
-
-  const filtrados = canales.filter((c) =>
-    c.nombre.toLowerCase().includes(busqueda.toLowerCase())
-  );
+  const [error, setError] = useState("");
+  const [guardando, setGuardando] = useState(false);
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const abrirCrear = () => {
     setEditandoId(null);
     setForm(formVacio);
+    setError("");
     setModalOpen(true);
   };
 
   const abrirEditar = (canal) => {
     setEditandoId(canal.id_canal);
-    setForm({ nombre: canal.nombre, categoria_id: canal.categoria_id ?? "", tipo: canal.tipo });
+    setForm({
+      nombre: canal.nombre,
+      servidor_id: canal.servidor_id,
+      categoria_id: canal.categoria_id ?? "",
+      tipo: canal.tipo,
+    });
+    setError("");
     setModalOpen(true);
   };
 
-  const handleEliminar = (canal) => {
-    if (window.confirm(`¿Eliminar el canal "${canal.nombre}"?`)) {
-      setCanales(canales.filter((c) => c.id_canal !== canal.id_canal));
+  const handleEliminar = async (canal) => {
+    if (!window.confirm(`¿Eliminar el canal "${canal.nombre}"?`)) return;
+
+    try {
+      setError("");
+      await eliminarCanal(canal.id_canal);
+      const datos = await listarCanales(busqueda);
+      setCanales(datos);
+    } catch (error) {
+      setError(error.message);
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const categoria_id = form.categoria_id ? Number(form.categoria_id) : null;
+    setError("");
 
-    if (editandoId) {
-      setCanales(
-        canales.map((c) =>
-          c.id_canal === editandoId
-            ? { ...c, nombre: form.nombre, categoria_id, tipo: form.tipo }
-            : c
-        )
-      );
-    } else {
-      setCanales([
-        ...canales,
-        { id_canal: Date.now(), nombre: form.nombre, servidor_id: 1, categoria_id, tipo: form.tipo },
-      ]);
+    if (!form.nombre.trim()) {
+      setError("El nombre es obligatorio");
+      return;
     }
-    setModalOpen(false);
+
+    setGuardando(true);
+
+    try {
+      if (editandoId) {
+        await actualizarCanal(editandoId, {
+          nombre: form.nombre,
+          tipo: form.tipo,
+          categoria_id: form.categoria_id ? Number(form.categoria_id) : null,
+        });
+      } else {
+        await crearCanal({
+          nombre: form.nombre,
+          tipo: form.tipo,
+          servidor_id: Number(form.servidor_id),
+          creador_id: user?.id_usuario,
+          categoria_id: form.categoria_id ? Number(form.categoria_id) : null,
+        });
+      }
+
+      const datos = await listarCanales(busqueda);
+      setCanales(datos);
+
+      setModalOpen(false);
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setGuardando(false);
+    }
   };
 
   return (
@@ -104,17 +145,19 @@ export default function Canales() {
         />
       </div>
 
-      <div className="canales__list">
-        {filtrados.length === 0 && <p className="canales__empty">No se encontraron canales.</p>}
+      {error && !modalOpen && <p className="canales__empty">{error}</p>}
 
-        {filtrados.map((c) => (
+      <div className="canales__list">
+        {canales.length === 0 && <p className="canales__empty">No se encontraron canales.</p>}
+
+        {canales.map((c) => (
           <div key={c.id_canal} className="canales__item">
             <div className="canales__item-icon">
               {c.tipo === "informativo" ? <Megaphone size={18} /> : <Hash size={18} />}
             </div>
             <div className="canales__item-main">
               <p className="canales__item-name">{c.nombre}</p>
-              <span className={`canales__badge canales__badge--${c.tipo}`}>
+              <span className={`canales__badge canaux__badge--${c.tipo}`}>
                 {c.tipo === "informativo" ? "Informativo" : "Chat"}
               </span>
             </div>
@@ -151,12 +194,24 @@ export default function Canales() {
               onChange={handleChange}
               placeholder="Ej: General"
             />
+
+            {!editandoId && (
+              <Select
+                label="Servidor"
+                name="servidor_id"
+                value={form.servidor_id}
+                onChange={handleChange}
+                options={servidores.map((s) => ({ value: s.id_servidor, label: s.nombre }))}
+                placeholder="Elegir servidor"
+              />
+            )}
+
             <Select
               label="Categoría (opcional)"
               name="categoria_id"
               value={form.categoria_id}
               onChange={handleChange}
-              options={categoriasDisponibles}
+              options={categorias.map((c) => ({ value: c.id_categoria, label: c.nombre }))}
               placeholder="Sin categoría"
             />
             <Select
@@ -167,12 +222,15 @@ export default function Canales() {
               options={tiposDisponibles}
               placeholder="Elegir tipo"
             />
+
+            {error && <p className="canales__empty">{error}</p>}
+
             <div className="canales__form-actions">
               <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
                 Cancelar
               </Button>
-              <Button type="submit">
-                {editandoId ? "Guardar cambios" : "Crear canal"}
+              <Button type="submit" disabled={guardando}>
+                {guardando ? "Guardando..." : editandoId ? "Guardar cambios" : "Crear canal"}
               </Button>
             </div>
           </form>
