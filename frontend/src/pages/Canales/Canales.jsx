@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Search, Pencil, Trash2, Hash, Megaphone } from "lucide-react";
 import Button from "../../components/ui/Button/Button";
 import Input from "../../components/ui/Input/Input";
 import Select from "../../components/ui/Select/Select";
 import Modal from "../../components/ui/Modal/Modal";
+import { listarCanales } from "../../api/canales";
 import "./Canales.css";
 
 const categoriasDisponibles = [
@@ -16,21 +17,32 @@ const tiposDisponibles = [
   { value: "chat", label: "Chat (todos escriben)" },
 ];
 
-const canalesIniciales = [
-  { id_canal: 1, nombre: "General", servidor_id: 1, categoria_id: 1, tipo: "informativo" },
-  { id_canal: 2, nombre: "Consultas", servidor_id: 1, categoria_id: 2, tipo: "chat" },
-];
-
 const formVacio = { nombre: "", categoria_id: "", tipo: "chat" };
 
 export default function Canales() {
-  const [canales, setCanales] = useState(canalesIniciales);
+  const [canales, setCanales] = useState([]);
+
+  useEffect(() => {
+    const cargar = async () => {
+      try {
+        const datos = await listarCanales();
+        setCanales(datos);
+      } catch (error) {
+        console.error("Error al cargar canales:", error);
+      }
+    };
+
+    cargar();
+  }, []);
+
   const [busqueda, setBusqueda] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editandoId, setEditandoId] = useState(null);
   const [form, setForm] = useState(formVacio);
 
-  const filtrados = canales.filter((c) => c.nombre.toLowerCase().includes(busqueda.toLowerCase()));
+  const filtrados = canales.filter((c) =>
+    c.nombre.toLowerCase().includes(busqueda.toLowerCase())
+  );
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -47,7 +59,6 @@ export default function Canales() {
   };
 
   const handleEliminar = (canal) => {
-    // TODO: reemplazar por confirm modal propio + DELETE real
     if (window.confirm(`¿Eliminar el canal "${canal.nombre}"?`)) {
       setCanales(canales.filter((c) => c.id_canal !== canal.id_canal));
     }
@@ -60,7 +71,9 @@ export default function Canales() {
     if (editandoId) {
       setCanales(
         canales.map((c) =>
-          c.id_canal === editandoId ? { ...c, nombre: form.nombre, categoria_id, tipo: form.tipo } : c
+          c.id_canal === editandoId
+            ? { ...c, nombre: form.nombre, categoria_id, tipo: form.tipo }
+            : c
         )
       );
     } else {
@@ -106,10 +119,18 @@ export default function Canales() {
               </span>
             </div>
             <div className="canales__item-actions">
-              <button className="canales__icon-btn" onClick={() => abrirEditar(c)} aria-label="Editar">
+              <button
+                className="canales__icon-btn"
+                onClick={() => abrirEditar(c)}
+                aria-label="Editar"
+              >
                 <Pencil size={16} />
               </button>
-              <button className="canales__icon-btn canales__icon-btn--danger" onClick={() => handleEliminar(c)} aria-label="Eliminar">
+              <button
+                className="canales__icon-btn canales__icon-btn--danger"
+                onClick={() => handleEliminar(c)}
+                aria-label="Eliminar"
+              >
                 <Trash2 size={16} />
               </button>
             </div>
@@ -118,9 +139,18 @@ export default function Canales() {
       </div>
 
       {modalOpen && (
-        <Modal title={editandoId ? "Editar canal" : "Nuevo canal"} onClose={() => setModalOpen(false)}>
+        <Modal
+          title={editandoId ? "Editar canal" : "Nuevo canal"}
+          onClose={() => setModalOpen(false)}
+        >
           <form className="canales__form" onSubmit={handleSubmit}>
-            <Input label="Nombre" name="nombre" value={form.nombre} onChange={handleChange} placeholder="Ej: General" />
+            <Input
+              label="Nombre"
+              name="nombre"
+              value={form.nombre}
+              onChange={handleChange}
+              placeholder="Ej: General"
+            />
             <Select
               label="Categoría (opcional)"
               name="categoria_id"
@@ -138,8 +168,12 @@ export default function Canales() {
               placeholder="Elegir tipo"
             />
             <div className="canales__form-actions">
-              <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
-              <Button type="submit">{editandoId ? "Guardar cambios" : "Crear canal"}</Button>
+              <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit">
+                {editandoId ? "Guardar cambios" : "Crear canal"}
+              </Button>
             </div>
           </form>
         </Modal>
