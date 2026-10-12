@@ -6,10 +6,10 @@ Sistema de mensajería tipo Discord, adaptado para gestión educativa con servid
 
 ## Contexto Académico
 
-- **Materia:** Programación 2
-- **Carrera:** Tecnicatura Universitaria en Desarrollo de Software
+- **Materia:** Practica 2
+- **Carrera:** Tecnicatura en Análisis en sistemas y Desarrollo de Software
 - **Institución:** IES
-- **Año:** 2024
+- **Año:** 2026
 
 ---
 
@@ -81,21 +81,23 @@ Las funcionalidades del frontend se están desarrollando para consumir estos end
 ---
 
 ## Estructura del Proyecto
-APP-MENSAJERIA-IES/
 
-├── backend/ # API REST con FastAPI
-│ ├── main.py # Punto de entrada
-│ ├── app/
-│ │ ├── core/ # Configuración y DB
-│ │ ├── models/ # Modelos SQLAlchemy
-│ │ └── api/ # Endpoints (v1)
-│ └── requirements.txt
+```text
+APP-MENSAJERIA-IES/
 │
-├── frontend/ # Interfaz con React + Vite
-│ └── ...
+├── backend/                  # API REST con FastAPI
+│   ├── main.py               # Punto de entrada
+│   ├── app/
+│   │   ├── core/             # Configuración y DB
+│   │   ├── models/           # Modelos SQLAlchemy
+│   │   └── api/              # Endpoints (v1)
+│   └── requirements.txt
 │
-├── docs/ # Documentación
-│ └── DER.md # Diagrama Entidad-Relación
+├── frontend/                 # Interfaz con React + Vite
+│   └── ...
+│
+├── docs/                     # Documentación
+│   └── DER.md                # Diagrama Entidad-Relación
 │
 ├── .gitignore
 └── README.md
