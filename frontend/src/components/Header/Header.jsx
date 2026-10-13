@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { Home, Bell, User, Menu, X } from "lucide-react";
 import UserMenu from "./UserMenu";
 import NotificationsPanel from "./NotificationsPanel";
+import useComunicadosNoLeidos from "../../hooks/useComunicadosNoLeidos";
 import "./Header.css";
 
 export default function Header({ onMenuToggle, menuOpen }) {
@@ -10,6 +11,8 @@ export default function Header({ onMenuToggle, menuOpen }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const userMenuRef = useRef(null);
   const notifRef = useRef(null);
+
+  const noLeidos = useComunicadosNoLeidos();
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -47,12 +50,17 @@ export default function Header({ onMenuToggle, menuOpen }) {
         <div className="header__user" ref={notifRef}>
           <button
             type="button"
-            className="header__icon-btn"
-            aria-label="Notificaciones"
+            className="header__icon-btn header__bell"
+            aria-label={
+              noLeidos > 0 ? `Notificaciones (${noLeidos} sin leer)` : "Notificaciones"
+            }
             aria-expanded={notifOpen}
             onClick={() => setNotifOpen((prev) => !prev)}
           >
             <Bell size={22} />
+            {noLeidos > 0 && (
+              <span className="header__badge">{noLeidos > 9 ? "9+" : noLeidos}</span>
+            )}
           </button>
           {notifOpen && <NotificationsPanel />}
         </div>
