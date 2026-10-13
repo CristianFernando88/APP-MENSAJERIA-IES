@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Search, Megaphone, Trash2 } from "lucide-react";
+import { Plus, Search, Megaphone, Trash2, Eye } from "lucide-react";
 import Badge from "../../components/ui/Badge/Badge";
 import Button from "../../components/ui/Button/Button";
 import Input from "../../components/ui/Input/Input";
@@ -10,8 +10,8 @@ import { listarVistos, marcarVisto } from "../../api/comunicadosVistos";
 import { listarCanales } from "../../api/canales";
 import { listarServidores } from "../../api/servidores";
 import { listarUsuarios } from "../../api/usuarios";
-import { listarMiembrosServidor } from "../../api/miembrosServidor";
 import { listarMiembrosCanal } from "../../api/miembrosCanal";
+import { listarMiembrosServidor } from "../../api/miembrosServidor";
 import { useAuth } from "../../context/AuthContext";
 import "./Comunicados.css";
 
@@ -79,18 +79,23 @@ export default function Comunicados() {
 
   useEffect(() => {
     cargarTodo();
+  
   }, [user?.id_usuario]);
 
-useEffect(() => {
-  if (!puedePublicar) setPestana("recibidos");
-}, [puedePublicar]);
+  useEffect(() => {
+    if (!puedePublicar) setPestana("recibidos");
+  }, [puedePublicar]);
 
   const nombreDe = (id) =>
     usuarios.find((u) => u.id_usuario === id)?.nombre_usuario ?? "Sistema";
 
-  const vistosIds = new Set(
-    vistos.filter((v) => v.usuario_id === user?.id_usuario).map((v) => v.comunicado_id)
-  );
+  // Traduce un destinatario (canal / servidor / usuario) a su nombre
+  const nombreDestino = (d) => {
+    if (d.canal_id) return canales.find((c) => c.id_canal === d.canal_id)?.nombre ?? `Canal ${d.canal_id}`;
+    if (d.servidor_id) return servidores.find((s) => s.id_servidor === d.servidor_id)?.nombre ?? `Servidor ${d.servidor_id}`;
+    if (d.usuario_id) return usuarios.find((u) => u.id_usuario === d.usuario_id)?.nombre_usuario ?? `Usuario ${d.usuario_id}`;
+    return "Todos";
+  };
 
   const meCorresponde = (comunicadoId) => {
     const destinos = destinatarios.filter((d) => d.comunicado_id === comunicadoId);
@@ -105,6 +110,10 @@ useEffect(() => {
     );
   };
 
+  const vistosIds = new Set(
+    vistos.filter((v) => v.usuario_id === user?.id_usuario).map((v) => v.comunicado_id)
+  );
+
   const enviados = comunicados.filter((c) => c.publicado_por === user?.id_usuario);
   const recibidos = comunicados.filter((c) => meCorresponde(c.id_comunicado));
 
@@ -114,6 +123,17 @@ useEffect(() => {
   const filtrados = listaBase.filter((c) =>
     c.titulo.toLowerCase().includes(busqueda.toLowerCase())
   );
+
+  // Destinos y lectores del comunicado que está abierto
+  const destinosSel = seleccionado
+    ? destinatarios.filter((d) => d.comunicado_id === seleccionado.id_comunicado)
+    : [];
+
+  const lectoresSel = seleccionado
+    ? vistos
+        .filter((v) => v.comunicado_id === seleccionado.id_comunicado)
+        .map((v) => nombreDe(v.usuario_id))
+    : [];
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -279,15 +299,54 @@ useEffect(() => {
         {seleccionado ? (
           <div className="comunicados__detail">
             <button className="comunicados__back" onClick={() => setSeleccionado(null)}>← Volver</button>
+
             <div className="comunicados__detail-header">
               <h2>{seleccionado.titulo}</h2>
               <Badge variant={TIPO_VARIANT[seleccionado.tipo]}>{seleccionado.tipo}</Badge>
             </div>
+
             <p className="comunicados__detail-meta">
               Publicado por {nombreDe(seleccionado.publicado_por)} ·{" "}
               {formatearFecha(seleccionado.fecha_publicacion)}
             </p>
+
             <p className="comunicados__detail-body">{seleccionado.contenido}</p>
+
+            <div className="comunicados__info">
+              <span className="comunicados__info-titulo">Enviado a</span>
+              {destinosSel.length === 0 ? (
+                <p className="comunicados__info-texto">Toda la institución</p>
+              ) : (
+                <div className="comunicados__chips">
+                  {destinosSel.map((d) => (
+                    <span key={d.id_comunicado_destinatario} className="comunicados__chip">
+                      {nombreDestino(d)}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {puedePublicar && (
+              <div className="comunicados__info">
+                <span className="comunicados__info-titulo">
+                  <Eye size={13} /> Visto por {lectoresSel.length}{" "}
+                  {lectoresSel.length === 1 ? "persona" : "personas"}
+                </span>
+
+                {lectoresSel.length === 0 ? (
+                  <p className="comunicados__info-texto">Todavía nadie lo abrió</p>
+                ) : (
+                  <div className="comunicados__chips">
+                    {lectoresSel.map((nombre, i) => (
+                      <span key={i} className="comunicados__chip comunicados__chip--visto">
+                        {nombre}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {puedePublicar && (
               <button className="comunicados__eliminar" onClick={() => handleEliminar(seleccionado)}>

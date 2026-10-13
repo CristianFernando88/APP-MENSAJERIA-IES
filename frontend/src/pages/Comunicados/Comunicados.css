@@ -266,3 +266,51 @@
 .comunicados__eliminar:hover {
   background: #FDDEDE;
 }
+
+.comunicados__info {
+  margin-top: var(--space-lg);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-gris-azulado);
+}
+
+.comunicados__info-titulo {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--texto-secundario);
+  margin-bottom: var(--space-sm);
+}
+
+.comunicados__info-texto {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--texto-secundario);
+}
+
+.comunicados__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.comunicados__chip {
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-gris-azulado);
+  color: var(--color-azul-petroleo);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.comunicados__chip--visto {
+  background-color: var(--color-menta-palido);
+  color: var(--color-verde-teal);
+}
+
+.comunicados__info-titulo {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
