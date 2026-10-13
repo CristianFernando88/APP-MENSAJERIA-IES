@@ -8,7 +8,7 @@ class ComunicadoVisto(Base):
     __tablename__ = "comunicado_visto"
 
     id_comunicado_visto = Column(Integer, primary_key=True, autoincrement=True)
-    comunicado_id = Column(Integer, ForeignKey("comunicado.id_comunicado"), nullable=False)
+    comunicado_id = Column(Integer, ForeignKey("comunicado.id_comunicado", ondelete="CASCADE"),nullable=False)
     usuario_id = Column(Integer, ForeignKey("usuario.id_usuario"), nullable=False)
     fecha_visto = Column(DateTime, default=datetime.utcnow)
 
