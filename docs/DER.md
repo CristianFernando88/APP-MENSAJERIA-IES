@@ -1,364 +1,282 @@
-📄 DOCUMENTO 1: DER ACTUALIZADO
-markdown
-# Diagrama Entidad-Relación
-
-Documentación del modelo de datos del sistema de mensajería.
-
----
-
-## Entidades Principales
-
-### Usuario
-usuario(id_usuario, nombre_usuario, email, contrasenia, fecha_registro, activo)
-
-text
-
-- **id_usuario**: Identificador único del usuario (PK).
-- **nombre_usuario**: Nombre único del usuario.
-- **email**: Correo electrónico único.
-- **contrasenia**: Contraseña del usuario (para login). Por ahora es opcional.
-- **fecha_registro**: Fecha y hora de registro.
-- **activo**: Booleano (activo/bloqueado).
-
----
-
-### Perfil
-perfil(id_perfil, usuario_id, nombres, apellidos, foto_perfil, biografia)
-
-text
-
-- **id_perfil**: Identificador único del perfil (PK).
-- **usuario_id**: FK al usuario (1:1).
-- **nombres**: Nombre(s) real(es).
-- **apellidos**: Apellido(s).
-- **foto_perfil**: Ruta o URL de la imagen de perfil.
-- **biografia**: Breve descripción personal.
-
----
-
-### Roles
-rol(id_rol, nombre, descripcion, tipo)
-
-text
-
-- **id_rol**: Identificador único del rol (PK).
-- **nombre**: Nombre del rol (ej: 'director', 'profesor', 'alumno').
-- **descripcion**: Descripción del rol.
-- **tipo**: 'global' (aplica a toda la app) o 'servidor' (solo en un servidor).
-
----
-
-### Usuario_Rol
-usuario_rol(id_usuario_rol, usuario_id, rol_id, servidor_id, fecha_asignacion, asignado_por)
-
-text
-
-- **id_usuario_rol**: Identificador único de la asignación (PK).
-- **usuario_id**: FK al usuario que recibe el rol.
-- **rol_id**: FK al rol asignado.
-- **servidor_id**: FK al servidor (NULL si es rol global).
-- **fecha_asignacion**: Fecha en que se asignó el rol.
-- **asignado_por**: FK al usuario que asignó el rol (puede ser NULL).
-
----
-
-### Servidores
-servidor(id_servidor, nombre, descripcion, fecha_creacion, creador_id)
-
-text
-
-- **id_servidor**: Identificador único del servidor (PK).
-- **nombre**: Nombre del servidor.
-- **descripcion**: Descripción opcional.
-- **fecha_creacion**: Fecha y hora de creación.
-- **creador_id**: FK al usuario que lo creó.
-
----
-
-### Miembro_Servidor
-miembro_servidor(usuario_id, servidor_id, fecha_union, activo)
-
-text
-
-- **usuario_id**: FK al usuario (PK compuesta).
-- **servidor_id**: FK al servidor (PK compuesta).
-- **fecha_union**: Fecha en que se unió.
-- **activo**: Booleano (activo/expulsado).
-
----
-
-### Categorías
-categoria(id_categoria, nombre, descripcion, padre_id, servidor_id, orden)
-
-text
-
-- **id_categoria**: Identificador único de la categoría (PK).
-- **nombre**: Nombre de la categoría.
-- **descripcion**: Descripción opcional.
-- **padre_id**: FK a otra categoría (auto-referencia). NULL si es raíz.
-- **servidor_id**: FK al servidor al que pertenece.
-- **orden**: Número para ordenar visualmente.
-
----
-
-### Canales
-canal(id_canal, nombre, descripcion, servidor_id, creador_id, categoria_id, orden, tipo)
-
-text
-
-- **id_canal**: Identificador único del canal (PK).
-- **nombre**: Nombre del canal.
-- **descripcion**: Descripción opcional.
-- **servidor_id**: FK al servidor al que pertenece.
-- **creador_id**: FK al usuario que lo creó.
-- **categoria_id**: FK a la categoría (NULL si no tiene).
-- **orden**: Número para ordenar visualmente.
-- **tipo**: 'informativo' (solo admins escriben) o 'chat' (todos escriben).
-
----
-
-### Miembro_Canal
-miembro_canal(id_miembro_canal, usuario_id, canal_id, fecha_union, rol_en_canal)
-
-text
-
-- **id_miembro_canal**: Identificador único (PK).
-- **usuario_id**: FK al usuario.
-- **canal_id**: FK al canal.
-- **fecha_union**: Fecha en que se unió.
-- **rol_en_canal**: 'admin', 'miembro' o 'tutor'.
-
----
-
-### Mensajes
-mensaje(id_mensaje, contenido, fecha_envio, editado, usuario_id, canal_id)
-
-text
-
-- **id_mensaje**: Identificador único del mensaje (PK).
-- **contenido**: Texto del mensaje.
-- **fecha_envio**: Fecha y hora de envío.
-- **editado**: Booleano (si fue editado).
-- **usuario_id**: FK al usuario que lo envió.
-- **canal_id**: FK al canal donde se envió.
-
----
-
-### Mensaje_Directo
-mensaje_directo(id_mensaje_directo, contenido, fecha_envio, leido, fecha_leido, emisor_id, receptor_id)
-
-text
-
-- **id_mensaje_directo**: Identificador único (PK).
-- **contenido**: Texto del mensaje.
-- **fecha_envio**: Fecha y hora de envío.
-- **leido**: Booleano (si fue leído).
-- **fecha_leido**: Fecha y hora en que se leyó.
-- **emisor_id**: FK al usuario que envía.
-- **receptor_id**: FK al usuario que recibe.
-
----
-
-### Comunicados
-comunicado(id_comunicado, titulo, contenido, fecha_publicacion, publicado_por, tipo)
-
-text
-
-- **id_comunicado**: Identificador único (PK).
-- **titulo**: Título del comunicado.
-- **contenido**: Cuerpo del comunicado.
-- **fecha_publicacion**: Fecha y hora de publicación.
-- **publicado_por**: FK al usuario que lo publicó.
-- **tipo**: 'global', 'servidor', 'canal' o 'usuario'.
-
----
-
-### Comunicado_Destinatario
-comunicado_destinatario(id_comunicado_destinatario, comunicado_id, servidor_id, canal_id, usuario_id)
-
-text
-
-- **id_comunicado_destinatario**: Identificador único (PK).
-- **comunicado_id**: FK al comunicado.
-- **servidor_id**: FK al servidor destinatario (NULL si no aplica).
-- **canal_id**: FK al canal destinatario (NULL si no aplica).
-- **usuario_id**: FK al usuario destinatario (NULL si no aplica).
-
----
-
-### Comunicado_Visto
-comunicado_visto(id_comunicado_visto, comunicado_id, usuario_id, fecha_visto)
-
-text
-
-- **id_comunicado_visto**: Identificador único (PK).
-- **comunicado_id**: FK al comunicado.
-- **usuario_id**: FK al usuario que lo vio.
-- **fecha_visto**: Fecha y hora en que lo vio.
-
----
-
-### Mensaje_Visto
-mensaje_visto(id_mensaje_visto, mensaje_id, usuario_id, fecha_visto)
-
-text
-
-- **id_mensaje_visto**: Identificador único (PK).
-- **mensaje_id**: FK al mensaje.
-- **usuario_id**: FK al usuario que lo vio.
-- **fecha_visto**: Fecha y hora en que lo vio.
-
----
-
-### Notificaciones
-notificacion(id_notificacion, usuario_id, mensaje, leida, fecha_creacion, tipo, enlace)
-
-text
-
-- **id_notificacion**: Identificador único (PK).
-- **usuario_id**: FK al usuario que recibe.
-- **mensaje**: Texto de la notificación.
-- **leida**: Booleano (true/false).
-- **fecha_creacion**: Fecha y hora de creación.
-- **tipo**: Tipo de notificación (ej: 'mensaje', 'invitacion', 'comunicado').
-- **enlace**: URL o ruta interna a la que redirige.
-
----
-
-### Recordatorios
-recordatorio(id_recordatorio, titulo, descripcion, fecha_creacion, fecha_limite, completado, usuario_id)
-
-text
-
-- **id_recordatorio**: Identificador único (PK).
-- **titulo**: Título del recordatorio.
-- **descripcion**: Detalle o descripción.
-- **fecha_creacion**: Fecha y hora de creación.
-- **fecha_limite**: Fecha y hora límite.
-- **completado**: Booleano (si se completó).
-- **usuario_id**: FK al usuario dueño del recordatorio.
-
----
-
-### Relacion_Usuario
-relacion_usuario(id_relacion, usuario_id, relacionado_id, tipo, fecha_creacion)
-
-text
-
-- **id_relacion**: Identificador único (PK).
-- **usuario_id**: FK al usuario principal (ej: alumno).
-- **relacionado_id**: FK al usuario relacionado (ej: tutor).
-- **tipo**: 'padre', 'madre', 'tutor', 'hermano', etc.
-- **fecha_creacion**: Fecha en que se creó la relación.
-
----
-
-## RELACIONES
-
-| Entidad | Campo FK | Referencia |
-|---------|----------|------------|
-| perfil | usuario_id | → usuario.id_usuario |
-| usuario_rol | usuario_id | → usuario.id_usuario |
-| usuario_rol | rol_id | → rol.id_rol |
-| usuario_rol | servidor_id | → servidor.id_servidor (NULL = global) |
-| usuario_rol | asignado_por | → usuario.id_usuario |
-| servidor | creador_id | → usuario.id_usuario |
-| miembro_servidor | usuario_id | → usuario.id_usuario |
-| miembro_servidor | servidor_id | → servidor.id_servidor |
-| categoria | padre_id | → categoria.id_categoria (auto-referencia) |
-| categoria | servidor_id | → servidor.id_servidor |
-| canal | servidor_id | → servidor.id_servidor |
-| canal | creador_id | → usuario.id_usuario |
-| canal | categoria_id | → categoria.id_categoria |
-| miembro_canal | usuario_id | → usuario.id_usuario |
-| miembro_canal | canal_id | → canal.id_canal |
-| mensaje | usuario_id | → usuario.id_usuario |
-| mensaje | canal_id | → canal.id_canal |
-| mensaje_directo | emisor_id | → usuario.id_usuario |
-| mensaje_directo | receptor_id | → usuario.id_usuario |
-| comunicado | publicado_por | → usuario.id_usuario |
-| comunicado_destinatario | comunicado_id | → comunicado.id_comunicado |
-| comunicado_destinatario | servidor_id | → servidor.id_servidor |
-| comunicado_destinatario | canal_id | → canal.id_canal |
-| comunicado_destinatario | usuario_id | → usuario.id_usuario |
-| comunicado_visto | comunicado_id | → comunicado.id_comunicado |
-| comunicado_visto | usuario_id | → usuario.id_usuario |
-| mensaje_visto | mensaje_id | → mensaje.id_mensaje |
-| mensaje_visto | usuario_id | → usuario.id_usuario |
-| notificacion | usuario_id | → usuario.id_usuario |
-| recordatorio | usuario_id | → usuario.id_usuario |
-| relacion_usuario | usuario_id | → usuario.id_usuario |
-| relacion_usuario | relacionado_id | → usuario.id_usuario |
-
----
-
-## RESUMEN DE ENTIDADES
+# Diagrama entidad-relación
+
+Este documento describe las 18 entidades registradas en `backend/app/models`, de acuerdo con sus modelos SQLAlchemy actuales. Los nombres de tablas, columnas, tipos, claves foráneas, restricciones explícitas y valores predeterminados se han tomado de esos modelos.
+
+> Los valores predeterminados de fecha se generan en la aplicación mediante `datetime.utcnow`. Las referencias a valores como `chat`, `global` o `tutor` describen convenciones del código: los modelos no declaran restricciones `CHECK` que limiten esos valores.
+
+## Entidades
+
+En las tablas siguientes, **Obligatorio** indica `nullable=False`; las claves primarias también son obligatorias. Si el modelo no especifica `nullable`, la columna permite `NULL` según la configuración predeterminada de SQLAlchemy.
+
+### Usuario — `usuario`
+
+| Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
+|---|---|---:|---|
+| `id_usuario` | Integer | Sí | PK, autoincremental |
+| `nombre_usuario` | String(100) | Sí | Único |
+| `email` | String(100) | Sí | Único |
+| `contrasena_hash` | String(255) | Sí | — |
+| `fecha_registro` | DateTime | No | `datetime.utcnow` |
+| `activo` | Boolean | No | `True` |
+
+### Perfil — `perfil`
+
+| Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
+|---|---|---:|---|
+| `id_perfil` | Integer | Sí | PK, autoincremental |
+| `usuario_id` | Integer | Sí | FK → `usuario.id_usuario`, único |
+| `nombres` | String(100) | No | — |
+| `apellidos` | String(100) | No | — |
+| `foto_perfil` | String(255) | No | — |
+| `biografia` | Text | No | — |
+
+`usuario_id` único hace que cada perfil pertenezca a un solo usuario y que un usuario tenga como máximo un perfil.
+
+### Rol — `rol`
+
+| Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
+|---|---|---:|---|
+| `id_rol` | Integer | Sí | PK, autoincremental |
+| `nombre` | String(50) | Sí | Único |
+| `descripcion` | Text | No | — |
+| `tipo` | String(20) | Sí | Se documentan `global` y `servidor`; sin restricción de valores en el modelo |
+
+### UsuarioRol — `usuario_rol`
+
+| Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
+|---|---|---:|---|
+| `id_usuario_rol` | Integer | Sí | PK, autoincremental |
+| `usuario_id` | Integer | Sí | FK → `usuario.id_usuario` |
+| `rol_id` | Integer | Sí | FK → `rol.id_rol` |
+| `servidor_id` | Integer | No | FK → `servidor.id_servidor` |
+| `fecha_asignacion` | DateTime | No | `datetime.utcnow` |
+| `asignado_por` | Integer | No | FK → `usuario.id_usuario` |
+
+### Servidor — `servidor`
+
+| Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
+|---|---|---:|---|
+| `id_servidor` | Integer | Sí | PK, autoincremental |
+| `nombre` | String(100) | Sí | — |
+| `descripcion` | Text | No | — |
+| `fecha_creacion` | DateTime | No | `datetime.utcnow` |
+| `creador_id` | Integer | Sí | FK → `usuario.id_usuario` |
+
+### MiembroServidor — `miembro_servidor`
+
+| Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
+|---|---|---:|---|
+| `usuario_id` | Integer | Sí | PK compuesta, FK → `usuario.id_usuario` |
+| `servidor_id` | Integer | Sí | PK compuesta, FK → `servidor.id_servidor` |
+| `fecha_union` | DateTime | No | `datetime.utcnow` |
+| `activo` | Boolean | No | `True` |
+
+### Categoria — `categoria`
+
+| Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
+|---|---|---:|---|
+| `id_categoria` | Integer | Sí | PK, autoincremental |
+| `nombre` | String(100) | Sí | — |
+| `descripcion` | Text | No | — |
+| `padre_id` | Integer | No | FK → `categoria.id_categoria` |
+| `servidor_id` | Integer | Sí | FK → `servidor.id_servidor` |
+| `orden` | Integer | No | `0` |
+
+### Canal — `canal`
+
+| Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
+|---|---|---:|---|
+| `id_canal` | Integer | Sí | PK, autoincremental |
+| `nombre` | String(100) | Sí | — |
+| `descripcion` | Text | No | — |
+| `servidor_id` | Integer | Sí | FK → `servidor.id_servidor` |
+| `creador_id` | Integer | Sí | FK → `usuario.id_usuario` |
+| `categoria_id` | Integer | No | FK → `categoria.id_categoria` |
+| `orden` | Integer | No | `0` |
+| `tipo` | String(20) | Sí | `chat`; también se documenta `informativo`, sin restricción de valores en el modelo |
+
+### MiembroCanal — `miembro_canal`
+
+| Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
+|---|---|---:|---|
+| `id_miembro_canal` | Integer | Sí | PK, autoincremental |
+| `usuario_id` | Integer | Sí | FK → `usuario.id_usuario` |
+| `canal_id` | Integer | Sí | FK → `canal.id_canal` |
+| `fecha_union` | DateTime | No | `datetime.utcnow` |
+| `rol_en_canal` | String(20) | Sí | `miembro`; también se documentan `admin` y `tutor`, sin restricción de valores en el modelo |
+
+El modelo no declara una restricción única sobre el par `usuario_id` y `canal_id`.
+
+### Mensaje — `mensaje`
+
+| Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
+|---|---|---:|---|
+| `id_mensaje` | Integer | Sí | PK, autoincremental |
+| `contenido` | Text | Sí | — |
+| `fecha_envio` | DateTime | No | `datetime.utcnow` |
+| `editado` | Boolean | No | `False` |
+| `usuario_id` | Integer | Sí | FK → `usuario.id_usuario` |
+| `canal_id` | Integer | Sí | FK → `canal.id_canal` |
+
+### MensajeDirecto — `mensaje_directo`
+
+| Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
+|---|---|---:|---|
+| `id_mensaje_directo` | Integer | Sí | PK, autoincremental |
+| `contenido` | Text | Sí | — |
+| `fecha_envio` | DateTime | No | `datetime.utcnow` |
+| `leido` | Boolean | No | `False` |
+| `fecha_leido` | DateTime | No | — |
+| `emisor_id` | Integer | Sí | FK → `usuario.id_usuario` |
+| `receptor_id` | Integer | Sí | FK → `usuario.id_usuario` |
+
+### Comunicado — `comunicado`
+
+| Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
+|---|---|---:|---|
+| `id_comunicado` | Integer | Sí | PK, autoincremental |
+| `titulo` | String(200) | Sí | — |
+| `contenido` | Text | Sí | — |
+| `fecha_publicacion` | DateTime | No | `datetime.utcnow` |
+| `publicado_por` | Integer | Sí | FK → `usuario.id_usuario` |
+| `tipo` | String(20) | Sí | `global`; también se documentan `servidor`, `canal` y `usuario`, sin restricción de valores en el modelo |
+
+### ComunicadoDestinatario — `comunicado_destinatario`
+
+| Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
+|---|---|---:|---|
+| `id_comunicado_destinatario` | Integer | Sí | PK, autoincremental |
+| `comunicado_id` | Integer | Sí | FK → `comunicado.id_comunicado` |
+| `servidor_id` | Integer | No | FK → `servidor.id_servidor` |
+| `canal_id` | Integer | No | FK → `canal.id_canal` |
+| `usuario_id` | Integer | No | FK → `usuario.id_usuario` |
+
+Los modelos permiten que las tres columnas de destinatario sean nulas; no declaran una regla que obligue a elegir exactamente un destino.
+
+### ComunicadoVisto — `comunicado_visto`
+
+| Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
+|---|---|---:|---|
+| `id_comunicado_visto` | Integer | Sí | PK, autoincremental |
+| `comunicado_id` | Integer | Sí | FK → `comunicado.id_comunicado` |
+| `usuario_id` | Integer | Sí | FK → `usuario.id_usuario` |
+| `fecha_visto` | DateTime | No | `datetime.utcnow` |
+
+### MensajeVisto — `mensaje_visto`
+
+| Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
+|---|---|---:|---|
+| `id_mensaje_visto` | Integer | Sí | PK, autoincremental |
+| `mensaje_id` | Integer | Sí | FK → `mensaje.id_mensaje` |
+| `usuario_id` | Integer | Sí | FK → `usuario.id_usuario` |
+| `fecha_visto` | DateTime | No | `datetime.utcnow` |
+
+### Notificacion — `notificacion`
+
+| Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
+|---|---|---:|---|
+| `id_notificacion` | Integer | Sí | PK, autoincremental |
+| `usuario_id` | Integer | Sí | FK → `usuario.id_usuario` |
+| `mensaje` | Text | Sí | — |
+| `leida` | Boolean | No | `False` |
+| `fecha_creacion` | DateTime | No | `datetime.utcnow` |
+| `tipo` | String(50) | Sí | — |
+| `enlace` | String(255) | No | — |
+
+### Recordatorio — `recordatorio`
+
+| Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
+|---|---|---:|---|
+| `id_recordatorio` | Integer | Sí | PK, autoincremental |
+| `titulo` | String(200) | Sí | — |
+| `descripcion` | Text | No | — |
+| `fecha_creacion` | DateTime | No | `datetime.utcnow` |
+| `fecha_limite` | DateTime | No | — |
+| `completado` | Boolean | No | `False` |
+| `usuario_id` | Integer | Sí | FK → `usuario.id_usuario` |
+
+### RelacionUsuario — `relacion_usuario`
+
+| Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
+|---|---|---:|---|
+| `id_relacion` | Integer | Sí | PK, autoincremental |
+| `usuario_id` | Integer | Sí | FK → `usuario.id_usuario` |
+| `relacionado_id` | Integer | Sí | FK → `usuario.id_usuario` |
+| `tipo` | String(50) | Sí | Se documentan `padre`, `madre`, `tutor`, `hermano`, entre otros; sin restricción de valores en el modelo |
+| `fecha_creacion` | DateTime | No | `datetime.utcnow` |
+
+## Relaciones y claves foráneas
+
+| Entidad | Campo | Referencia |
+|---|---|---|
+| `perfil` | `usuario_id` | `usuario.id_usuario` |
+| `usuario_rol` | `usuario_id` | `usuario.id_usuario` |
+| `usuario_rol` | `rol_id` | `rol.id_rol` |
+| `usuario_rol` | `servidor_id` | `servidor.id_servidor` |
+| `usuario_rol` | `asignado_por` | `usuario.id_usuario` |
+| `servidor` | `creador_id` | `usuario.id_usuario` |
+| `miembro_servidor` | `usuario_id` | `usuario.id_usuario` |
+| `miembro_servidor` | `servidor_id` | `servidor.id_servidor` |
+| `categoria` | `padre_id` | `categoria.id_categoria` |
+| `categoria` | `servidor_id` | `servidor.id_servidor` |
+| `canal` | `servidor_id` | `servidor.id_servidor` |
+| `canal` | `creador_id` | `usuario.id_usuario` |
+| `canal` | `categoria_id` | `categoria.id_categoria` |
+| `miembro_canal` | `usuario_id` | `usuario.id_usuario` |
+| `miembro_canal` | `canal_id` | `canal.id_canal` |
+| `mensaje` | `usuario_id` | `usuario.id_usuario` |
+| `mensaje` | `canal_id` | `canal.id_canal` |
+| `mensaje_directo` | `emisor_id` | `usuario.id_usuario` |
+| `mensaje_directo` | `receptor_id` | `usuario.id_usuario` |
+| `comunicado` | `publicado_por` | `usuario.id_usuario` |
+| `comunicado_destinatario` | `comunicado_id` | `comunicado.id_comunicado` |
+| `comunicado_destinatario` | `servidor_id` | `servidor.id_servidor` |
+| `comunicado_destinatario` | `canal_id` | `canal.id_canal` |
+| `comunicado_destinatario` | `usuario_id` | `usuario.id_usuario` |
+| `comunicado_visto` | `comunicado_id` | `comunicado.id_comunicado` |
+| `comunicado_visto` | `usuario_id` | `usuario.id_usuario` |
+| `mensaje_visto` | `mensaje_id` | `mensaje.id_mensaje` |
+| `mensaje_visto` | `usuario_id` | `usuario.id_usuario` |
+| `notificacion` | `usuario_id` | `usuario.id_usuario` |
+| `recordatorio` | `usuario_id` | `usuario.id_usuario` |
+| `relacion_usuario` | `usuario_id` | `usuario.id_usuario` |
+| `relacion_usuario` | `relacionado_id` | `usuario.id_usuario` |
+
+## Cardinalidades principales
+
+- Un `usuario` puede tener cero o un `perfil`; cada `perfil` pertenece a un usuario.
+- `usuario` y `rol` se relacionan mediante `usuario_rol`; la asignación puede asociarse opcionalmente a un `servidor`.
+- `usuario` y `servidor` se relacionan mediante `miembro_servidor`, cuya PK está compuesta por ambas FK.
+- Un `servidor` contiene categorías, canales y miembros.
+- Una `categoria` puede tener una categoría padre y subcategorías; un canal puede asociarse opcionalmente a una categoría.
+- `usuario` y `canal` se relacionan mediante `miembro_canal`.
+- Un `canal` contiene mensajes; cada mensaje tiene un usuario autor y pertenece a un canal.
+- Cada mensaje directo tiene un usuario emisor y un usuario receptor.
+- Un comunicado tiene un usuario autor y puede tener destinatarios y registros de visualización.
+- `mensaje_visto` registra un mensaje y un usuario; `comunicado_visto` registra un comunicado y un usuario.
+- Un usuario puede tener notificaciones, recordatorios y relaciones con otros usuarios.
+
+## Resumen
 
 | # | Entidad | Propósito |
-|---|---------|-----------|
-| 1 | usuario | Registro básico de usuarios |
-| 2 | perfil | Datos personales y foto |
-| 3 | rol | Roles disponibles (globales y de servidor) |
-| 4 | usuario_rol | Asignación de roles a usuarios |
-| 5 | servidor | Espacios que contienen canales |
-| 6 | miembro_servidor | Usuarios que pertenecen a servidores |
-| 7 | categoria | Agrupación de canales (jerárquica) |
-| 8 | canal | Chats dentro de un servidor (+ tipo) |
-| 9 | miembro_canal | Usuarios que pertenecen a canales |
-| 10 | mensaje | Mensajes dentro de un canal |
-| 11 | mensaje_directo | Chats privados 1 a 1 |
-| 12 | comunicado | Anuncios oficiales |
-| 13 | comunicado_destinatario | Destinatarios de un comunicado |
-| 14 | comunicado_visto | Seguimiento de comunicados vistos |
-| 15 | mensaje_visto | Seguimiento de mensajes vistos |
-| 16 | notificacion | Avisos automáticos |
-| 17 | recordatorio | Tareas personales |
-| 18 | relacion_usuario | Relaciones entre usuarios (alumno ↔ tutor) |
+|---:|---|---|
+| 1 | `usuario` | Cuenta e identidad de usuario |
+| 2 | `perfil` | Información complementaria del usuario |
+| 3 | `rol` | Catálogo de roles |
+| 4 | `usuario_rol` | Asignación de roles a usuarios, opcionalmente en un servidor |
+| 5 | `servidor` | Espacio con canales, categorías y miembros |
+| 6 | `miembro_servidor` | Asociación de usuarios y servidores |
+| 7 | `categoria` | Categorías jerárquicas de un servidor |
+| 8 | `canal` | Canal perteneciente a un servidor |
+| 9 | `miembro_canal` | Asociación de usuarios y canales |
+| 10 | `mensaje` | Mensaje publicado en un canal |
+| 11 | `mensaje_directo` | Mensaje privado entre usuarios |
+| 12 | `comunicado` | Comunicado publicado por un usuario |
+| 13 | `comunicado_destinatario` | Destinos opcionales de un comunicado |
+| 14 | `comunicado_visto` | Registro de visualización de comunicados |
+| 15 | `mensaje_visto` | Registro de visualización de mensajes |
+| 16 | `notificacion` | Notificación asociada a un usuario |
+| 17 | `recordatorio` | Recordatorio asociado a un usuario |
+| 18 | `relacion_usuario` | Relación tipada entre dos usuarios |
 
 **Total: 18 entidades.**
-
----
-
-## QUÉ CUBRE ESTE DER
-
-| Funcionalidad | Entidades |
-|---------------|-----------|
-| Crear usuarios | usuario, perfil |
-| Iniciar sesión | usuario (se ve después) |
-| Listar servidores del usuario | miembro_servidor, servidor |
-| Listar canales del servidor | canal, categoria |
-| Listar canales del usuario | miembro_canal, canal |
-| Listar mensajes del canal | mensaje |
-| Editar/eliminar mensajes propios | mensaje (usuario_id) |
-| Chats privados | mensaje_directo |
-| Perfil actualizable | perfil |
-| Roles y permisos | rol, usuario_rol |
-| Comunicados | comunicado |
-| Enviar comunicado a varios | comunicado_destinatario |
-| Seguimiento de comunicados | comunicado_visto |
-| Seguimiento de mensajes | mensaje_visto |
-| Notificaciones | notificacion |
-| Recordatorios | recordatorio |
-| Relaciones (alumno ↔ tutor) | relacion_usuario |
-
----
-
-## NOTAS
-
-- **`contrasenia`** en `usuario` es **opcional por ahora**. Se hará `NOT NULL` cuando se implemente login.
-- **`usuario_rol`** permite que un usuario tenga **múltiples roles**.
-- **`canal.tipo`** diferencia 'informativo' (solo admins escriben) de 'chat' (todos escriben).
-- **`miembro_canal.rol_en_canal`** puede ser 'admin', 'miembro' o 'tutor'.
-- **`mensaje_directo`** permite chats privados 1 a 1.
-- **`comunicado.tipo`** define el alcance: 'global', 'servidor', 'canal' o 'usuario'.
-- **`comunicado_destinatario`** permite enviar un comunicado a **varios destinatarios**.
-- **`comunicado_visto`** y **`mensaje_visto`** permiten saber quién vio qué.
-- **`relacion_usuario`** permite relacionar usuarios (alumno ↔ tutor).
-- **`notificacion`** se genera automáticamente por el sistema.
-- **`recordatorio`** es personal (creado por el usuario para sí mismo).
-
----
-
-## DER gráfico
-
-pendiente...
