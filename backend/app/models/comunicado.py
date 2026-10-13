@@ -14,7 +14,16 @@ class Comunicado(Base):
     publicado_por = Column(Integer, ForeignKey("usuario.id_usuario"), nullable=False)
     tipo = Column(String(20), nullable=False, default="global")
 
-    # Relaciones
     autor = relationship("Usuario", foreign_keys=[publicado_por])
-    destinatarios = relationship("ComunicadoDestinatario", back_populates="comunicado")
-    vistas = relationship("ComunicadoVisto", back_populates="comunicado")
+
+    destinatarios = relationship(
+        "ComunicadoDestinatario",
+        back_populates="comunicado",
+        cascade="all, delete-orphan"
+    )
+
+    vistas = relationship(
+        "ComunicadoVisto",
+        back_populates="comunicado",
+        cascade="all, delete-orphan"
+    )
