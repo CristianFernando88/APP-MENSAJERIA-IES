@@ -1,4 +1,3 @@
-import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard,
   Server,
@@ -7,9 +6,9 @@ import {
   MessageSquare,
   Megaphone,
   Calendar,
-  ClipboardList,
-  Tags,
+  ShieldCheck,
 } from "lucide-react";
+import { NavLink } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import "./SideBar.css";
 
@@ -22,12 +21,7 @@ const NAV_LINKS = [
     icon: Server,
     roles: ["admin", "super_admin", "director"],
   },
-  {
-    to: "/categorias",
-    label: "Categorías",
-    icon: Tags,
-    roles: ["admin", "super_admin", "director"],
-  },
+  
   {
     to: "/canales",
     label: "Canales",
@@ -39,6 +33,12 @@ const NAV_LINKS = [
     label: "Miembros",
     icon: Users,
     roles: ["admin", "super_admin", "director", "profesor"],
+  },
+    {
+    to: "/admin",
+    label: "Panel Administrador",
+    icon: ShieldCheck,
+    roles: ["admin", "super_admin"],
   },
   {
     to: "/usuarios",
