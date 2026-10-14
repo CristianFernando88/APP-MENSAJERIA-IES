@@ -4,6 +4,7 @@
 
 from sqlalchemy.orm import Session
 from app.models.usuario import Usuario
+from app.core.security import hashear_password
 from .schemas import UsuarioCreate, UsuarioUpdate
 
 
@@ -54,7 +55,7 @@ def create(db: Session, data: UsuarioCreate) -> Usuario:
     nuevo = Usuario(
         nombre_usuario=data.nombre_usuario,
         email=data.email,
-        contrasena_hash=data.contrasena_hash,  # Opcional por ahora
+        contrasena_hash=hashear_password(data.password),  # Hashear la contraseña
         activo=data.activo,
     )
     db.add(nuevo)
@@ -70,6 +71,10 @@ def update(db: Session, usuario_id: int, data: UsuarioUpdate) -> Usuario | None:
         return None
 
     cambios = data.model_dump(exclude_unset=True)  # solo lo enviado
+    if "password" in cambios:
+        cambios["contrasena_hash"] = hashear_password(cambios["password"])
+        del cambios["password"]
+
     for k, v in cambios.items():
         setattr(usuario, k, v)
 

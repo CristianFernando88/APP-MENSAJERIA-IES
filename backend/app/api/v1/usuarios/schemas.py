@@ -22,10 +22,10 @@ class UsuarioBase(BaseModel):
 
 class UsuarioCreate(UsuarioBase):
     """Body para CREAR un usuario."""
-    # Contraseña opcional por ahora (hasta que se implemente login)
-    contrasena_hash: str | None = Field(
-        default=None,
-        description="Contraseña hasheada (opcional por ahora)",
+    password: str = Field(
+        min_length=8,
+        max_length=50,
+        description="Contraseña del usuario en texto plano",
     )
 
 
@@ -33,10 +33,13 @@ class UsuarioUpdate(BaseModel):
     """Body para ACTUALIZAR (todos los campos opcionales)."""
     nombre_usuario: str | None = Field(default=None, min_length=3, max_length=100)
     email: EmailStr | None = None
-    contrasena_hash: str | None = None
+    password: str | None = Field(
+        default=None,
+        min_length=8,
+        max_length=50,
+        description="Nueva contraseña del usuario en texto plano",
+    )
     activo: bool | None = None
-
-
 class UsuarioResponse(UsuarioBase):
     """Respuesta: incluye ID y fecha de registro."""
     id_usuario: int

@@ -9,7 +9,7 @@ import Modal from "../../components/ui/Modal/Modal";
 import { listarUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario } from "../../api/usuarios";
 import "./Usuarios.css";
 
-const formVacio = { nombre_usuario: "", email: "", contrasena: "", activo: "true" };
+const formVacio = { nombre_usuario: "", email: "", password: "", activo: "true" };
 
 export default function Usuarios() {
   const [usuarios, setUsuarios] = useState([]);
@@ -49,7 +49,7 @@ export default function Usuarios() {
     setForm({
       nombre_usuario: u.nombre_usuario,
       email: u.email,
-      contrasena: "",
+      password: "", // Ahora esperamos 'password' en lugar de 'contrasena'
       activo: String(u.activo),
     });
     setError("");
@@ -81,17 +81,22 @@ export default function Usuarios() {
 
     try {
       if (editandoId) {
-        await actualizarUsuario(editandoId, {
+        const updateData = {
           nombre_usuario: form.nombre_usuario,
           email: form.email,
           activo: form.activo === "true",
-        });
+        };
+        if (form.password) {
+          updateData.password = form.password;
+        }
+        await actualizarUsuario(editandoId, updateData);
       } else {
+        // Al crear, enviamos 'password' en lugar de 'contrasena_hash'
         await crearUsuario({
           nombre_usuario: form.nombre_usuario,
           email: form.email,
           activo: form.activo === "true",
-          contrasena_hash: form.contrasena || null,
+          password: form.password || null, // Se espera 'password' en texto plano
         });
       }
 
@@ -184,9 +189,9 @@ export default function Usuarios() {
             {!editandoId && (
               <Input
                 label="Contraseña"
-                name="contrasena"
+                name="password" // Cambiamos el nombre del campo a 'password'
                 type="password"
-                value={form.contrasena}
+                value={form.password}
                 onChange={handleChange}
                 placeholder="Opcional"
               />
