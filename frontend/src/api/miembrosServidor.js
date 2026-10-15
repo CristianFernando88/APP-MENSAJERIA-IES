@@ -1,23 +1,25 @@
-import { apiGet, apiPost } from "./apiClient";
+import { apiGet, apiPost, apiPut, apiDelete } from "./apiClient";
 
 export function listarMiembrosServidor() {
   return apiGet("/miembros-servidor/");
+}
+
+export function crearMiembroServidor(data) {
+  return apiPost("/miembros-servidor/", data);
 }
 
 export function obtenerMiembroServidor(usuarioId, servidorId) {
   return apiGet(`/miembros-servidor/${usuarioId}/${servidorId}`);
 }
 
-export function unirseAServidor(usuarioId, servidorId) {
-  return apiPost("/miembros-servidor/", {
-    usuario_id: usuarioId,
-    servidor_id: servidorId,
-    activo: true,
-  });
+export function actualizarMiembroServidor(usuarioId, servidorId, data) {
+  return apiPut(`/miembros-servidor/${usuarioId}/${servidorId}`, data);
 }
 
-export default {
-  listarMiembrosServidor,
-  obtenerMiembroServidor,
-  unirseAServidor,
-};
+export function eliminarMiembroServidor(usuarioId, servidorId) {
+  return apiDelete(`/miembros-servidor/${usuarioId}/${servidorId}`);
+}
+
+export function unirseAServidor(usuarioId, servidorId) {
+  return crearMiembroServidor({ usuario_id: usuarioId, servidor_id: servidorId, activo: true });
+}

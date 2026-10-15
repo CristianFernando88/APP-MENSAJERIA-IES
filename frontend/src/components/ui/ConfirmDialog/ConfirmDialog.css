@@ -1,0 +1,81 @@
+.confirm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) 0;
+}
+
+.confirm__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background-color: var(--color-gris-azulado);
+  color: var(--color-azul-petroleo);
+}
+
+.confirm__icon--peligro {
+  background-color: #FDDEDE;
+  color: #C0292C;
+}
+
+.confirm__mensaje {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--texto-secundario);
+  line-height: 1.5;
+}
+
+.confirm__acciones {
+  display: flex;
+  gap: var(--space-sm);
+  width: 100%;
+}
+
+.confirm__acciones > * {
+  flex: 1;
+}
+
+.confirm__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  padding: 9px var(--space-md);
+  border: none;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-verde-teal);
+  color: var(--texto-claro);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.confirm__btn:hover:not(:disabled) {
+  background-color: var(--color-teal-medio);
+}
+
+.confirm__btn--peligro {
+  background-color: #C0292C;
+}
+
+.confirm__btn--peligro:hover:not(:disabled) {
+  background-color: #A8324A;
+}
+
+.confirm__btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.confirm__spinner {
+  animation: confirm-spin 0.9s linear infinite;
+}
+
+@keyframes confirm-spin {
+  to { transform: rotate(360deg); }
+}
