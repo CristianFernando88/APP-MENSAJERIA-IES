@@ -87,6 +87,22 @@ export async function apiPut(ruta, data) {
 
 
 // ============================================
+// PATCH
+// ============================================
+export async function apiPatch(ruta, data) {
+  const token = localStorage.getItem("access_token");
+  const response = await fetch(`${API_URL}${ruta}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
+    body: JSON.stringify(data),
+  });
+  return manejarRespuesta(response);
+}
+
+// ============================================
 // DELETE
 // ============================================
 export async function apiDelete(ruta) {
