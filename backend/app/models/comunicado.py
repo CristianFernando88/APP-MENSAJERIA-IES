@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.core.db import Base
@@ -13,6 +13,7 @@ class Comunicado(Base):
     fecha_publicacion = Column(DateTime, default=datetime.utcnow)
     publicado_por = Column(Integer, ForeignKey("usuario.id_usuario"), nullable=False)
     tipo = Column(String(20), nullable=False, default="global")
+    eliminado = Column(Boolean, nullable=False, default=False, server_default="false")
 
     autor = relationship("Usuario", foreign_keys=[publicado_por])
 
