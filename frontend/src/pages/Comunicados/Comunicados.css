@@ -314,3 +314,94 @@
   align-items: center;
   gap: 5px;
 }
+
+.comunicados__filtros {
+  display: flex;
+  gap: var(--space-xs);
+  padding: 0 var(--space-md);
+}
+
+.comunicados__filtros .comunicados__search {
+  flex: 1;
+}
+
+.comunicados__filtro {
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-gris-azulado);
+  border-radius: var(--radius-md);
+  background: none;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--texto-secundario);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.comunicados__filtro:hover {
+  background-color: var(--color-gris-azulado);
+}
+
+.comunicados__filtro--activo {
+  background-color: var(--color-azul-petroleo);
+  border-color: var(--color-azul-petroleo);
+  color: var(--texto-claro);
+}
+
+.comunicados__punto {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background-color: var(--color-verde-teal);
+}
+
+.comunicados__item--archivado {
+  opacity: 0.72;
+}
+
+.comunicados__item--archivado .comunicados__item-title {
+  text-decoration: line-through;
+  color: var(--texto-secundario);
+}
+
+.comunicados__aviso-papelera {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-md);
+  background-color: #FEF3E2;
+  color: #A85B00;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.comunicados__acciones-detalle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+
+.comunicados__btn-restaurar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
+  border: none;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-verde-esmeralda);
+  color: var(--texto-claro);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.comunicados__btn-restaurar:hover {
+  background-color: var(--color-verde-teal);
+}
+
+.comunicados__acciones-detalle .comunicados__eliminar {
+  margin-top: 0;
+}

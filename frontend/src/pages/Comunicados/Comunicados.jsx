@@ -1,10 +1,16 @@
-import { useState, useEffect } from "react";
-import { Plus, Search, Megaphone, Trash2, Eye } from "lucide-react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import {
+  Plus, Search, Megaphone, Trash2, Eye, RotateCcw, Archive, Ban,
+} from "lucide-react";
 import Badge from "../../components/ui/Badge/Badge";
 import Button from "../../components/ui/Button/Button";
 import Input from "../../components/ui/Input/Input";
 import Modal from "../../components/ui/Modal/Modal";
-import { listarComunicados, crearComunicado, eliminarComunicado } from "../../api/comunicados";
+import Toast from "../../components/ui/Toast/Toast";
+import {
+  listarComunicados, crearComunicado, eliminarComunicado,
+  listarPapelera, restaurarComunicado, eliminarDefinitivo,
+} from "../../api/comunicados";
 import { listarDestinatarios, crearDestinatario } from "../../api/comunicadosDestinatarios";
 import { listarVistos, marcarVisto } from "../../api/comunicadosVistos";
 import { listarCanales } from "../../api/canales";
@@ -12,6 +18,7 @@ import { listarServidores } from "../../api/servidores";
 import { listarUsuarios } from "../../api/usuarios";
 import { listarMiembrosCanal } from "../../api/miembrosCanal";
 import { listarMiembrosServidor } from "../../api/miembrosServidor";
+import useConfirmacion from "../../hooks/useConfirmacion";
 import { useAuth } from "../../context/AuthContext";
 import "./Comunicados.css";
 
@@ -25,14 +32,32 @@ const TIPO_VARIANT = {
 };
 
 const formVacio = { titulo: "", contenido: "" };
+const MS_TOAST = 8000;
 
-const formatearFecha = (iso) => new Date(iso).toLocaleDateString("es-AR");
+function tiempoRelativo(iso) {
+  const minutos = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+
+  if (minutos < 1) return "recién";
+  if (minutos < 60) return `hace ${minutos} min`;
+
+  const horas = Math.floor(minutos / 60);
+  if (horas < 24) return `hace ${horas} h`;
+
+  const dias = Math.floor(horas / 24);
+  if (dias === 1) return "ayer";
+  if (dias < 7) return `hace ${dias} días`;
+
+  return new Date(iso).toLocaleDateString("es-AR");
+}
 
 export default function Comunicados() {
   const { user, hasRole } = useAuth();
   const puedePublicar = hasRole(ROLES_PUEDEN_PUBLICAR);
 
+  const { pedir, dialogo } = useConfirmacion();
+
   const [comunicados, setComunicados] = useState([]);
+  const [papelera, setPapelera] = useState([]);
   const [destinatarios, setDestinatarios] = useState([]);
   const [vistos, setVistos] = useState([]);
   const [canales, setCanales] = useState([]);
@@ -41,7 +66,8 @@ export default function Comunicados() {
   const [misCanales, setMisCanales] = useState([]);
   const [misServidores, setMisServidores] = useState([]);
 
-  const [pestana, setPestana] = useState("enviados");
+  const [pestana, setPestana] = useState("recibidos");
+  const [soloNoLeidos, setSoloNoLeidos] = useState(false);
   const [busqueda, setBusqueda] = useState("");
   const [seleccionado, setSeleccionado] = useState(null);
   const [crearOpen, setCrearOpen] = useState(false);
@@ -49,12 +75,25 @@ export default function Comunicados() {
   const [seleccionados, setSeleccionados] = useState({ canales: [], servidores: [] });
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
+  const [toast, setToast] = useState(null);
 
-  const cargarTodo = async () => {
+  const idsConocidos = useRef(new Set());
+  const primeraCarga = useRef(true);
+  const temporizadorToast = useRef(null);
+
+  const mostrarToast = (com) => {
+    setToast(com);
+    if (temporizadorToast.current) clearTimeout(temporizadorToast.current);
+    temporizadorToast.current = setTimeout(() => setToast(null), MS_TOAST);
+  };
+
+  const cargarTodo = async ({ silencioso = false } = {}) => {
     try {
-      setError("");
-      const [c, d, v, ca, se, us, mc, ms] = await Promise.all([
+      if (!silencioso) setError("");
+
+      const [c, pap, d, v, ca, se, us, mc, ms] = await Promise.all([
         listarComunicados(),
+        listarPapelera(),
         listarDestinatarios(),
         listarVistos(),
         listarCanales(),
@@ -63,23 +102,56 @@ export default function Comunicados() {
         listarMiembrosCanal(),
         listarMiembrosServidor(),
       ]);
+
       setComunicados(c);
+      setPapelera(pap);
       setDestinatarios(d);
       setVistos(v);
       setCanales(ca);
       setServidores(se);
       setUsuarios(us);
-
       setMisCanales(mc.filter((m) => m.usuario_id === user?.id_usuario).map((m) => m.canal_id));
       setMisServidores(ms.filter((m) => m.usuario_id === user?.id_usuario).map((m) => m.servidor_id));
+
+      if (!primeraCarga.current) {
+        const nuevos = c.filter((x) => !idsConocidos.current.has(x.id_comunicado));
+        if (nuevos.length > 0) {
+          const recien = [...nuevos].sort(
+            (a, b) => new Date(b.fecha_publicacion) - new Date(a.fecha_publicacion)
+          )[0];
+          mostrarToast(recien);
+        }
+      }
+
+      idsConocidos.current = new Set(c.map((x) => x.id_comunicado));
+      primeraCarga.current = false;
     } catch (err) {
-      setError(err.message);
+      if (!silencioso) setError(err.message);
     }
   };
 
   useEffect(() => {
     cargarTodo();
-  
+    
+  }, [user?.id_usuario]);
+
+  useEffect(() => {
+    const consultar = () => {
+      if (document.visibilityState === "visible") cargarTodo({ silencioso: true });
+    };
+
+    const intervalo = setInterval(consultar, 10000);
+    const alVolver = () => {
+      if (document.visibilityState === "visible") cargarTodo({ silencioso: true });
+    };
+    document.addEventListener("visibilitychange", alVolver);
+
+    return () => {
+      clearInterval(intervalo);
+      document.removeEventListener("visibilitychange", alVolver);
+      if (temporizadorToast.current) clearTimeout(temporizadorToast.current);
+    };
+    
   }, [user?.id_usuario]);
 
   useEffect(() => {
@@ -89,7 +161,6 @@ export default function Comunicados() {
   const nombreDe = (id) =>
     usuarios.find((u) => u.id_usuario === id)?.nombre_usuario ?? "Sistema";
 
-  // Traduce un destinatario (canal / servidor / usuario) a su nombre
   const nombreDestino = (d) => {
     if (d.canal_id) return canales.find((c) => c.id_canal === d.canal_id)?.nombre ?? `Canal ${d.canal_id}`;
     if (d.servidor_id) return servidores.find((s) => s.id_servidor === d.servidor_id)?.nombre ?? `Servidor ${d.servidor_id}`;
@@ -99,7 +170,6 @@ export default function Comunicados() {
 
   const meCorresponde = (comunicadoId) => {
     const destinos = destinatarios.filter((d) => d.comunicado_id === comunicadoId);
-
     if (destinos.length === 0) return true;
 
     return destinos.some(
@@ -110,21 +180,32 @@ export default function Comunicados() {
     );
   };
 
-  const vistosIds = new Set(
-    vistos.filter((v) => v.usuario_id === user?.id_usuario).map((v) => v.comunicado_id)
+  const vistosIds = useMemo(
+    () => new Set(vistos.filter((v) => v.usuario_id === user?.id_usuario).map((v) => v.comunicado_id)),
+    [vistos, user?.id_usuario]
   );
 
   const enviados = comunicados.filter((c) => c.publicado_por === user?.id_usuario);
   const recibidos = comunicados.filter((c) => meCorresponde(c.id_comunicado));
 
-  const listaBase =
-    pestana === "enviados" ? enviados : pestana === "todos" ? comunicados : recibidos;
+  const porFechaDesc = (a, b) =>
+    new Date(b.fecha_publicacion) - new Date(a.fecha_publicacion);
 
-  const filtrados = listaBase.filter((c) =>
-    c.titulo.toLowerCase().includes(busqueda.toLowerCase())
-  );
+  const enPapelera = papelera.filter((c) => c.publicado_por === user?.id_usuario);
 
-  // Destinos y lectores del comunicado que está abierto
+  const listaBase = useMemo(() => {
+    if (pestana === "papelera") return [...enPapelera].sort(porFechaDesc);
+    const base = pestana === "enviados" ? enviados : pestana === "todos" ? comunicados : recibidos;
+    return [...base].sort(porFechaDesc);
+  }, [pestana, enviados, recibidos, comunicados, enPapelera]);
+
+  const noLeidosCount = recibidos.filter((c) => !vistosIds.has(c.id_comunicado)).length;
+
+  const filtrados = listaBase.filter((c) => {
+    if (soloNoLeidos && vistosIds.has(c.id_comunicado)) return false;
+    return c.titulo.toLowerCase().includes(busqueda.toLowerCase());
+  });
+
   const destinosSel = seleccionado
     ? destinatarios.filter((d) => d.comunicado_id === seleccionado.id_comunicado)
     : [];
@@ -147,8 +228,8 @@ export default function Comunicados() {
   const handleAbrir = (comunicado) => {
     setSeleccionado(comunicado);
 
-    if (pestana === "recibidos" && !vistosIds.has(comunicado.id_comunicado)) {
-      marcarVisto(comunicado.id_comunicado, user?.id_usuario)
+    if (pestana === "recibidos" && !vistosIds.has(comunicado.id_comunicado) && user?.id_usuario) {
+      marcarVisto(comunicado.id_comunicado, user.id_usuario)
         .then(() => listarVistos())
         .then(setVistos)
         .catch((err) => console.error(err));
@@ -156,11 +237,58 @@ export default function Comunicados() {
   };
 
   const handleEliminar = async (comunicado) => {
-    if (!window.confirm(`¿Eliminar el comunicado "${comunicado.titulo}"?`)) return;
+    const ok = await pedir({
+      titulo: "Mover a la papelera",
+      mensaje: `"${comunicado.titulo}" va a dejar de ser visible para todos los destinatarios. Podés restaurarlo después desde la papelera.`,
+      textoConfirmar: "Mover a la papelera",
+      peligro: true,
+    });
+
+    if (!ok) return;
 
     try {
       setError("");
       await eliminarComunicado(comunicado.id_comunicado);
+      setSeleccionado(null);
+      await cargarTodo();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // ---------- restaurar ----------
+  const handleRestaurar = async (comunicado) => {
+    const ok = await pedir({
+      titulo: "Restaurar comunicado",
+      mensaje: `"${comunicado.titulo}" va a volver a estar visible para todos sus destinatarios.`,
+      textoConfirmar: "Restaurar",
+    });
+
+    if (!ok) return;
+
+    try {
+      setError("");
+      await restaurarComunicado(comunicado.id_comunicado);
+      setSeleccionado(null);
+      await cargarTodo();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleEliminarDefinitivo = async (comunicado) => {
+    const ok = await pedir({
+      titulo: "Eliminar definitivamente",
+      mensaje: `Se va a borrar "${comunicado.titulo}" para siempre, junto con sus destinatarios y registros de lectura. Esta acción NO se puede deshacer.`,
+      textoConfirmar: "Eliminar para siempre",
+      peligro: true,
+    });
+
+    if (!ok) return;
+
+    try {
+      setError("");
+      await eliminarDefinitivo(comunicado.id_comunicado);
       setSeleccionado(null);
       await cargarTodo();
     } catch (err) {
@@ -173,15 +301,25 @@ export default function Comunicados() {
     setError("");
 
     if (!puedePublicar) return;
-
     if (!form.titulo.trim() || !form.contenido.trim()) {
       setError("El título y el contenido son obligatorios");
       return;
     }
 
+    const { canales: selCanales, servidores: selServidores } = seleccionados;
+    const destinos = selServidores.length + selCanales.length;
+    const alcance = destinos === 0 ? "toda la institución" : `${destinos} destino(s)`;
+
+    const ok = await pedir({
+      titulo: "Publicar comunicado",
+      mensaje: `Se va a publicar "${form.titulo.trim()}" para ${alcance}. Los destinatarios lo van a ver al instante y no se puede editar el alcance una vez enviado.`,
+      textoConfirmar: "Publicar",
+    });
+
+    if (!ok) return;
+
     setGuardando(true);
 
-    const { canales: selCanales, servidores: selServidores } = seleccionados;
     let tipo = "global";
     if (selCanales.length && !selServidores.length) tipo = "canal";
     else if (selServidores.length && !selCanales.length) tipo = "servidor";
@@ -217,12 +355,16 @@ export default function Comunicados() {
     setSeleccionado(null);
   };
 
+  const enPapeleraActual = pestana === "papelera";
+
   return (
     <section className="comunicados">
       <div className={`comunicados__list-panel${seleccionado ? " comunicados__list-panel--hidden-mobile" : ""}`}>
         <div className="comunicados__header">
-          <h1 className="comunicados__title">Comunicados</h1>
-          {puedePublicar && (
+          <h1 className="comunicados__title">
+            {enPapeleraActual ? "Papelera" : "Comunicados"}
+          </h1>
+          {puedePublicar && !enPapeleraActual && (
             <button className="comunicados__new-btn" onClick={() => setCrearOpen(true)} aria-label="Nuevo comunicado">
               <Plus size={20} />
             </button>
@@ -231,19 +373,30 @@ export default function Comunicados() {
 
         <div className="comunicados__tabs">
           {puedePublicar && (
-            <button
-              className={`comunicados__tab${pestana === "enviados" ? " comunicados__tab--active" : ""}`}
-              onClick={() => cambiarPestana("enviados")}
-            >
-              Enviados <span>({enviados.length})</span>
-            </button>
+            <>
+              <button
+                className={`comunicados__tab${pestana === "enviados" ? " comunicados__tab--active" : ""}`}
+                onClick={() => cambiarPestana("enviados")}
+              >
+                Enviados <span>({enviados.length})</span>
+              </button>
+
+              <button
+                className={`comunicados__tab${pestana === "papelera" ? " comunicados__tab--active" : ""}`}
+                onClick={() => cambiarPestana("papelera")}
+              >
+                Papelera <span>({enPapelera.length})</span>
+              </button>
+            </>
           )}
+
           <button
             className={`comunicados__tab${pestana === "recibidos" ? " comunicados__tab--active" : ""}`}
             onClick={() => cambiarPestana("recibidos")}
           >
             Recibidos <span>({recibidos.length})</span>
           </button>
+
           {puedePublicar && (
             <button
               className={`comunicados__tab${pestana === "todos" ? " comunicados__tab--active" : ""}`}
@@ -254,31 +407,48 @@ export default function Comunicados() {
           )}
         </div>
 
-        <div className="comunicados__search">
-          <Search size={18} />
-          <input
-            type="text"
-            placeholder="Buscar comunicado..."
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-          />
+        <div className="comunicados__filtros">
+          <div className="comunicados__search">
+            <Search size={18} />
+            <input
+              type="text"
+              placeholder="Buscar comunicado..."
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+            />
+          </div>
+
+          {!enPapeleraActual && noLeidosCount > 0 && (
+            <button
+              className={`comunicados__filtro${soloNoLeidos ? " comunicados__filtro--activo" : ""}`}
+              onClick={() => setSoloNoLeidos((v) => !v)}
+            >
+              Solo no leídos ({noLeidosCount})
+            </button>
+          )}
         </div>
 
         {error && <p className="comunicados__empty">{error}</p>}
 
         <div className="comunicados__list">
-          {filtrados.length === 0 && <p className="comunicados__empty">No hay comunicados.</p>}
+          {filtrados.length === 0 && (
+            <p className="comunicados__empty">
+              {enPapeleraActual ? "La papelera está vacía." : "No hay comunicados."}
+            </p>
+          )}
 
           {filtrados.map((c) => {
-            const sinLeer = pestana === "recibidos" && !vistosIds.has(c.id_comunicado);
+            const sinLeer = !enPapeleraActual && !vistosIds.has(c.id_comunicado);
 
             return (
               <button
                 key={c.id_comunicado}
-                className={`comunicados__item${seleccionado?.id_comunicado === c.id_comunicado ? " comunicados__item--active" : ""}${sinLeer ? " comunicados__item--unread" : ""}`}
+                className={`comunicados__item${seleccionado?.id_comunicado === c.id_comunicado ? " comunicados__item--active" : ""}${sinLeer ? " comunicados__item--unread" : ""}${enPapeleraActual ? " comunicados__item--archivado" : ""}`}
                 onClick={() => handleAbrir(c)}
               >
-                <div className="comunicados__item-icon"><Megaphone size={18} /></div>
+                <div className="comunicados__item-icon">
+                  {enPapeleraActual ? <Archive size={18} /> : <Megaphone size={18} />}
+                </div>
                 <div className="comunicados__item-content">
                   <div className="comunicados__item-top">
                     <span className="comunicados__item-title">{c.titulo}</span>
@@ -286,9 +456,12 @@ export default function Comunicados() {
                   </div>
                   <p className="comunicados__item-snippet">{c.contenido}</p>
                   <span className="comunicados__item-meta">
-                    {nombreDe(c.publicado_por)} · {formatearFecha(c.fecha_publicacion)}
+                    {nombreDe(c.publicado_por)} · {tiempoRelativo(c.fecha_publicacion)}
                   </span>
                 </div>
+                {sinLeer && pestana === "recibidos" && (
+                  <span className="comunicados__punto" aria-label="No leído" />
+                )}
               </button>
             );
           })}
@@ -300,6 +473,12 @@ export default function Comunicados() {
           <div className="comunicados__detail">
             <button className="comunicados__back" onClick={() => setSeleccionado(null)}>← Volver</button>
 
+            {enPapeleraActual && (
+              <div className="comunicados__aviso-papelera">
+                <Archive size={15} /> Este comunicado está en la papelera. No es visible para los destinatarios.
+              </div>
+            )}
+
             <div className="comunicados__detail-header">
               <h2>{seleccionado.titulo}</h2>
               <Badge variant={TIPO_VARIANT[seleccionado.tipo]}>{seleccionado.tipo}</Badge>
@@ -307,7 +486,7 @@ export default function Comunicados() {
 
             <p className="comunicados__detail-meta">
               Publicado por {nombreDe(seleccionado.publicado_por)} ·{" "}
-              {formatearFecha(seleccionado.fecha_publicacion)}
+              {new Date(seleccionado.fecha_publicacion).toLocaleString("es-AR")}
             </p>
 
             <p className="comunicados__detail-body">{seleccionado.contenido}</p>
@@ -333,7 +512,6 @@ export default function Comunicados() {
                   <Eye size={13} /> Visto por {lectoresSel.length}{" "}
                   {lectoresSel.length === 1 ? "persona" : "personas"}
                 </span>
-
                 {lectoresSel.length === 0 ? (
                   <p className="comunicados__info-texto">Todavía nadie lo abrió</p>
                 ) : (
@@ -349,14 +527,33 @@ export default function Comunicados() {
             )}
 
             {puedePublicar && (
-              <button className="comunicados__eliminar" onClick={() => handleEliminar(seleccionado)}>
-                <Trash2 size={16} /> Eliminar comunicado
-              </button>
+              <div className="comunicados__acciones-detalle">
+                {enPapeleraActual ? (
+                  <>
+                    <button
+                      className="comunicados__btn-restaurar"
+                      onClick={() => handleRestaurar(seleccionado)}
+                    >
+                      <RotateCcw size={16} /> Restaurar
+                    </button>
+                    <button
+                      className="comunicados__eliminar"
+                      onClick={() => handleEliminarDefinitivo(seleccionado)}
+                    >
+                      <Ban size={16} /> Borrar definitivamente
+                    </button>
+                  </>
+                ) : (
+                  <button className="comunicados__eliminar" onClick={() => handleEliminar(seleccionado)}>
+                    <Trash2 size={16} /> Mover a la papelera
+                  </button>
+                )}
+              </div>
             )}
           </div>
         ) : (
           <div className="comunicados__empty-state">
-            <Megaphone size={48} />
+            {enPapeleraActual ? <Archive size={48} /> : <Megaphone size={48} />}
             <p>Seleccioná un comunicado para leerlo</p>
           </div>
         )}
@@ -433,6 +630,21 @@ export default function Comunicados() {
           </form>
         </Modal>
       )}
+
+      {toast && (
+        <Toast
+          titulo="Nuevo comunicado"
+          detalle={toast.titulo}
+          onAccion={() => {
+            handleAbrir(toast);
+            setPestana("recibidos");
+            setToast(null);
+          }}
+          onCerrar={() => setToast(null)}
+        />
+      )}
+
+      {dialogo}
     </section>
   );
 }
