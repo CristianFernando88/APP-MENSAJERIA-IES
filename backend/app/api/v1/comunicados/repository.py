@@ -6,12 +6,15 @@ from .schemas import ComunicadoCreate, ComunicadoUpdate
 
 
 def list_comunicados(db: Session) -> list[Comunicado]:
-    return db.query(Comunicado).all()
+    return db.query(Comunicado).filter(
+        Comunicado.eliminado == False
+    ).all()
 
 
 def get_by_id(db: Session, comunicado_id: int) -> Comunicado | None:
     return db.query(Comunicado).filter(
-        Comunicado.id_comunicado == comunicado_id
+        Comunicado.id_comunicado == comunicado_id,
+        Comunicado.eliminado == False
     ).first()
 
 
@@ -22,8 +25,6 @@ def ensure_usuario(db: Session, usuario_id: int) -> tuple[bool, str]:
     if usuario is None:
         return False, f"El usuario {usuario_id} no existe"
     return True, ""
-
-
 
 
 def create(db: Session, data: ComunicadoCreate) -> Comunicado:
@@ -60,6 +61,40 @@ def update(
 
 def delete(db: Session, comunicado_id: int) -> bool:
     comunicado = get_by_id(db, comunicado_id)
+    if comunicado is None:
+        return False
+
+    comunicado.eliminado = True
+    db.commit()
+    db.refresh(comunicado)
+    return True
+def list_eliminados(db: Session) -> list[Comunicado]:
+    return db.query(Comunicado).filter(
+        Comunicado.eliminado == True
+    ).all()
+
+
+def restore(db: Session, comunicado_id: int) -> Comunicado | None:
+    comunicado = db.query(Comunicado).filter(
+        Comunicado.id_comunicado == comunicado_id,
+        Comunicado.eliminado == True
+    ).first()
+
+    if comunicado is None:
+        return None
+
+    comunicado.eliminado = False
+    db.commit()
+    db.refresh(comunicado)
+    return comunicado
+
+
+def delete_permanently(db: Session, comunicado_id: int) -> bool:
+    comunicado = db.query(Comunicado).filter(
+        Comunicado.id_comunicado == comunicado_id,
+        Comunicado.eliminado == True
+    ).first()
+
     if comunicado is None:
         return False
 
