@@ -12,6 +12,34 @@ router = APIRouter(prefix="/comunicados", tags=["Comunicados"])
 def listar(db: Session = Depends(get_db)):
     return repo.list_comunicados(db)
 
+@router.get("/papelera", response_model=list[ComunicadoResponse])
+def listar_eliminados(db: Session = Depends(get_db)):
+    return repo.list_eliminados(db)
+
+
+@router.patch("/{comunicado_id}/restaurar", response_model=ComunicadoResponse)
+def restaurar(comunicado_id: int, db: Session = Depends(get_db)):
+    comunicado = repo.restore(db, comunicado_id)
+    if comunicado is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Comunicado eliminado no encontrado"
+        )
+    return comunicado
+
+
+@router.delete("/{comunicado_id}/definitivo", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_definitivamente(
+    comunicado_id: int,
+    db: Session = Depends(get_db)
+):
+    if not repo.delete_permanently(db, comunicado_id):
+        raise HTTPException(
+            status_code=404,
+            detail="Comunicado eliminado no encontrado en la papelera"
+        )
+    return None
+
 
 @router.get("/{comunicado_id}", response_model=ComunicadoResponse)
 def obtener(comunicado_id: int, db: Session = Depends(get_db)):
