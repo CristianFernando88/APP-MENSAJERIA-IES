@@ -19,14 +19,13 @@ import Select from "../../components/ui/Select/Select";
 import Modal from "../../components/ui/Modal/Modal";
 import Card from "../../components/ui/Card/Card";
 import "./servidores.css";
+import { listarServidores, obtenerJerarquiaServidor } from "../../api/servidores";
 import {
-  obtenerServidores,
-  obtenerJerarquiaServidor,
-  obtenerCategoriasPorServidor,
+  listarCategoriasPorServidor,
   crearCategoria,
   actualizarCategoria,
   eliminarCategoria,
-} from "../../services/servidoresService";
+} from "../../api/categorias";
 import { useAuth } from "../../context/AuthContext";
 import { listarMiembrosServidor, unirseAServidor } from "../../api/miembrosServidor";
 
@@ -72,7 +71,7 @@ export default function Servidores() {
       setLoadingServidores(true);
       setErrorServidores("");
       try {
-        const data = await obtenerServidores();
+        const data = await listarServidores();
         if (cancelado) return;
         setServidores(data);
         if (data.length > 0) {
@@ -166,7 +165,7 @@ export default function Servidores() {
       setLoadingCategorias(true);
       setErrorCategorias("");
       try {
-        const data = await obtenerCategoriasPorServidor(servidorSeleccionado);
+        const data = await listarCategoriasPorServidor(servidorSeleccionado);
         if (!cancelado) setCategoriasGestion(Array.isArray(data) ? data : []);
       } catch (err) {
         if (!cancelado) setErrorCategorias(err?.message || "No se pudieron cargar las categorías");

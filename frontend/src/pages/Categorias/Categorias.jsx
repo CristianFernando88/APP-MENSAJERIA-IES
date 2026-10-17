@@ -7,13 +7,13 @@ import Input from "../../components/ui/Input/Input";
 import Select from "../../components/ui/Select/Select";
 import Modal from "../../components/ui/Modal/Modal";
 import "./Categorias.css";
+import { listarServidores } from "../../api/servidores";
 import {
-  obtenerServidores,
-  obtenerCategoriasPorServidor,
+  listarCategoriasPorServidor,
   crearCategoria,
   actualizarCategoria,
   eliminarCategoria,
-} from "../../services/servidoresService";
+} from "../../api/categorias";
 
 function construirArbol(lista) {
   const principales = lista.filter((c) => c.padre_id === null || c.padre_id === undefined);
@@ -60,7 +60,7 @@ export default function Categorias() {
       setLoadingServidores(true);
       setError("");
       try {
-        const data = await obtenerServidores();
+        const data = await listarServidores();
         if (cancelado) return;
         setServidores(data);
 
@@ -97,7 +97,7 @@ export default function Categorias() {
       setLoadingCategorias(true);
       setError("");
       try {
-        const data = await obtenerCategoriasPorServidor(servidorSeleccionado);
+        const data = await listarCategoriasPorServidor(servidorSeleccionado);
         if (!cancelado) setCategorias(Array.isArray(data) ? data : []);
       } catch (err) {
         if (!cancelado) setError(err?.message || "No se pudieron cargar las categorías");
