@@ -1,8 +1,6 @@
-# app/api/v1/usuarios/schemas.py
-# Schemas Pydantic (DTOs) del recurso Usuario.
-
 from pydantic import BaseModel, Field, EmailStr
 from datetime import datetime
+from app.api.v1.perfiles.schemas import PerfilResponse
 
 
 class UsuarioBase(BaseModel):
@@ -41,9 +39,9 @@ class UsuarioUpdate(BaseModel):
     )
     activo: bool | None = None
 class UsuarioResponse(UsuarioBase):
-    """Respuesta: incluye ID y fecha de registro."""
     id_usuario: int
     fecha_registro: datetime
+    perfil: PerfilResponse | None = None
 
     class Config:
-        from_attributes = True  # Para leer desde SQLAlchemy
+        from_attributes = True

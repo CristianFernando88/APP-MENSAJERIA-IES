@@ -2,7 +2,7 @@
 # Repository del recurso Usuario.
 # La capa de router NO sabe si los datos vienen de una lista, SQLAlchemy o PostgreSQL.
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.models.usuario import Usuario
 from app.core.security import hashear_password
 from .schemas import UsuarioCreate, UsuarioUpdate
@@ -10,13 +10,21 @@ from .schemas import UsuarioCreate, UsuarioUpdate
 
 # ---------- operaciones que consume el router ----------
 def list_usuarios(db: Session) -> list[Usuario]:
-    """Devuelve todos los usuarios."""
-    return db.query(Usuario).all()
+    return (
+        db.query(Usuario)
+        .options(joinedload(Usuario.perfil))
+        .all()
+    )
 
 
 def get_by_id(db: Session, usuario_id: int) -> Usuario | None:
-    """Devuelve un usuario por su ID."""
-    return db.query(Usuario).filter(Usuario.id_usuario == usuario_id).first()
+    return (
+        db.query(Usuario)
+        .options(joinedload(Usuario.perfil))
+        .filter(Usuario.id_usuario == usuario_id)
+        .first()
+    )
+
 
 
 def get_by_email(db: Session, email: str) -> Usuario | None:
@@ -25,14 +33,20 @@ def get_by_email(db: Session, email: str) -> Usuario | None:
 
 
 def get_by_nombre(db: Session, nombre_usuario: str) -> Usuario | None:
-    """Devuelve un usuario por su nombre de usuario."""
-    return db.query(Usuario).filter(Usuario.nombre_usuario == nombre_usuario).first()
+    return db.query(Usuario).filter(
+        Usuario.nombre_usuario == nombre_usuario
+    ).first()
 
 
 def search_by_nombre(db: Session, query: str) -> list[Usuario]:
-    """Busca usuarios por nombre (coincidencia parcial)."""
     q = f"%{query.lower()}%"
-    return db.query(Usuario).filter(Usuario.nombre_usuario.ilike(q)).all()
+    return (
+        db.query(Usuario)
+        .options(joinedload(Usuario.perfil))
+        .filter(Usuario.nombre_usuario.ilike(q))
+        .all()
+    )
+
 
 
 def ensure_unique(db: Session, email: str, nombre_usuario: str, exclude_id: int | None = None) -> tuple[bool, str]:
