@@ -1,23 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Search,
-  Server,
-  FolderTree,
-  Hash,
-  Megaphone,
-  ChevronRight,
-  AlertCircle,
-  Loader2,
-  Tags,
-  Pencil,
-  Trash2,
+  Search, Server, FolderTree, Hash, Megaphone, ChevronRight,
+  AlertCircle, Loader2, Tags, Pencil, Trash2, Users, UserPlus
 } from "lucide-react";
 import Button from "../../components/ui/Button/Button";
 import Input from "../../components/ui/Input/Input";
 import Select from "../../components/ui/Select/Select";
 import Modal from "../../components/ui/Modal/Modal";
-import Card from "../../components/ui/Card/Card";
 import "./servidores.css";
 import { listarServidores, obtenerJerarquiaServidor } from "../../api/servidores";
 import {
@@ -26,376 +16,382 @@ import {
   actualizarCategoria,
   eliminarCategoria,
 } from "../../api/categorias";
+import {
+  crearCanal,
+  actualizarCanal,
+  eliminarCanal
+} from "../../api/canales";
+import { listarUsuarios, crearUsuario } from "../../api/usuarios";
+import { crearMiembroServidor, eliminarMiembroServidor, listarMiembrosServidor } from "../../api/miembrosServidor";
+import { listarUsuarioRol, crearUsuarioRol, eliminarUsuarioRol } from "../../api/usuarioRol";
+import { listarRoles } from "../../api/roles";
 import { useAuth } from "../../context/AuthContext";
-import { listarMiembrosServidor, unirseAServidor } from "../../api/miembrosServidor";
 
 export default function Servidores() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, hasRole } = useAuth();
 
-  const [servidores, setServidores] = useState([]);
-  const [busquedaServidor, setBusquedaServidor] = useState("");
-  const [servidorSeleccionado, setServidorSeleccionado] = useState(null);
+  // --- Estados de datos ---
+  const [todosLosServidores, setTodosLosServidores] = useState([]);
+  const [todosLosRoles, setTodosLosRoles] = useState([]);
+  const [rolesDefinidos, setRolesDefinidos] = useState([]);
+  const [misMembresias, setMisMembresias] = useState([]);
+  const [todosLosUsuarios, setTodosLosUsuarios] = useState([]);
+  
   const [loadingServidores, setLoadingServidores] = useState(true);
   const [errorServidores, setErrorServidores] = useState("");
 
+  // --- Estados de UI ---
+  const [busquedaServidor, setBusquedaServidor] = useState("");
+  const [servidorSeleccionado, setServidorSeleccionado] = useState(null);
+  const [activeTab, setActiveTab] = useState("canales"); // "canales" | "categorias" | "miembros"
+  
   const [jerarquia, setJerarquia] = useState(null);
   const [loadingJerarquia, setLoadingJerarquia] = useState(false);
-  const [errorJerarquia, setErrorJerarquia] = useState("");
-
   const [canalActivoId, setCanalActivoId] = useState(null);
 
-  const [uniendo, setUniendo] = useState(false);
-  const [esMiembro, setEsMiembro] = useState(null);
-  const [mensajeUnion, setMensajeUnion] = useState("");
-
+  // --- Estados de Gestión (Categorías) ---
   const [categoriasGestion, setCategoriasGestion] = useState([]);
-  const [loadingCategorias, setLoadingCategorias] = useState(false);
-  const [errorCategorias, setErrorCategorias] = useState("");
-  const [busquedaCategoria, setBusquedaCategoria] = useState("");
   const [modalCategoria, setModalCategoria] = useState(false);
   const [categoriaEditando, setCategoriaEditando] = useState(null);
   const [guardandoCategoria, setGuardandoCategoria] = useState(false);
-  const [eliminandoCategoriaId, setEliminandoCategoriaId] = useState(null);
-  const [formCategoria, setFormCategoria] = useState({
-    nombre: "",
-    descripcion: "",
-    padre_id: "",
-    orden: "",
-  });
+  const [formCategoria, setFormCategoria] = useState({ nombre: "", descripcion: "" });
 
+  // --- Estados de Gestión (Canales) ---
+  const [modalCanal, setModalCanal] = useState(false);
+  const [canalEditando, setCanalEditando] = useState(null);
+  const [guardandoCanal, setGuardandoCanal] = useState(false);
+  const [formCanal, setFormCanal] = useState({ nombre: "", tipo: "chat", categoria_id: "" });
+
+  // --- Estados de Gestión (Miembros) ---
+  const [modalMiembro, setModalMiembro] = useState(false);
+  const [busquedaUsuario, setBusquedaUsuario] = useState("");
+  const [usuarioSeleccionado, setUsuarioSeleccionado] = useState("");
+  const [creandoUsuarioNuevo, setCreandoUsuarioNuevo] = useState(false);
+  const [formNuevoUsuario, setFormNuevoUsuario] = useState({ nombre_usuario: "", email: "", password: "" });
+  const [rolesNuevoUsuario, setRolesNuevoUsuario] = useState([]);
+  const [guardandoUsuario, setGuardandoUsuario] = useState(false);
+
+  // --- Estados de Edición de Roles ---
+  const [modalEditarRoles, setModalEditarRoles] = useState(false);
+  const [usuarioEditandoRoles, setUsuarioEditandoRoles] = useState(null);
+  const [rolesSeleccionadosEdicion, setRolesSeleccionadosEdicion] = useState([]);
+
+  // 1. Cargar datos iniciales
   useEffect(() => {
     let cancelado = false;
-
-    async function cargarServidores() {
+    async function cargarDatos() {
       setLoadingServidores(true);
-      setErrorServidores("");
       try {
-        const data = await listarServidores();
+        const [servidores, asignaciones, membresias, roles, usuarios] = await Promise.all([
+          listarServidores(),
+          listarUsuarioRol(),
+          listarMiembrosServidor(),
+          listarRoles(),
+          listarUsuarios(),
+        ]);
         if (cancelado) return;
-        setServidores(data);
-        if (data.length > 0) {
-          setServidorSeleccionado(data[0].id_servidor);
-        }
+        setTodosLosServidores(servidores || []);
+        setTodosLosRoles(asignaciones || []);
+        setMisMembresias(membresias || []);
+        setRolesDefinidos(roles || []);
+        setTodosLosUsuarios(usuarios || []);
       } catch (err) {
-        if (cancelado) return;
-        setErrorServidores(err?.message || "No se pudieron cargar los servidores");
+        if (!cancelado) setErrorServidores(err?.message || "Error al cargar datos");
       } finally {
         if (!cancelado) setLoadingServidores(false);
       }
     }
-
-    cargarServidores();
-    return () => {
-      cancelado = true;
-    };
+    cargarDatos();
+    return () => { cancelado = true; };
   }, []);
 
+  // 2. Filtrado estricto de servidores
+  const misServidores = useMemo(() => {
+    if (!user) return [];
+    if (hasRole(["super_admin", "admin"])) return todosLosServidores;
+    
+    const misIds = misMembresias
+      .filter((m) => Number(m.usuario_id) === Number(user.id_usuario) && m.activo !== false)
+      .map((m) => Number(m.servidor_id));
+      
+    return todosLosServidores.filter((s) => misIds.includes(Number(s.id_servidor)));
+  }, [todosLosServidores, misMembresias, user, hasRole]);
+
+  // Auto-seleccionar primer servidor
   useEffect(() => {
-    if (!user || servidorSeleccionado == null) {
-      setEsMiembro(null);
+    if (misServidores.length > 0 && !misServidores.some(s => s.id_servidor === servidorSeleccionado)) {
+      setServidorSeleccionado(misServidores[0].id_servidor);
+    } else if (misServidores.length === 0) {
+      setServidorSeleccionado(null);
+    }
+  }, [misServidores, servidorSeleccionado]);
+
+  const servidoresFiltrados = misServidores.filter((s) =>
+    (s.nombre || "").toLowerCase().includes(busquedaServidor.toLowerCase())
+  );
+
+  const servidorActivo = misServidores.find((s) => s.id_servidor === servidorSeleccionado);
+
+  // 3. Permisos de gestión
+  const puedeGestionar = useMemo(() => {
+    if (!user || !servidorActivo) return false;
+    if (hasRole(["super_admin", "admin"])) return true;
+    if (Number(servidorActivo.creador_id) === Number(user.id_usuario)) return true;
+
+    return todosLosRoles.some((ur) => {
+      if (Number(ur.usuario_id) !== Number(user.id_usuario)) return false;
+      if (Number(ur.servidor_id) !== Number(servidorActivo.id_servidor)) return false;
+      const rol = rolesDefinidos.find(r => r.id_rol === ur.rol_id);
+      return rol?.nombre?.toLowerCase() === "director";
+    });
+  }, [user, servidorActivo, hasRole, todosLosRoles, rolesDefinidos]);
+
+  // 4. Miembros actuales del servidor seleccionado
+  const miembrosActuales = useMemo(() => {
+    if (!servidorSeleccionado) return [];
+    const idsMiembros = misMembresias
+      .filter(m => Number(m.servidor_id) === Number(servidorSeleccionado) && m.activo !== false)
+      .map(m => Number(m.usuario_id));
+    return todosLosUsuarios.filter(u => idsMiembros.includes(Number(u.id_usuario)));
+  }, [misMembresias, servidorSeleccionado, todosLosUsuarios]);
+
+  // 5. Cargar Jerarquía y Categorías
+  useEffect(() => {
+    if (!servidorSeleccionado) {
+      setJerarquia(null);
       return;
     }
-
     let cancelado = false;
-    setMensajeUnion("");
-
-    async function verificarMembresia() {
-      try {
-        const data = await listarMiembrosServidor();
-        if (cancelado) return;
-        const miembro =
-          Array.isArray(data) &&
-          data.some((m) =>
-            Number(m.usuario_id) === Number(user.id_usuario) &&
-            Number(m.servidor_id) === Number(servidorSeleccionado) &&
-            m.activo !== false
-          );
-        setEsMiembro(Boolean(miembro));
-      } catch {
-        if (!cancelado) setEsMiembro(null);
-      }
-    }
-
-    verificarMembresia();
-    return () => {
-      cancelado = true;
-    };
-  }, [user, servidorSeleccionado]);
-
-  useEffect(() => {
-    if (servidorSeleccionado === null || servidorSeleccionado === undefined) {
-      return;
-    }
-
-    let cancelado = false;
-
     async function cargarJerarquia() {
       setLoadingJerarquia(true);
-      setErrorJerarquia("");
       setCanalActivoId(null);
       try {
         const data = await obtenerJerarquiaServidor(servidorSeleccionado);
-        if (cancelado) return;
-        setJerarquia(data);
+        if (!cancelado) setJerarquia(data);
       } catch (err) {
-        if (cancelado) return;
-        setErrorJerarquia(err?.message || "No se pudo cargar la jerarquía del servidor");
-        setJerarquia(null);
+        console.error(err);
       } finally {
         if (!cancelado) setLoadingJerarquia(false);
       }
     }
-
     cargarJerarquia();
-    return () => {
-      cancelado = true;
-    };
+    return () => { cancelado = true; };
   }, [servidorSeleccionado]);
 
   useEffect(() => {
-    if (servidorSeleccionado == null) {
+    if (!servidorSeleccionado || !puedeGestionar) {
       setCategoriasGestion([]);
       return;
     }
-
     let cancelado = false;
-
-    async function cargarCategorias() {
-      setLoadingCategorias(true);
-      setErrorCategorias("");
+    async function cargarCat() {
       try {
         const data = await listarCategoriasPorServidor(servidorSeleccionado);
         if (!cancelado) setCategoriasGestion(Array.isArray(data) ? data : []);
-      } catch (err) {
-        if (!cancelado) setErrorCategorias(err?.message || "No se pudieron cargar las categorías");
-      } finally {
-        if (!cancelado) setLoadingCategorias(false);
-      }
+      } catch (err) { console.error(err); }
     }
+    cargarCat();
+    return () => { cancelado = true; };
+  }, [servidorSeleccionado, puedeGestionar, jerarquia]);
 
-    cargarCategorias();
-    return () => {
-      cancelado = true;
-    };
-  }, [servidorSeleccionado]);
+  // 6. Handlers
+  const canalActivo = jerarquia?.categorias?.flatMap((c) => c.canales || [])
+    .concat(jerarquia?.sinCategoria || [])
+    .find((c) => c.id_canal === canalActivoId) || null;
 
-  const servidoresFiltrados = servidores.filter((s) =>
-    (s.nombre || "").toLowerCase().includes(busquedaServidor.toLowerCase())
-  );
-
-  const servidorActivo = servidores.find(
-    (s) => s.id_servidor === servidorSeleccionado
-  );
-
-  const canalActivo =
-    jerarquia?.categorias
-      ?.flatMap((c) => c.canales || [])
-      .concat(jerarquia?.sinCategoria || [])
-      .find((c) => c.id_canal === canalActivoId) || null;
-
-  const seleccionarCanal = useCallback((canal) => {
-    setCanalActivoId(canal.id_canal);
-  }, []);
-
-  const abrirCanal = useCallback(() => {
-    if (canalActivo) {
-      navigate("/mensajes", { state: { canal: canalActivo } });
-    }
-  }, [canalActivo, navigate]);
-
-  const handleUnirseServidor = async () => {
-    if (!user || servidorSeleccionado == null) return;
-    setUniendo(true);
-    setMensajeUnion("");
-
-    try {
-      await unirseAServidor(user.id_usuario, servidorSeleccionado);
-      setEsMiembro(true);
-      setMensajeUnion("Te uniste al servidor correctamente.");
-    } catch (err) {
-      const msg = err?.message || "No se pudo unir al servidor";
-      if (msg.toLowerCase().includes("ya es miembro")) {
-        setEsMiembro(true);
-      }
-      setMensajeUnion(msg);
-    } finally {
-      setUniendo(false);
-    }
+  const abrirCanal = () => {
+    if (canalActivo) navigate("/mensajes", { state: { canal: canalActivo } });
   };
 
-  const nombreCategoriaPorId = (id) =>
-    categoriasGestion.find((c) => Number(c.id_categoria) === Number(id))?.nombre ||
-    `#${id}`;
-
-  const categoriasFiltradas = useMemo(() => {
-    const term = busquedaCategoria.trim().toLowerCase();
-    if (!term) return categoriasGestion;
-    return categoriasGestion.filter((c) =>
-      (c.nombre || "").toLowerCase().includes(term) ||
-      (c.descripcion || "").toLowerCase().includes(term)
-    );
-  }, [categoriasGestion, busquedaCategoria]);
-
-  const opcionesPadreCategoria = useMemo(() => {
-    const idsExcluidos = categoriaEditando ? [categoriaEditando.id_categoria] : [];
-    return categoriasGestion
-      .filter(
-        (c) =>
-          (c.padre_id === null || c.padre_id === undefined) &&
-          !idsExcluidos.includes(c.id_categoria)
-      )
-      .map((c) => ({ value: c.id_categoria, label: c.nombre }));
-  }, [categoriasGestion, categoriaEditando]);
-
-  const abrirNuevaCategoria = () => {
-    setCategoriaEditando(null);
-    setFormCategoria({ nombre: "", descripcion: "", padre_id: "", orden: "" });
-    setModalCategoria(true);
-  };
-
-  const abrirEditarCategoria = (categoria) => {
-    setCategoriaEditando(categoria);
-    setFormCategoria({
-      nombre: categoria.nombre || "",
-      descripcion: categoria.descripcion || "",
-      padre_id:
-        categoria.padre_id === null || categoria.padre_id === undefined
-          ? ""
-          : String(categoria.padre_id),
-      orden:
-        categoria.orden === null || categoria.orden === undefined
-          ? ""
-          : String(categoria.orden),
-    });
-    setModalCategoria(true);
-  };
-
-  const cerrarModalCategoria = () => {
-    if (guardandoCategoria) return;
-    setModalCategoria(false);
-    setCategoriaEditando(null);
-    setFormCategoria({ nombre: "", descripcion: "", padre_id: "", orden: "" });
-  };
-
-  const handleChangeCategoria = (e) => {
-    setFormCategoria((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  const recargarJerarquia = async () => {
+    if (!servidorSeleccionado) return;
+    const j = await obtenerJerarquiaServidor(servidorSeleccionado);
+    setJerarquia(j);
   };
 
   const guardarCategoria = async (e) => {
     e.preventDefault();
     if (!servidorSeleccionado) return;
-
     setGuardandoCategoria(true);
-    setErrorCategorias("");
-
     try {
-      const payload = {
-        nombre: formCategoria.nombre.trim(),
-        descripcion: formCategoria.descripcion.trim() || null,
-        padre_id: formCategoria.padre_id ? Number(formCategoria.padre_id) : null,
-        orden: formCategoria.orden === "" ? 0 : Number(formCategoria.orden),
-      };
-
-      if (categoriaEditando) {
-        const actualizada = await actualizarCategoria(categoriaEditando.id_categoria, payload);
-        setCategoriasGestion((prev) =>
-          prev.map((c) =>
-            c.id_categoria === actualizada.id_categoria ? actualizada : c
-          )
-        );
-      } else {
-        const nueva = await crearCategoria({
-          ...payload,
-          servidor_id: Number(servidorSeleccionado),
-        });
-        setCategoriasGestion((prev) => [...prev, nueva]);
-      }
-
-      const jerarquiaActualizada = await obtenerJerarquiaServidor(servidorSeleccionado);
-      setJerarquia(jerarquiaActualizada);
-
-      cerrarModalCategoria();
-    } catch (err) {
-      setErrorCategorias(err?.message || "No se pudo guardar la categoría");
-    } finally {
-      setGuardandoCategoria(false);
-    }
+      const payload = { nombre: formCategoria.nombre.trim(), descripcion: formCategoria.descripcion.trim() || null, padre_id: null, orden: 0 };
+      if (categoriaEditando) await actualizarCategoria(categoriaEditando.id_categoria, payload);
+      else await crearCategoria({ ...payload, servidor_id: Number(servidorSeleccionado) });
+      
+      await recargarJerarquia();
+      setCategoriasGestion(await listarCategoriasPorServidor(servidorSeleccionado));
+      setModalCategoria(false);
+    } catch (err) { alert(err.message); } finally { setGuardandoCategoria(false); }
   };
 
-  const handleEliminarCategoria = async (categoria) => {
-    if (!window.confirm(`¿Eliminar la categoría "${categoria.nombre}"?`)) return;
-
-    setEliminandoCategoriaId(categoria.id_categoria);
-    setErrorCategorias("");
-
+  const borrarCategoria = async (id) => {
+    if (!window.confirm("¿Eliminar categoría?")) return;
     try {
-      await eliminarCategoria(categoria.id_categoria);
-      setCategoriasGestion((prev) =>
-        prev.filter((c) => c.id_categoria !== categoria.id_categoria)
-      );
+      await eliminarCategoria(id);
+      await recargarJerarquia();
+      setCategoriasGestion(await listarCategoriasPorServidor(servidorSeleccionado));
+    } catch (err) { alert(err.message); }
+  };
 
-      const jerarquiaActualizada = await obtenerJerarquiaServidor(servidorSeleccionado);
-      setJerarquia(jerarquiaActualizada);
-    } catch (err) {
-      setErrorCategorias(err?.message || "No se pudo eliminar la categoría");
-    } finally {
-      setEliminandoCategoriaId(null);
-    }
+  const guardarCanal = async (e) => {
+    e.preventDefault();
+    if (!servidorSeleccionado) return;
+    setGuardandoCanal(true);
+    try {
+      const payload = { nombre: formCanal.nombre.trim(), tipo: formCanal.tipo, categoria_id: formCanal.categoria_id ? Number(formCanal.categoria_id) : null };
+      if (canalEditando) await actualizarCanal(canalEditando.id_canal, payload);
+      else await crearCanal({ ...payload, servidor_id: Number(servidorSeleccionado), creador_id: user?.id_usuario });
+      
+      await recargarJerarquia();
+      setModalCanal(false);
+    } catch (err) { alert(err.message); } finally { setGuardandoCanal(false); }
+  };
+
+  const borrarCanal = async (id) => {
+    if (!window.confirm("¿Eliminar canal?")) return;
+    try {
+      await eliminarCanal(id);
+      await recargarJerarquia();
+    } catch (err) { alert(err.message); }
+  };
+
+  // --- Handlers de Miembros ---
+  const agregarMiembroExistente = async () => {
+    if (!usuarioSeleccionado || !servidorSeleccionado) return;
+    setGuardandoUsuario(true);
+    try {
+      await crearMiembroServidor({ usuario_id: Number(usuarioSeleccionado), servidor_id: Number(servidorSeleccionado), activo: true });
+      setMisMembresias(await listarMiembrosServidor());
+      setModalMiembro(false);
+      setUsuarioSeleccionado("");
+      setBusquedaUsuario("");
+    } catch (e) { alert(e.message); } finally { setGuardandoUsuario(false); }
+  };
+
+  const toggleRolNuevo = (rolId) => {
+    setRolesNuevoUsuario(prev => prev.includes(rolId) ? prev.filter(id => id !== rolId) : [...prev, rolId]);
+  };
+
+  const crearEInscribirUsuario = async () => {
+    if (!servidorSeleccionado) return;
+    if (rolesNuevoUsuario.length === 0) return alert("Seleccioná al menos un rol.");
+    
+    setGuardandoUsuario(true);
+    try {
+      const nuevo = await crearUsuario({ ...formNuevoUsuario, activo: true });
+      await crearMiembroServidor({ usuario_id: nuevo.id_usuario, servidor_id: Number(servidorSeleccionado), activo: true });
+
+      for (const rolId of rolesNuevoUsuario) {
+        await crearUsuarioRol({
+          usuario_id: nuevo.id_usuario, rol_id: Number(rolId), servidor_id: Number(servidorSeleccionado), asignado_por: user?.id_usuario,
+        });
+      }
+      
+      setMisMembresias(await listarMiembrosServidor());
+      setTodosLosUsuarios(await listarUsuarios());
+      setTodosLosRoles(await listarUsuarioRol());
+
+      setModalMiembro(false);
+      setFormNuevoUsuario({ nombre_usuario: "", email: "", password: "" });
+      setRolesNuevoUsuario([]);
+    } catch (e) { alert(e.message); } finally { setGuardandoUsuario(false); }
+  };
+
+  const quitarMiembro = async (usuarioId) => {
+    if (!window.confirm("¿Quitar a este usuario del servidor? Se le quitarán todos sus roles en este servidor.")) return;
+    try {
+      // 1. Quitar membresía
+      await eliminarMiembroServidor(usuarioId, servidorSeleccionado);
+      
+      // 2. Quitar roles asociados a este servidor
+      const rolesAEliminar = todosLosRoles.filter(ur => Number(ur.usuario_id) === Number(usuarioId) && Number(ur.servidor_id) === Number(servidorSeleccionado));
+      for (const ur of rolesAEliminar) {
+        await eliminarUsuarioRol(usuarioId, ur.rol_id, servidorSeleccionado);
+      }
+
+      setMisMembresias(await listarMiembrosServidor());
+      setTodosLosRoles(await listarUsuarioRol());
+    } catch (e) { alert(e.message); }
+  };
+
+  // --- Handlers de Edición de Roles ---
+  const abrirEditarRoles = (u) => {
+    setUsuarioEditandoRoles(u);
+    const rolesActuales = todosLosRoles
+      .filter(ur => Number(ur.usuario_id) === Number(u.id_usuario) && Number(ur.servidor_id) === Number(servidorSeleccionado))
+      .map(ur => Number(ur.rol_id));
+    setRolesSeleccionadosEdicion(rolesActuales);
+    setModalEditarRoles(true);
+  };
+
+  const toggleRolEdicion = (rolId) => {
+    setRolesSeleccionadosEdicion(prev => prev.includes(rolId) ? prev.filter(id => id !== rolId) : [...prev, rolId]);
+  };
+
+  const guardarEdicionRoles = async () => {
+    if (!usuarioEditandoRoles || !servidorSeleccionado) return;
+    setGuardandoUsuario(true);
+    try {
+      const rolesActuales = todosLosRoles
+        .filter(ur => Number(ur.usuario_id) === Number(usuarioEditandoRoles.id_usuario) && Number(ur.servidor_id) === Number(servidorSeleccionado))
+        .map(ur => Number(ur.rol_id));
+
+      // Quitar los desmarcados
+      for (const rolId of rolesActuales) {
+        if (!rolesSeleccionadosEdicion.includes(rolId)) {
+          await eliminarUsuarioRol(usuarioEditandoRoles.id_usuario, rolId, servidorSeleccionado);
+        }
+      }
+      // Agregar los nuevos marcados
+      for (const rolId of rolesSeleccionadosEdicion) {
+        if (!rolesActuales.includes(rolId)) {
+          await crearUsuarioRol({
+            usuario_id: usuarioEditandoRoles.id_usuario, rol_id: rolId, servidor_id: Number(servidorSeleccionado), asignado_por: user?.id_usuario,
+          });
+        }
+      }
+
+      setTodosLosRoles(await listarUsuarioRol());
+      setModalEditarRoles(false);
+    } catch (e) { alert(e.message); } finally { setGuardandoUsuario(false); }
+  };
+
+  const obtenerRolesDeUsuario = (usuarioId) => {
+    return todosLosRoles
+      .filter(ur => Number(ur.usuario_id) === Number(usuarioId) && Number(ur.servidor_id) === Number(servidorSeleccionado))
+      .map(ur => rolesDefinidos.find(r => r.id_rol === ur.rol_id)?.nombre)
+      .filter(Boolean);
   };
 
   return (
     <section className="servidores">
       <div className="servidores__header">
-        <h1 className="servidores__title">Servidores</h1>
+        <h1 className="servidores__title">Mis Servidores</h1>
       </div>
 
       <div className="servidores__explorer">
+        {/* BARRA LATERAL */}
         <aside className="servidores__panel servidores__panel--servers">
           <div className="servidores__search">
             <Search size={18} />
-            <input
-              type="text"
-              placeholder="Buscar servidor..."
-              value={busquedaServidor}
-              onChange={(e) => setBusquedaServidor(e.target.value)}
-            />
+            <input type="text" placeholder="Buscar servidor..." value={busquedaServidor} onChange={(e) => setBusquedaServidor(e.target.value)} />
           </div>
 
-          {loadingServidores && (
-            <div className="servidores__state servidores__state--loading">
-              <Loader2 className="servidores__spinner" size={18} />
-              <span>Cargando servidores…</span>
-            </div>
-          )}
-
-          {errorServidores && (
-            <div className="servidores__state servidores__state--error">
-              <AlertCircle size={18} />
-              <span>{errorServidores}</span>
-            </div>
-          )}
-
-          {!loadingServidores && !errorServidores && servidoresFiltrados.length === 0 && (
-            <p className="servidores__empty">No se encontraron servidores.</p>
-          )}
+          {loadingServidores && <p className="servidores__empty">Cargando...</p>}
+          {!loadingServidores && servidoresFiltrados.length === 0 && <p className="servidores__empty">No perteneces a ningún servidor.</p>}
 
           <ul className="servidores__server-list">
             {servidoresFiltrados.map((s) => (
               <li key={s.id_servidor}>
                 <button
-                  type="button"
-                  className={`servidores__server-item${
-                    s.id_servidor === servidorSeleccionado ? " servidores__server-item--active" : ""
-                  }`}
+                  className={`servidores__server-item ${s.id_servidor === servidorSeleccionado ? "servidores__server-item--active" : ""}`}
                   onClick={() => setServidorSeleccionado(s.id_servidor)}
                 >
                   <Server size={18} />
                   <div className="servidores__server-text">
                     <span className="servidores__server-name">{s.nombre}</span>
-                    {s.descripcion && (
-                      <span className="servidores__server-desc">{s.descripcion}</span>
-                    )}
+                    {s.descripcion && <span className="servidores__server-desc">{s.descripcion}</span>}
                   </div>
                   <ChevronRight size={16} />
                 </button>
@@ -404,326 +400,276 @@ export default function Servidores() {
           </ul>
         </aside>
 
+        {/* PANEL DERECHO */}
         <main className="servidores__panel servidores__panel--detail">
           {servidorSeleccionado === null ? (
             <div className="servidores__empty-state">
               <Server size={32} />
-              <p>Seleccioná un servidor para ver sus categorías y canales.</p>
+              <p>Seleccioná un servidor para ver sus canales.</p>
             </div>
           ) : (
             <>
-              <header className="servidores__detail-header">
+              <header className="servidores__detail-header" style={{ marginBottom: "1rem", borderBottom: "1px solid #ddd", paddingBottom: "1rem" }}>
                 <div>
-                  <h2 className="servidores__detail-title">
-                    {servidorActivo?.nombre || "Servidor"}
-                  </h2>
-                  {servidorActivo?.descripcion && (
-                    <p className="servidores__detail-desc">{servidorActivo.descripcion}</p>
-                  )}
+                  <h2 className="servidores__detail-title">{servidorActivo?.nombre}</h2>
+                  {servidorActivo?.descripcion && <p className="servidores__detail-desc">{servidorActivo.descripcion}</p>}
                 </div>
-
-                {user && servidorSeleccionado !== null && (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "4px",
-                      alignItems: "flex-end",
-                    }}
-                  >
-                    {esMiembro === true ? (
-                      <span style={{ fontSize: "12px", opacity: 0.8 }}>Ya sos miembro</span>
-                    ) : (
-                      <Button size="sm" onClick={handleUnirseServidor} disabled={uniendo}>
-                        {uniendo ? "Uniéndome..." : "Unirme al servidor"}
-                      </Button>
-                    )}
-
-                    {mensajeUnion && (
-                      <p style={{ fontSize: "12px", margin: 0, opacity: 0.85 }}>
-                        {mensajeUnion}
-                      </p>
-                    )}
-                  </div>
-                )}
               </header>
 
-              <section style={{ margin: "1rem 0" }}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: "8px",
-                    flexWrap: "wrap",
-                    marginBottom: "8px",
-                  }}
-                >
-                  <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "6px" }}>
-                    <Tags size={18} /> Categorías del servidor
-                  </h3>
-
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-                    <input
-                      type="text"
-                      placeholder="Buscar categoría..."
-                      value={busquedaCategoria}
-                      onChange={(e) => setBusquedaCategoria(e.target.value)}
-                      style={{ padding: "6px 8px" }}
-                    />
-                    <Button size="sm" onClick={abrirNuevaCategoria}>
-                      + Nueva categoría
-                    </Button>
-                  </div>
-                </div>
-
-                {errorCategorias && (
-                  <div className="servidores__state servidores__state--error" style={{ marginBottom: "8px" }}>
-                    <AlertCircle size={18} />
-                    <span>{errorCategorias}</span>
+              <div style={{ display: "flex", gap: "2rem", alignItems: "flex-start", flexWrap: "wrap" }}>
+                
+                {/* COLUMNA IZQUIERDA: TABS */}
+                {puedeGestionar && (
+                  <div style={{ width: "200px", flexShrink: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <button onClick={() => setActiveTab("canales")} style={{ padding: "10px 12px", textAlign: "left", borderRadius: "8px", border: "none", cursor: "pointer", background: activeTab === "canales" ? "var(--color-azul-petroleo)" : "transparent", color: activeTab === "canales" ? "white" : "var(--texto-oscuro)", fontWeight: 600 }}>
+                      <Hash size={16} style={{ marginRight: "6px", verticalAlign: "middle" }} /> Canales
+                    </button>
+                    <button onClick={() => setActiveTab("categorias")} style={{ padding: "10px 12px", textAlign: "left", borderRadius: "8px", border: "none", cursor: "pointer", background: activeTab === "categorias" ? "var(--color-azul-petroleo)" : "transparent", color: activeTab === "categorias" ? "white" : "var(--texto-oscuro)", fontWeight: 600 }}>
+                      <Tags size={16} style={{ marginRight: "6px", verticalAlign: "middle" }} /> Categorías
+                    </button>
+                    <button onClick={() => setActiveTab("miembros")} style={{ padding: "10px 12px", textAlign: "left", borderRadius: "8px", border: "none", cursor: "pointer", background: activeTab === "miembros" ? "var(--color-azul-petroleo)" : "transparent", color: activeTab === "miembros" ? "white" : "var(--texto-oscuro)", fontWeight: 600 }}>
+                      <Users size={16} style={{ marginRight: "6px", verticalAlign: "middle" }} /> Miembros
+                    </button>
                   </div>
                 )}
 
-                {loadingCategorias ? (
-                  <div className="servidores__state servidores__state--loading">
-                    <Loader2 className="servidores__spinner" size={18} />
-                    <span>Cargando categorías…</span>
-                  </div>
-                ) : (
-                  <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                    {categoriasFiltradas.map((categoria) => (
-                      <li
-                        key={categoria.id_categoria}
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          gap: "8px",
-                          padding: "8px",
-                          borderBottom: "1px solid rgba(255,255,255,0.1)",
-                        }}
-                      >
-                        <div style={{ minWidth: 0 }}>
-                          <strong>{categoria.nombre}</strong>
-                          {categoria.descripcion && (
-                            <div style={{ fontSize: "12px", opacity: 0.75 }}>
-                              {categoria.descripcion}
-                            </div>
-                          )}
-                          <div style={{ fontSize: "11px", opacity: 0.6 }}>
-                            Orden: {categoria.orden ?? 0}
-                            {categoria.padre_id
-                              ? ` · Hija de ${nombreCategoriaPorId(categoria.padre_id)}`
-                              : ""}
-                          </div>
-                        </div>
-
-                        <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => abrirEditarCategoria(categoria)}
-                          >
-                            <Pencil size={14} /> Editar
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => handleEliminarCategoria(categoria)}
-                            disabled={eliminandoCategoriaId === categoria.id_categoria}
-                          >
-                            <Trash2 size={14} />
-                            {eliminandoCategoriaId === categoria.id_categoria
-                              ? "Eliminando..."
-                              : "Eliminar"}
-                          </Button>
-                        </div>
-                      </li>
-                    ))}
-
-                    {categoriasFiltradas.length === 0 && (
-                      <li style={{ padding: "8px", opacity: 0.7 }}>
-                        No hay categorías para este servidor.
-                      </li>
-                    )}
-                  </ul>
-                )}
-              </section>
-
-              {loadingJerarquia && (
-                <div className="servidores__state servidores__state--loading">
-                  <Loader2 className="servidores__spinner" size={18} />
-                  <span>Cargando categorías y canales…</span>
-                </div>
-              )}
-
-              {errorJerarquia && (
-                <div className="servidores__state servidores__state--error">
-                  <AlertCircle size={18} />
-                  <span>{errorJerarquia}</span>
-                </div>
-              )}
-
-              {!loadingJerarquia && !errorJerarquia && jerarquia && (
-                <div className="servidores__tree">
-                  {(jerarquia.categorias || []).length === 0 &&
-                    (jerarquia.sinCategoria || []).length === 0 && (
-                      <p className="servidores__empty">
-                        Este servidor todavía no tiene categorías ni canales.
-                      </p>
-                    )}
-
-                  {(jerarquia.categorias || []).map((categoria) => (
-                    <section key={categoria.id_categoria} className="servidores__categoria">
-                      <div className="servidores__categoria-header">
-                        <FolderTree size={18} />
-                        <div>
-                          <p className="servidores__categoria-nombre">{categoria.nombre}</p>
-                          {categoria.descripcion && (
-                            <p className="servidores__categoria-desc">{categoria.descripcion}</p>
-                          )}
-                        </div>
+                {/* COLUMNA DERECHA: CONTENIDO */}
+                <div style={{ flex: 1, minWidth: "300px" }}>
+                  
+                  {/* VISTA: CANALES */}
+                  {(!puedeGestionar || activeTab === "canales") && (
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                        <h3 style={{ margin: 0 }}>Canales del servidor</h3>
+                        {puedeGestionar && <Button size="sm" onClick={() => { setCanalEditando(null); setFormCanal({ nombre: "", tipo: "chat", categoria_id: "" }); setModalCanal(true); }}>+ Nuevo canal</Button>}
                       </div>
 
-                      {(categoria.canales || []).length === 0 && (
-                        <p className="servidores__categoria-empty">Sin canales en esta categoría.</p>
+                      {loadingJerarquia ? <p>Cargando canales...</p> : jerarquia && (
+                        <div className="servidores__tree">
+                          {(jerarquia.categorias || []).map((cat) => (
+                            <section key={cat.id_categoria} className="servidores__categoria">
+                              <h4 className="servidores__categoria-nombre">{cat.nombre}</h4>
+                              <ul className="servidores__canal-list">
+                                {(cat.canales || []).map((canal) => (
+                                  <li key={canal.id_canal} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                    <button className={`servidores__canal ${canal.id_canal === canalActivoId ? "servidores__canal--active" : ""}`} onClick={() => setCanalActivoId(canal.id_canal)} style={{ flex: 1 }}>
+                                      {canal.tipo === "informativo" ? <Megaphone size={16} /> : <Hash size={16} />}
+                                      <span>{canal.nombre}</span>
+                                    </button>
+                                    {puedeGestionar && (
+                                      <div style={{ display: "flex", gap: "4px", marginLeft: "8px" }}>
+                                        <button onClick={() => { setCanalEditando(canal); setFormCanal({ nombre: canal.nombre, tipo: canal.tipo, categoria_id: canal.categoria_id || "" }); setModalCanal(true); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#666" }}><Pencil size={14} /></button>
+                                        <button onClick={() => borrarCanal(canal.id_canal)} style={{ background: "none", border: "none", cursor: "pointer", color: "#c00" }}><Trash2 size={14} /></button>
+                                      </div>
+                                    )}
+                                  </li>
+                                ))}
+                                {cat.canales.length === 0 && <p style={{ opacity: 0.6, fontSize: "14px" }}>Sin canales.</p>}
+                              </ul>
+                            </section>
+                          ))}
+                          {(jerarquia.sinCategoria || []).length > 0 && (
+                            <section className="servidores__categoria servidores__categoria--uncategorized">
+                              <h4 className="servidores__categoria-nombre">Sin categoría</h4>
+                              <ul className="servidores__canal-list">
+                                {jerarquia.sinCategoria.map((canal) => (
+                                  <li key={canal.id_canal} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                    <button className={`servidores__canal ${canal.id_canal === canalActivoId ? "servidores__canal--active" : ""}`} onClick={() => setCanalActivoId(canal.id_canal)} style={{ flex: 1 }}>
+                                      {canal.tipo === "informativo" ? <Megaphone size={16} /> : <Hash size={16} />}
+                                      <span>{canal.nombre}</span>
+                                    </button>
+                                    {puedeGestionar && (
+                                      <div style={{ display: "flex", gap: "4px", marginLeft: "8px" }}>
+                                        <button onClick={() => { setCanalEditando(canal); setFormCanal({ nombre: canal.nombre, tipo: canal.tipo, categoria_id: "" }); setModalCanal(true); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#666" }}><Pencil size={14} /></button>
+                                        <button onClick={() => borrarCanal(canal.id_canal)} style={{ background: "none", border: "none", cursor: "pointer", color: "#c00" }}><Trash2 size={14} /></button>
+                                      </div>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            </section>
+                          )}
+                        </div>
                       )}
+                    </div>
+                  )}
 
-                      <ul className="servidores__canal-list">
-                        {(categoria.canales || []).map((canal) => (
-                          <li key={canal.id_canal}>
-                            <button
-                              type="button"
-                              className={`servidores__canal${
-                                canal.id_canal === canalActivoId ? " servidores__canal--active" : ""
-                              }`}
-                              onClick={() => seleccionarCanal(canal)}
-                            >
-                              {canal.tipo === "informativo" ? (
-                                <Megaphone size={16} />
-                              ) : (
-                                <Hash size={16} />
-                              )}
-                              <span className="servidores__canal-nombre">{canal.nombre}</span>
-                              <span className="servidores__canal-tipo">
-                                {canal.tipo === "informativo" ? "Informativo" : "Chat"}
-                              </span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    </section>
-                  ))}
-
-                  {(jerarquia.sinCategoria || []).length > 0 && (
-                    <section className="servidores__categoria servidores__categoria--uncategorized">
-                      <div className="servidores__categoria-header">
-                        <FolderTree size={18} />
-                        <div>
-                          <p className="servidores__categoria-nombre">Sin categoría</p>
-                          <p className="servidores__categoria-desc">
-                            Canales que todavía no fueron agrupados.
-                          </p>
-                        </div>
+                  {/* VISTA: CATEGORÍAS */}
+                  {puedeGestionar && activeTab === "categorias" && (
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                        <h3 style={{ margin: 0 }}>Categorías</h3>
+                        <Button size="sm" onClick={() => { setCategoriaEditando(null); setFormCategoria({ nombre: "", descripcion: "" }); setModalCategoria(true); }}>+ Nueva categoría</Button>
                       </div>
-                      <ul className="servidores__canal-list">
-                        {jerarquia.sinCategoria.map((canal) => (
-                          <li key={canal.id_canal}>
-                            <button
-                              type="button"
-                              className={`servidores__canal${
-                                canal.id_canal === canalActivoId ? " servidores__canal--active" : ""
-                              }`}
-                              onClick={() => seleccionarCanal(canal)}
-                            >
-                              {canal.tipo === "informativo" ? (
-                                <Megaphone size={16} />
-                              ) : (
-                                <Hash size={16} />
-                              )}
-                              <span className="servidores__canal-nombre">{canal.nombre}</span>
-                              <span className="servidores__canal-tipo">
-                                {canal.tipo === "informativo" ? "Informativo" : "Chat"}
-                              </span>
-                            </button>
+                      <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                        {categoriasGestion.map((cat) => (
+                          <li key={cat.id_categoria} style={{ display: "flex", justifyContent: "space-between", padding: "12px", background: "var(--color-gris-azulado)", marginBottom: "8px", borderRadius: "8px" }}>
+                            <div>
+                              <strong style={{ display: "block" }}>{cat.nombre}</strong>
+                              {cat.descripcion && <span style={{ fontSize: "12px", color: "#666" }}>{cat.descripcion}</span>}
+                            </div>
+                            <div style={{ display: "flex", gap: "6px" }}>
+                              <Button size="sm" variant="outline" onClick={() => { setCategoriaEditando(cat); setFormCategoria({ nombre: cat.nombre, descripcion: cat.descripcion || "" }); setModalCategoria(true); }}><Pencil size={14} /></Button>
+                              <Button size="sm" onClick={() => borrarCategoria(cat.id_categoria)}><Trash2 size={14} /></Button>
+                            </div>
                           </li>
                         ))}
+                        {categoriasGestion.length === 0 && <p>No hay categorías creadas.</p>}
                       </ul>
-                    </section>
+                    </div>
+                  )}
+
+                  {/* VISTA: MIEMBROS */}
+                  {puedeGestionar && activeTab === "miembros" && (
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                        <h3 style={{ margin: 0 }}>Miembros del Servidor</h3>
+                        <Button size="sm" onClick={() => { setCreandoUsuarioNuevo(false); setModalMiembro(true); }}>+ Agregar miembro</Button>
+                      </div>
+
+                      {miembrosActuales.length === 0 ? (
+                        <p>No hay miembros en este servidor.</p>
+                      ) : (
+                        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                          {miembrosActuales.map((u) => (
+                            <li key={u.id_usuario} style={{ display: "flex", justifyContent: "space-between", padding: "12px", background: "var(--color-gris-azulado)", marginBottom: "8px", borderRadius: "8px", alignItems: "center" }}>
+                              <div>
+                                <strong style={{ display: "block" }}>{u.nombre_usuario} <span style={{ fontSize: "11px", fontWeight: "normal", color: "var(--color-teal-medio)", marginLeft: "6px" }}>{obtenerRolesDeUsuario(u.id_usuario).join(", ")}</span></strong>
+                                <span style={{ fontSize: "12px", color: "#666" }}>{u.email}</span>
+                              </div>
+                              <div style={{ display: "flex", gap: "6px" }}>
+                                <Button size="sm" variant="outline" onClick={() => abrirEditarRoles(u)}><Pencil size={14} /></Button>
+                                <Button size="sm" onClick={() => quitarMiembro(u.id_usuario)}><Trash2 size={14} /></Button>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+
+                  {/* BARRA DE CANAL SELECCIONADO */}
+                  {canalActivo && activeTab === "canales" && (
+                    <div style={{ marginTop: "2rem", padding: "1rem", background: "#EDF2F7", display: "flex", justifyContent: "space-between", borderRadius: "8px" }}>
+                      <span>Canal seleccionado: <strong>{canalActivo.nombre}</strong></span>
+                      <Button size="sm" onClick={abrirCanal}>Entrar al canal <ChevronRight size={16} /></Button>
+                    </div>
                   )}
                 </div>
-              )}
-
-              {canalActivo && (
-                <div className="servidores__active-channel">
-                  <div className="servidores__active-channel-info">
-                    <p className="servidores__active-channel-label">Canal seleccionado</p>
-                    <p className="servidores__active-channel-name">{canalActivo.nombre}</p>
-                    <p className="servidores__active-channel-meta">
-                      {canalActivo.tipo === "informativo" ? "Informativo" : "Chat"} — ID {canalActivo.id_canal}
-                    </p>
-                  </div>
-                  <Button size="sm" onClick={abrirCanal}>
-                    Abrir canal <ChevronRight size={16} />
-                  </Button>
-                </div>
-              )}
+              </div>
             </>
           )}
         </main>
       </div>
 
+      {/* MODAL CATEGORIA */}
       {modalCategoria && (
-        <Modal
-          title={categoriaEditando ? "Editar categoría" : "Nueva categoría"}
-          onClose={cerrarModalCategoria}
-        >
-          <form className="categorias__form" onSubmit={guardarCategoria}>
-            <Input
-              label="Nombre"
-              name="nombre"
-              value={formCategoria.nombre}
-              onChange={handleChangeCategoria}
-              placeholder="Ej: Soporte"
-            />
-            <Input
-              label="Descripción"
-              name="descripcion"
-              value={formCategoria.descripcion}
-              onChange={handleChangeCategoria}
-              placeholder="Ej: Consultas y ayuda técnica"
-            />
-            <Select
-              label="Categoría padre (opcional)"
-              name="padre_id"
-              value={formCategoria.padre_id}
-              onChange={handleChangeCategoria}
-              options={opcionesPadreCategoria}
-              placeholder="Ninguna (categoría principal)"
-            />
-            <Input
-              label="Orden"
-              name="orden"
-              type="number"
-              value={formCategoria.orden}
-              onChange={handleChangeCategoria}
-              placeholder="0"
-            />
-
-            <div className="categorias__form-actions">
-              <Button type="button" variant="outline" onClick={cerrarModalCategoria}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={guardandoCategoria}>
-                {guardandoCategoria
-                  ? "Guardando..."
-                  : categoriaEditando
-                  ? "Guardar cambios"
-                  : "Crear categoría"}
-              </Button>
+        <Modal title={categoriaEditando ? "Editar categoría" : "Nueva categoría"} onClose={() => setModalCategoria(false)}>
+          <form className="categorias__form" onSubmit={guardarCategoria} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <Input label="Nombre" value={formCategoria.nombre} onChange={(e) => setFormCategoria({...formCategoria, nombre: e.target.value})} />
+            <Input label="Descripción" value={formCategoria.descripcion} onChange={(e) => setFormCategoria({...formCategoria, descripcion: e.target.value})} />
+            <div style={{ display: "flex", gap: "1rem", justifyContent: "flex-end" }}>
+              <Button type="button" variant="outline" onClick={() => setModalCategoria(false)}>Cancelar</Button>
+              <Button type="submit" disabled={guardandoCategoria}>{guardandoCategoria ? "Guardando..." : "Guardar"}</Button>
             </div>
           </form>
         </Modal>
       )}
+
+      {/* MODAL CANAL */}
+      {modalCanal && (
+        <Modal title={canalEditando ? "Editar canal" : "Nuevo canal"} onClose={() => setModalCanal(false)}>
+          <form className="categorias__form" onSubmit={guardarCanal} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <Input label="Nombre" value={formCanal.nombre} onChange={(e) => setFormCanal({...formCanal, nombre: e.target.value})} />
+            <Select 
+              label="Categoría (opcional)" value={formCanal.categoria_id} onChange={(e) => setFormCanal({...formCanal, categoria_id: e.target.value})} 
+              options={[{ value: "", label: "Sin categoría" }, ...categoriasGestion.map(c => ({ value: c.id_categoria, label: c.nombre }))]} 
+            />
+            <Select 
+              label="Tipo de canal" value={formCanal.tipo} onChange={(e) => setFormCanal({...formCanal, tipo: e.target.value})} 
+              options={[{ value: "chat", label: "Chat" }, { value: "informativo", label: "Informativo" }]} 
+            />
+            <div style={{ display: "flex", gap: "1rem", justifyContent: "flex-end", marginTop: "1rem" }}>
+              <Button type="button" variant="outline" onClick={() => setModalCanal(false)}>Cancelar</Button>
+              <Button type="submit" disabled={guardandoCanal}>{guardandoCanal ? "Guardando..." : "Guardar"}</Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* MODAL AGREGAR MIEMBROS */}
+      {modalMiembro && (
+        <Modal title="Agregar miembro al servidor" onClose={() => setModalMiembro(false)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            {!creandoUsuarioNuevo ? (
+              <>
+                <Input label="Buscar usuario por nombre o email" value={busquedaUsuario} onChange={(e) => setBusquedaUsuario(e.target.value)} placeholder="Ej: juan" />
+                <Select
+                  label="Seleccionar usuario"
+                  value={usuarioSeleccionado}
+                  onChange={(e) => setUsuarioSeleccionado(e.target.value)}
+                  options={todosLosUsuarios.filter(u => (u.nombre_usuario.toLowerCase().includes(busquedaUsuario.toLowerCase()) || u.email.toLowerCase().includes(busquedaUsuario.toLowerCase())) && !miembrosActuales.some(m => m.id_usuario === u.id_usuario)).map(u => ({ value: u.id_usuario, label: `${u.nombre_usuario} (${u.email})` }))}
+                  placeholder="Elegir usuario..."
+                />
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: "1rem" }}>
+                  <Button type="button" variant="outline" onClick={() => setCreandoUsuarioNuevo(true)}>¿No existe? Crear nuevo</Button>
+                  <Button disabled={!usuarioSeleccionado || guardandoUsuario} onClick={agregarMiembroExistente}>{guardandoUsuario ? "Agregando..." : "Agregar al servidor"}</Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={{ fontSize: "14px", color: "#666" }}>Creá la cuenta. Se agregará al servidor con los roles que elijas (puede tener más de uno).</p>
+                <Input label="Nombre de usuario" value={formNuevoUsuario.nombre_usuario} onChange={e => setFormNuevoUsuario({...formNuevoUsuario, nombre_usuario: e.target.value})} />
+                <Input label="Email" type="email" value={formNuevoUsuario.email} onChange={e => setFormNuevoUsuario({...formNuevoUsuario, email: e.target.value})} />
+                <Input label="Contraseña temporal" type="password" value={formNuevoUsuario.password} onChange={e => setFormNuevoUsuario({...formNuevoUsuario, password: e.target.value})} />
+                
+                <div className="admin-grupo" style={{ marginTop: "0.5rem" }}>
+                  <span className="admin-grupo-label" style={{ fontWeight: "bold", fontSize: "14px", display: "block", marginBottom: "8px" }}>Roles en este servidor:</span>
+                  <div className="admin-checks" style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                    {rolesDefinidos.filter(r => r.tipo === "servidor").map(r => (
+                        <label key={r.id_rol} className="admin-check" style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 10px", background: "var(--color-gris-azulado)", borderRadius: "6px", cursor: "pointer" }}>
+                          <input type="checkbox" checked={rolesNuevoUsuario.includes(r.id_rol)} onChange={() => toggleRolNuevo(r.id_rol)} />
+                          <span style={{ fontSize: "13px" }}>{r.nombre}</span>
+                        </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: "1rem" }}>
+                  <Button type="button" variant="outline" onClick={() => setCreandoUsuarioNuevo(false)}>Volver</Button>
+                  <Button disabled={guardandoUsuario} onClick={crearEInscribirUsuario}>{guardandoUsuario ? "Creando..." : "Crear y agregar"}</Button>
+                </div>
+              </>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {/* MODAL EDITAR ROLES DE MIEMBRO */}
+      {modalEditarRoles && usuarioEditandoRoles && (
+        <Modal title={`Roles de ${usuarioEditandoRoles.nombre_usuario}`} onClose={() => setModalEditarRoles(false)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <p style={{ fontSize: "14px", color: "#666" }}>Modificá los roles de este usuario <strong>solo en este servidor</strong>.</p>
+            
+            <div className="admin-grupo">
+              <div className="admin-checks" style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                {rolesDefinidos.filter(r => r.tipo === "servidor").map(r => (
+                  <label key={r.id_rol} className="admin-check" style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 10px", background: "var(--color-gris-azulado)", borderRadius: "6px", cursor: "pointer" }}>
+                    <input type="checkbox" checked={rolesSeleccionadosEdicion.includes(r.id_rol)} onChange={() => toggleRolEdicion(r.id_rol)} />
+                    <span style={{ fontSize: "13px" }}>{r.nombre}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "1rem" }}>
+              <Button type="button" variant="outline" onClick={() => setModalEditarRoles(false)} style={{ marginRight: "8px" }}>Cancelar</Button>
+              <Button disabled={guardandoUsuario} onClick={guardarEdicionRoles}>{guardandoUsuario ? "Guardando..." : "Guardar roles"}</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
     </section>
   );
 }
