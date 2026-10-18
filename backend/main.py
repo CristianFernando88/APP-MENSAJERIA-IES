@@ -8,6 +8,7 @@ from app import models  # noqa: F401 — registra los modelos en Base.metadata
 # aca importamos las rutas
 from app.api.v1.auth.router import router as auth_router
 from app.api.v1.usuarios.router import router as usuarios_router
+from app.api.v1.perfiles.router import router as perfiles_router
 from app.api.v1.servidores.router import router as servidores_router
 from app.api.v1.categorias.router import router as categorias_router
 from app.api.v1.canales.router import router as canales_router
@@ -47,6 +48,7 @@ app.add_middleware(
 # Aca van los routers
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(usuarios_router, prefix="/api/v1")
+app.include_router(perfiles_router, prefix="/api/v1")
 app.include_router(servidores_router, prefix="/api/v1")
 app.include_router(categorias_router, prefix="/api/v1")
 app.include_router(canales_router, prefix="/api/v1")
