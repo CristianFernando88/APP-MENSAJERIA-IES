@@ -1,4 +1,3 @@
-// src/components/forms/UsuarioForm.jsx
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import Input from "../ui/Input/Input";
@@ -6,6 +5,7 @@ import Select from "../ui/Select/Select";
 import Button from "../ui/Button/Button";
 
 export default function UsuarioForm({
+  usuarioInicial = null,
   rolesDisponibles = [],
   mostrarServidores = false,
   mostrarRolesGlobales = false,
@@ -14,14 +14,15 @@ export default function UsuarioForm({
   guardando = false,
 }) {
   const [form, setForm] = useState({
-    nombre_usuario: "",
-    email: "",
+    nombre_usuario: usuarioInicial?.nombre_usuario || "",
+    email: usuarioInicial?.email || "",
     password: "",
     confirmar_password: "",
-    activo: "true",
-    nombres: "",
-    apellidos: "",
-    roles_ids: [],
+    activo: usuarioInicial ? String(usuarioInicial.activo) : "true",
+    nombres: usuarioInicial?.perfil?.nombres || "",
+    apellidos: usuarioInicial?.perfil?.apellidos || "",
+    roles_ids: usuarioInicial?.roles_asignados || [],
+    servidores_ids: usuarioInicial?.servidores_actuales || [], // Agregado para múltiples servidores
   });
   
   const [verClave, setVerClave] = useState(false);
@@ -44,6 +45,18 @@ export default function UsuarioForm({
     });
   };
 
+  const toggleServidor = (srvId) => {
+    setForm((prev) => {
+      const existe = prev.servidores_ids.includes(srvId);
+      return {
+        ...prev,
+        servidores_ids: existe
+          ? prev.servidores_ids.filter((id) => id !== srvId)
+          : [...prev.servidores_ids, srvId],
+      };
+    });
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     setError("");
@@ -53,8 +66,14 @@ export default function UsuarioForm({
     if (!form.email.trim()) return setError("El email es obligatorio.");
     if (!form.nombres.trim() || !form.apellidos.trim()) return setError("Nombre y apellido son obligatorios.");
     
-    if (!form.password || form.password.length < 6) return setError("La contraseña debe tener al menos 6 caracteres.");
-    if (form.password !== form.confirmar_password) return setError("Las contraseñas no coinciden.");
+    // Si es nuevo, la contraseña es obligatoria. Si es edición, es opcional.
+    if (!usuarioInicial) {
+      if (!form.password || form.password.length < 6) return setError("La contraseña debe tener al menos 6 caracteres.");
+      if (form.password !== form.confirmar_password) return setError("Las contraseñas no coinciden.");
+    } else if (form.password) {
+      if (form.password.length < 6) return setError("La nueva contraseña debe tener al menos 6 caracteres.");
+      if (form.password !== form.confirmar_password) return setError("Las contraseñas no coinciden.");
+    }
 
     // Validar roles de servidor
     const rolesServidor = form.roles_ids.filter(id => {
@@ -62,14 +81,13 @@ export default function UsuarioForm({
       return r?.tipo === "servidor";
     });
     
-    if (rolesServidor.length > 0 && mostrarServidores && form.servidores_ids?.length === 0) {
+    if (rolesServidor.length > 0 && mostrarServidores && form.servidores_ids.length === 0) {
       return setError("Seleccionaste roles de servidor pero no asignaste ningún servidor.");
     }
 
     onSubmit(form);
   };
 
-  // Filtro de roles a mostrar
   const rolesAMostrar = mostrarRolesGlobales 
     ? rolesDisponibles 
     : rolesDisponibles.filter(r => r.tipo === "servidor");
@@ -83,14 +101,14 @@ export default function UsuarioForm({
       <Input label="Email" name="email" type="email" value={form.email} onChange={handleChange} placeholder="Ej: juan@email.com" />
       
       <div className="admin-clave">
-        <label className="admin-clave-label">Contraseña</label>
+        <label className="admin-clave-label">{usuarioInicial ? "Nueva contraseña (opcional)" : "Contraseña"}</label>
         <div className="admin-clave-caja">
           <input 
             name="password" 
             type={verClave ? "text" : "password"} 
             value={form.password} 
             onChange={handleChange} 
-            placeholder="Mínimo 6 caracteres" 
+            placeholder={usuarioInicial ? "Dejar vacío para no cambiar" : "Mínimo 6 caracteres"} 
             style={{ width: "100%" }}
           />
           <button type="button" onClick={() => setVerClave(!verClave)}>
@@ -120,12 +138,27 @@ export default function UsuarioForm({
         </div>
       </div>
 
+      {/* Selector de servidores si es que estamos en el Admin */}
+      {mostrarServidores && (
+        <div className="admin-grupo" style={{ marginTop: "1rem" }}>
+          <span className="admin-grupo-label" style={{ fontWeight: "bold", fontSize: "14px", display: "block", marginBottom: "8px" }}>Servidores a los que pertenece</span>
+          <div className="admin-checks" style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+            {usuarioInicial?.servidores_disponibles?.map((s) => (
+              <label key={s.id_servidor} className="admin-check" style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 10px", background: "var(--color-gris-azulado)", borderRadius: "6px", cursor: "pointer" }}>
+                <input type="checkbox" checked={form.servidores_ids.includes(s.id_servidor)} onChange={() => toggleServidor(s.id_servidor)} />
+                <span style={{ fontSize: "13px" }}>{s.nombre}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
       {error && <div className="admin-tab__error" style={{ color: "red", background: "#fee", padding: "8px", borderRadius: "4px", fontSize: "14px" }}>{error}</div>}
 
       <div style={{ display: "flex", justifyContent: "flex-end", gap: "1rem", marginTop: "1rem", width: "100%" }}>
         <Button type="button" variant="outline" onClick={onCancel} disabled={guardando}>Cancelar</Button>
         <Button type="submit" disabled={guardando}>
-          {guardando ? "Guardando..." : "Crear y agregar"}
+          {guardando ? "Guardando..." : usuarioInicial ? "Guardar cambios" : "Crear y agregar"}
         </Button>
       </div>
     </form>

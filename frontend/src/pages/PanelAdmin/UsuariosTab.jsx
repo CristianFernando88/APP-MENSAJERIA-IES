@@ -43,10 +43,10 @@ export default function UsuariosTab({
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editandoId, setEditandoId] = useState(null);
-  const [verClave, setVerClave] = useState(false);
 
   const [modalClave, setModalClave] = useState(false);
   const [formClave, setFormClave] = useState({ nueva: "", repetir: "", usuario: null });
+  const [verClave, setVerClave] = useState(false);
 
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
@@ -118,14 +118,12 @@ export default function UsuariosTab({
   const abrirCrear = () => {
     setEditandoId(null);
     setError("");
-    setVerClave(false);
     setModalOpen(true);
   };
 
   const abrirEditar = (u) => {
     setEditandoId(u.id_usuario);
     setError("");
-    setVerClave(false);
     setModalOpen(true);
   };
 
@@ -219,7 +217,6 @@ export default function UsuariosTab({
           await crearPerfil({ usuario_id: userId, nombres: datos.nombres, apellidos: datos.apellidos });
         }
       } catch (perfilErr) {
-        // Si el perfil no existe al editar (error 404), lo creamos
         if (perfilErr.message.includes("no encontrado") || perfilErr.message.includes("404")) {
           await crearPerfil({ usuario_id: userId, nombres: datos.nombres, apellidos: datos.apellidos });
         } else {
@@ -228,7 +225,6 @@ export default function UsuariosTab({
       }
 
       // 3. Sincronizar Roles y Servidores
-      // Usamos las funciones existentes pero les pasamos los datos del formulario
       await sincronizarRolesNuevos(userId, datos.roles_ids, datos.servidores_ids);
       await sincronizarServidoresNuevos(userId, datos.servidores_ids);
 
@@ -298,6 +294,16 @@ export default function UsuariosTab({
   };
 
   const hayFiltros = busqueda || filtroRol || orden !== "nombre-asc";
+
+  const usuarioAEditar = editandoId ? usuarios.find(u => u.id_usuario === editandoId) : null;
+  
+  // Preparamos los datos para pasárselos al formulario
+  const datosUsuarioInicial = usuarioAEditar ? {
+    ...usuarioAEditar,
+    roles_asignados: asignaciones.filter(a => a.usuario_id === editandoId).map(a => a.rol_id),
+    servidores_actuales: todosLosMiembros.filter(m => Number(m.usuario_id) === Number(editandoId)).map(m => m.servidor_id),
+    servidores_disponibles: servidores // <-- Para que el form sepa qué servidores mostrar
+  } : null;
 
   return (
     <div className="admin-tab">
@@ -378,13 +384,8 @@ export default function UsuariosTab({
       {modalOpen && (
         <Modal title={editandoId ? "Editar usuario" : "Nuevo usuario"} onClose={() => !guardando && setModalOpen(false)}>
           <UsuarioForm 
-            usuarioEditar={editandoId ? {
-              ...usuarios.find(u => u.id_usuario === editandoId),
-              roles_asignados: asignaciones.filter(a => a.usuario_id === editandoId).map(a => a.rol_id)
-            } : null}
+            usuarioInicial={datosUsuarioInicial}
             rolesDisponibles={roles}
-            servidoresDisponibles={servidores}
-            servidoresActuales={todosLosMiembros.filter(m => Number(m.usuario_id) === Number(editandoId)).map(m => m.servidor_id)}
             mostrarServidores={true}
             mostrarRolesGlobales={true}
             guardando={guardando}
@@ -394,7 +395,7 @@ export default function UsuariosTab({
         </Modal>
       )}
 
-      {/* MODAL CAMBIAR CLAVE (se mantiene igual) */}
+      {/* MODAL CAMBIAR CLAVE */}
       {modalClave && formClave.usuario && (
         <Modal title={`Contraseña de ${formClave.usuario.nombre_usuario}`} onClose={() => !guardando && setModalClave(false)}>
           <form className="admin-form" onSubmit={handleCambiarClave}>
