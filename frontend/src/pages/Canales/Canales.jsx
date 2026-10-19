@@ -1,239 +1,337 @@
-import { useState, useEffect } from "react";
-import { Plus, Search, Pencil, Trash2, Hash, Megaphone } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  Search, Hash, Megaphone, Plus, Pencil, Trash2, Users, ChevronRight, AlertCircle, Loader2, X
+} from "lucide-react";
 import Button from "../../components/ui/Button/Button";
 import Input from "../../components/ui/Input/Input";
 import Select from "../../components/ui/Select/Select";
 import Modal from "../../components/ui/Modal/Modal";
-import { listarCanales, crearCanal, actualizarCanal, eliminarCanal } from "../../api/canales";
-import { listarServidores } from "../../api/servidores";
-import { listarCategorias } from "../../api/categorias";
+import { listarCanales } from "../../api/canales";
+import { listarMiembrosCanal, crearMiembroCanal, actualizarMiembroCanal, eliminarMiembroCanal } from "../../api/miembrosCanal";
+import { listarUsuarios } from "../../api/usuarios";
+import { listarMiembrosServidor } from "../../api/miembrosServidor";
+import { listarUsuarioRol } from "../../api/usuarioRol";
+import { listarRoles } from "../../api/roles";
 import { useAuth } from "../../context/AuthContext";
 import "./Canales.css";
 
-const tiposDisponibles = [
-  { value: "informativo", label: "Informativo (solo admins escriben)" },
-  { value: "chat", label: "Chat (todos escriben)" },
-];
-
-const formVacio = { nombre: "", servidor_id: "", categoria_id: "", tipo: "chat" };
-
 export default function Canales() {
-  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { user, hasRole } = useAuth();
 
+  // --- Datos base ---
   const [canales, setCanales] = useState([]);
-  const [servidores, setServidores] = useState([]);
-  const [categorias, setCategorias] = useState([]);
+  const [todosLosUsuarios, setTodosLosUsuarios] = useState([]);
+  const [todosLosRoles, setTodosLosRoles] = useState([]);
+  const [rolesDefinidos, setRolesDefinidos] = useState([]);
+  const [miembrosCanal, setMiembrosCanal] = useState([]);
+  const [miembrosServidor, setMiembrosServidor] = useState([]);
+
+  // --- UI ---
   const [busqueda, setBusqueda] = useState("");
+  const [canalSeleccionadoId, setCanalSeleccionadoId] = useState(null);
+  const [loading, setLoading] = useState(true);
 
+  // --- Modales ---
+  const [modalMiembro, setModalMiembro] = useState(false);
+  const [usuarioSeleccionado, setUsuarioSeleccionado] = useState("");
+  const [rolEnCanal, setRolEnCanal] = useState("miembro");
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState("");
+
+  // 1. Cargar todo
   useEffect(() => {
-    listarServidores()
-      .then(setServidores)
-      .catch((error) => console.error("Error al cargar servidores:", error));
-
-    listarCategorias()
-      .then(setCategorias)
-      .catch((error) => console.error("Error al cargar categorías:", error));
+    let cancelado = false;
+    async function cargar() {
+      setLoading(true);
+      try {
+        const [resCanales, resUsuarios, resAsignaciones, resRoles, resMiembrosCanal, resMiembrosServidor] = await Promise.all([
+          listarCanales(),
+          listarUsuarios(),
+          listarUsuarioRol(),
+          listarRoles(),
+          listarMiembrosCanal(),
+          listarMiembrosServidor()
+        ]);
+        if (cancelado) return;
+        setCanales(resCanales || []);
+        setTodosLosUsuarios(resUsuarios || []);
+        setTodosLosRoles(resAsignaciones || []);
+        setRolesDefinidos(resRoles || []);
+        setMiembrosCanal(resMiembrosCanal || []);
+        setMiembrosServidor(resMiembrosServidor || []);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (!cancelado) setLoading(false);
+      }
+    }
+    cargar();
+    return () => { cancelado = true; };
   }, []);
 
-  // Cada vez que cambia el texto del buscador, se lo pasamos al backend.
-  // El setTimeout evita pedir datos en cada tecla.
+  // 2. Filtrar canales según membresía
+  const misCanales = useMemo(() => {
+    if (!user) return [];
+    if (hasRole(["super_admin", "admin"])) return canales;
+
+    const misIdsCanal = miembrosCanal
+      .filter((m) => Number(m.usuario_id) === Number(user.id_usuario))
+      .map((m) => Number(m.canal_id));
+
+    return canales.filter((c) => misIdsCanal.includes(Number(c.id_canal)));
+  }, [canales, miembrosCanal, user, hasRole]);
+
+  // Auto-seleccionar el primer canal
   useEffect(() => {
-    const timer = setTimeout(() => {
-      listarCanales(busqueda)
-        .then(setCanales)
-        .catch((error) => console.error("Error al cargar canales:", error));
-    }, 400);
+    if (misCanales.length > 0 && !misCanales.some(c => c.id_canal === canalSeleccionadoId)) {
+      setCanalSeleccionadoId(misCanales[0].id_canal);
+    } else if (misCanales.length === 0) {
+      setCanalSeleccionadoId(null);
+    }
+  }, [misCanales, canalSeleccionadoId]);
 
-    return () => clearTimeout(timer);
-  }, [busqueda]);
+  const canalesFiltrados = misCanales.filter(c => (c.nombre || "").toLowerCase().includes(busqueda.toLowerCase()));
+  const canalActivo = misCanales.find(c => c.id_canal === canalSeleccionadoId);
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editandoId, setEditandoId] = useState(null);
-  const [form, setForm] = useState(formVacio);
-  const [error, setError] = useState("");
-  const [guardando, setGuardando] = useState(false);
+  // 3. Permisos (Admin, Director del servidor, Preceptor del servidor)
+  const puedeGestionar = useMemo(() => {
+    if (!user || !canalActivo) return false;
+    if (hasRole(["super_admin", "admin"])) return true;
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
-
-  const abrirCrear = () => {
-    setEditandoId(null);
-    setForm(formVacio);
-    setError("");
-    setModalOpen(true);
-  };
-
-  const abrirEditar = (canal) => {
-    setEditandoId(canal.id_canal);
-    setForm({
-      nombre: canal.nombre,
-      servidor_id: canal.servidor_id,
-      categoria_id: canal.categoria_id ?? "",
-      tipo: canal.tipo,
+    // Verificamos si es director o preceptor en el servidor de este canal
+    return todosLosRoles.some((ur) => {
+      if (Number(ur.usuario_id) !== Number(user.id_usuario)) return false;
+      if (Number(ur.servidor_id) !== Number(canalActivo.servidor_id)) return false;
+      const rol = rolesDefinidos.find(r => r.id_rol === ur.rol_id);
+      return ["director", "preceptor"].includes(rol?.nombre?.toLowerCase());
     });
-    setError("");
-    setModalOpen(true);
+  }, [user, canalActivo, hasRole, todosLosRoles, rolesDefinidos]);
+
+  // 4. Miembros del canal activo
+  const miembrosDelCanal = useMemo(() => {
+    if (!canalActivo) return [];
+    const ids = miembrosCanal
+      .filter((m) => Number(m.canal_id) === Number(canalActivo.id_canal))
+      .map((m) => Number(m.usuario_id));
+    return todosLosUsuarios.filter((u) => ids.includes(Number(u.id_usuario)));
+  }, [miembrosCanal, canalActivo, todosLosUsuarios]);
+
+  // 5. Handlers
+  const nombreDeUsuario = (id) => {
+    const u = todosLosUsuarios.find(x => x.id_usuario === id);
+    return u ? u.nombre_usuario : `Usuario ${id}`;
   };
 
-  const handleEliminar = async (canal) => {
-    if (!window.confirm(`¿Eliminar el canal "${canal.nombre}"?`)) return;
-
-    try {
-      setError("");
-      await eliminarCanal(canal.id_canal);
-      const datos = await listarCanales(busqueda);
-      setCanales(datos);
-    } catch (error) {
-      setError(error.message);
-    }
+  const rolEnCanalDe = (usuarioId) => {
+    return miembrosCanal.find(m => Number(m.usuario_id) === usuarioId && Number(m.canal_id) === canalActivo?.id_canal)?.rol_en_canal || "miembro";
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-
-    if (!form.nombre.trim()) {
-      setError("El nombre es obligatorio");
-      return;
-    }
-
+  const agregarMiembro = async () => {
+    if (!usuarioSeleccionado || !canalActivo) return;
     setGuardando(true);
-
     try {
-      if (editandoId) {
-        await actualizarCanal(editandoId, {
-          nombre: form.nombre,
-          tipo: form.tipo,
-          categoria_id: form.categoria_id ? Number(form.categoria_id) : null,
-        });
-      } else {
-        await crearCanal({
-          nombre: form.nombre,
-          tipo: form.tipo,
-          servidor_id: Number(form.servidor_id),
-          creador_id: user?.id_usuario,
-          categoria_id: form.categoria_id ? Number(form.categoria_id) : null,
-        });
-      }
-
-      const datos = await listarCanales(busqueda);
-      setCanales(datos);
-
-      setModalOpen(false);
-    } catch (error) {
-      setError(error.message);
+      await crearMiembroCanal({
+        usuario_id: Number(usuarioSeleccionado),
+        canal_id: Number(canalActivo.id_canal),
+        rol_en_canal: rolEnCanal
+      });
+      const data = await listarMiembrosCanal();
+      setMiembrosCanal(data);
+      setModalMiembro(false);
+      setUsuarioSeleccionado("");
+    } catch (err) {
+      alert(err.message);
     } finally {
       setGuardando(false);
+    }
+  };
+
+  const cambiarRolMiembro = async (usuarioId, nuevoRol) => {
+    if (!canalActivo) return;
+    try {
+      // Como el backend pide el id del miembro_canal, lo buscamos en el array
+      const registro = miembrosCanal.find(m => Number(m.usuario_id) === usuarioId && Number(m.canal_id) === canalActivo.id_canal);
+      if (!registro) return;
+      
+      await actualizarMiembroCanal(registro.id_miembro_canal, { rol_en_canal: nuevoRol });
+      const data = await listarMiembrosCanal();
+      setMiembrosCanal(data);
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const quitarMiembro = async (usuarioId) => {
+    if (!canalActivo) return;
+    if (!window.confirm("¿Quitar a este usuario del canal?")) return;
+    try {
+      const registro = miembrosCanal.find(m => Number(m.usuario_id) === usuarioId && Number(m.canal_id) === canalActivo.id_canal);
+      if (!registro) return;
+      
+      await eliminarMiembroCanal(registro.id_miembro_canal);
+      const data = await listarMiembrosCanal();
+      setMiembrosCanal(data);
+    } catch (err) {
+      alert(err.message);
     }
   };
 
   return (
     <section className="canales">
       <div className="canales__header">
-        <h1 className="canales__title">Canales</h1>
-        <Button size="sm" onClick={abrirCrear}>
-          <Plus size={16} /> Nuevo canal
-        </Button>
+        <h1 className="canales__title">Mis Canales</h1>
       </div>
 
-      <div className="canales__search">
-        <Search size={18} />
-        <input
-          type="text"
-          placeholder="Buscar canal..."
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-        />
+      <div className="canales__explorer" style={{ display: "flex", gap: "1rem", alignItems: "flex-start", flexWrap: "wrap" }}>
+        
+        {/* BARRA LATERAL */}
+        <aside style={{ width: "280px", flexShrink: 0, background: "var(--color-blanco)", padding: "1rem", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-sm)" }}>
+          <div className="canales__search" style={{ marginBottom: "1rem", margin: 0 }}>
+            <Search size={18} />
+            <input type="text" placeholder="Buscar canal..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+          </div>
+
+          {loading && <p className="canales__empty">Cargando...</p>}
+          {!loading && canalesFiltrados.length === 0 && <p className="canales__empty">No estás en ningún canal.</p>}
+
+          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "4px" }}>
+            {canalesFiltrados.map((c) => (
+              <li key={c.id_canal}>
+                <button
+                  onClick={() => setCanalSeleccionadoId(c.id_canal)}
+                  style={{
+                    width: "100%", display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", border: "none", borderRadius: "8px", cursor: "pointer", textAlign: "left",
+                    background: c.id_canal === canalSeleccionadoId ? "var(--color-azul-petroleo)" : "transparent",
+                    color: c.id_canal === canalSeleccionadoId ? "white" : "var(--texto-oscuro)",
+                  }}
+                >
+                  {c.tipo === "informativo" ? <Megaphone size={16} /> : <Hash size={16} />}
+                  <span style={{ flex: 1, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.nombre}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </aside>
+
+        {/* PANEL PRINCIPAL */}
+        <main style={{ flex: 1, minWidth: "300px", background: "var(--color-blanco)", padding: "1.5rem", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-sm)", minHeight: "400px" }}>
+          {!canalActivo ? (
+            <div style={{ textAlign: "center", padding: "2rem", color: "var(--texto-secundario)" }}>
+              <Hash size={32} style={{ marginBottom: "1rem" }} />
+              <p>Seleccioná un canal para ver sus miembros.</p>
+            </div>
+          ) : (
+            <>
+              <header style={{ borderBottom: "1px solid #ddd", paddingBottom: "1rem", marginBottom: "1rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: "1.2rem", display: "flex", alignItems: "center", gap: "8px" }}>
+                    {canalActivo.tipo === "informativo" ? <Megaphone size={20} /> : <Hash size={20} />} {canalActivo.nombre}
+                  </h2>
+                  <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "var(--texto-secundario)" }}>Canal de {canalActivo.tipo}</p>
+                </div>
+                <Button size="sm" onClick={() => navigate("/mensajes", { state: { canal: canalActivo } })}>
+                  Entrar al chat <ChevronRight size={16} />
+                </Button>
+              </header>
+
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                  <h3 style={{ margin: 0, fontSize: "1rem" }}>Miembros del canal ({miembrosDelCanal.length})</h3>
+                  {puedeGestionar && (
+                    <Button size="sm" onClick={() => { setUsuarioSeleccionado(""); setRolEnCanal("miembro"); setModalMiembro(true); }}>
+                      <Plus size={16} /> Agregar miembro
+                    </Button>
+                  )}
+                </div>
+
+                {miembrosDelCanal.length === 0 ? (
+                  <p style={{ textAlign: "center", color: "var(--texto-secundario)", padding: "1rem" }}>No hay miembros en este canal.</p>
+                ) : (
+                  <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                    {miembrosDelCanal.map((u) => (
+                      <li key={u.id_usuario} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px", background: "var(--color-gris-azulado)", borderRadius: "8px", marginBottom: "8px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                          <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "var(--color-menta-palido)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", color: "var(--color-azul-petroleo)" }}>
+                            {u.nombre_usuario.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <strong style={{ display: "block", fontSize: "14px" }}>{u.nombre_usuario}</strong>
+                            <span style={{ fontSize: "12px", color: "var(--texto-secundario)" }}>{u.email}</span>
+                          </div>
+                        </div>
+                        
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          {puedeGestionar ? (
+                            <select
+                              value={rolEnCanalDe(u.id_usuario)}
+                              onChange={(e) => cambiarRolMiembro(u.id_usuario, e.target.value)}
+                              style={{ padding: "4px 8px", borderRadius: "4px", border: "1px solid #ccc", fontSize: "12px", background: "white" }}
+                            >
+                              <option value="admin">Admin</option>
+                              <option value="tutor">Tutor</option>
+                              <option value="miembro">Miembro</option>
+                            </select>
+                          ) : (
+                            <span style={{ fontSize: "12px", fontWeight: 600, background: "var(--color-menta-palido)", padding: "2px 8px", borderRadius: "12px", color: "var(--color-azul-petroleo)" }}>
+                              {rolEnCanalDe(u.id_usuario)}
+                            </span>
+                          )}
+                          {puedeGestionar && (
+                            <button onClick={() => quitarMiembro(u.id_usuario)} style={{ background: "none", border: "none", cursor: "pointer", color: "#c00", padding: "4px" }}>
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </>
+          )}
+        </main>
       </div>
 
-      {error && !modalOpen && <p className="canales__empty">{error}</p>}
+      {/* MODAL AGREGAR MIEMBRO */}
+      {modalMiembro && canalActivo && (
+        <Modal title="Agregar miembro al canal" onClose={() => setModalMiembro(false)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <Select
+              label="Usuario (solo miembros del servidor)"
+              value={usuarioSeleccionado}
+              onChange={(e) => setUsuarioSeleccionado(e.target.value)}
+              options={todosLosUsuarios
+                .filter(u => 
+                  // Solo usuarios que estén en el servidor de este canal
+                  miembrosServidor.some(ms => Number(ms.servidor_id) === Number(canalActivo.servidor_id) && Number(ms.usuario_id) === Number(u.id_usuario)) &&
+                  // Y que no estén ya en el canal
+                  !miembrosDelCanal.some(m => m.id_usuario === u.id_usuario)
+                )
+                .map(u => ({ value: u.id_usuario, label: `${u.nombre_usuario} (${u.email})` }))
+              }
+              placeholder="Elegir usuario..."
+            />
+            
+            <Select
+              label="Rol en el canal"
+              value={rolEnCanal}
+              onChange={(e) => setRolEnCanal(e.target.value)}
+              options={[
+                { value: "miembro", label: "Miembro (solo escribe)" },
+                { value: "tutor", label: "Tutor" },
+                { value: "admin", label: "Admin (modera el canal)" }
+              ]}
+            />
 
-      <div className="canales__list">
-        {canales.length === 0 && <p className="canales__empty">No se encontraron canales.</p>}
-
-        {canales.map((c) => (
-          <div key={c.id_canal} className="canales__item">
-            <div className="canales__item-icon">
-              {c.tipo === "informativo" ? <Megaphone size={18} /> : <Hash size={18} />}
-            </div>
-            <div className="canales__item-main">
-              <p className="canales__item-name">{c.nombre}</p>
-              <span className={`canales__badge canaux__badge--${c.tipo}`}>
-                {c.tipo === "informativo" ? "Informativo" : "Chat"}
-              </span>
-            </div>
-            <div className="canales__item-actions">
-              <button
-                className="canales__icon-btn"
-                onClick={() => abrirEditar(c)}
-                aria-label="Editar"
-              >
-                <Pencil size={16} />
-              </button>
-              <button
-                className="canales__icon-btn canales__icon-btn--danger"
-                onClick={() => handleEliminar(c)}
-                aria-label="Eliminar"
-              >
-                <Trash2 size={16} />
-              </button>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "1rem", marginTop: "1rem" }}>
+              <Button type="button" variant="outline" onClick={() => setModalMiembro(false)}>Cancelar</Button>
+              <Button disabled={!usuarioSeleccionado || guardando} onClick={agregarMiembro}>
+                {guardando ? "Agregando..." : "Agregar"}
+              </Button>
             </div>
           </div>
-        ))}
-      </div>
-
-      {modalOpen && (
-        <Modal
-          title={editandoId ? "Editar canal" : "Nuevo canal"}
-          onClose={() => setModalOpen(false)}
-        >
-          <form className="canales__form" onSubmit={handleSubmit}>
-            <Input
-              label="Nombre"
-              name="nombre"
-              value={form.nombre}
-              onChange={handleChange}
-              placeholder="Ej: General"
-            />
-
-            {!editandoId && (
-              <Select
-                label="Servidor"
-                name="servidor_id"
-                value={form.servidor_id}
-                onChange={handleChange}
-                options={servidores.map((s) => ({ value: s.id_servidor, label: s.nombre }))}
-                placeholder="Elegir servidor"
-              />
-            )}
-
-            <Select
-              label="Categoría (opcional)"
-              name="categoria_id"
-              value={form.categoria_id}
-              onChange={handleChange}
-              options={categorias.map((c) => ({ value: c.id_categoria, label: c.nombre }))}
-              placeholder="Sin categoría"
-            />
-            <Select
-              label="Tipo de canal"
-              name="tipo"
-              value={form.tipo}
-              onChange={handleChange}
-              options={tiposDisponibles}
-              placeholder="Elegir tipo"
-            />
-
-            {error && <p className="canales__empty">{error}</p>}
-
-            <div className="canales__form-actions">
-              <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={guardando}>
-                {guardando ? "Guardando..." : editandoId ? "Guardar cambios" : "Crear canal"}
-              </Button>
-            </div>
-          </form>
         </Modal>
       )}
     </section>
