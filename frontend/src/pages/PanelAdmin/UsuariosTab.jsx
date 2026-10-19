@@ -6,11 +6,12 @@ import {
 import Badge from "../../components/ui/Badge/Badge";
 import Button from "../../components/ui/Button/Button";
 import Input from "../../components/ui/Input/Input";
-import Select from "../../components/ui/Select/Select";
 import Modal from "../../components/ui/Modal/Modal";
+import UsuarioForm from "../../components/forms/UsuarioForm";
 import {
   listarUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario,
 } from "../../api/usuarios";
+import { crearPerfil, actualizarPerfil } from "../../api/perfiles";
 import { crearUsuarioRol, eliminarUsuarioRol } from "../../api/usuarioRol";
 import { 
   listarMiembrosServidor, crearMiembroServidor, eliminarMiembroServidor 
@@ -29,18 +30,6 @@ const OPCIONES_ORDEN = [
   { value: "inactivos", label: "Inactivos primero" },
 ];
 
-const formVacio = {
-  nombre_usuario: "",
-  email: "",
-  contrasena: "",
-  contrasena2: "",
-  activo: "true",
-  roles: [],
-  servidores_ids: [], // Array de IDs de servidores
-};
-
-const emailValido = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-
 export default function UsuariosTab({
   usuarios, setUsuarios, roles, servidores, asignaciones, setAsignaciones,
 }) {
@@ -54,7 +43,6 @@ export default function UsuariosTab({
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editandoId, setEditandoId] = useState(null);
-  const [form, setForm] = useState(formVacio);
   const [verClave, setVerClave] = useState(false);
 
   const [modalClave, setModalClave] = useState(false);
@@ -127,25 +115,8 @@ export default function UsuariosTab({
     setBusqueda(""); setFiltroRol(""); setOrden("nombre-asc");
   };
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
-
-  const toggleRol = (rolId) =>
-    setForm((prev) => ({
-      ...prev,
-      roles: prev.roles.includes(rolId) ? prev.roles.filter((x) => x !== rolId) : [...prev.roles, rolId],
-    }));
-
-  const toggleServidor = (servidorId) =>
-    setForm((prev) => ({
-      ...prev,
-      servidores_ids: prev.servidores_ids.includes(servidorId) 
-        ? prev.servidores_ids.filter((x) => x !== servidorId) 
-        : [...prev.servidores_ids, servidorId],
-    }));
-
   const abrirCrear = () => {
     setEditandoId(null);
-    setForm(formVacio);
     setError("");
     setVerClave(false);
     setModalOpen(true);
@@ -153,20 +124,6 @@ export default function UsuariosTab({
 
   const abrirEditar = (u) => {
     setEditandoId(u.id_usuario);
-    
-    const misServidoresIds = todosLosMiembros
-      .filter(m => Number(m.usuario_id) === Number(u.id_usuario) && m.activo !== false)
-      .map(m => Number(m.servidor_id));
-
-    setForm({
-      nombre_usuario: u.nombre_usuario,
-      email: u.email,
-      contrasena: "",
-      contrasena2: "",
-      activo: String(u.activo),
-      roles: asignaciones.filter((a) => a.usuario_id === u.id_usuario).map((a) => a.rol_id),
-      servidores_ids: misServidoresIds,
-    });
     setError("");
     setVerClave(false);
     setModalOpen(true);
@@ -223,8 +180,72 @@ export default function UsuariosTab({
     } catch (err) { setError(err.message); } finally { setGuardando(false); }
   };
 
-  const sincronizarRoles = async (usuarioId) => {
-    const rolesNuevos = form.roles.map(Number);
+  // --- Lógica del Formulario Compartido ---
+  const handleFormSubmit = async (datos) => {
+    const ok = await pedir({
+      titulo: editandoId ? "Guardar cambios" : "Crear usuario",
+      mensaje: `¿Guardar a "${datos.nombre_usuario}"?`,
+      textoConfirmar: "Guardar",
+    });
+    if (!ok) return;
+
+    setGuardando(true);
+    try {
+      let userId = editandoId;
+
+      // 1. Crear o Actualizar Usuario
+      if (editandoId) {
+        await actualizarUsuario(editandoId, { 
+          nombre_usuario: datos.nombre_usuario, 
+          email: datos.email, 
+          activo: datos.activo === "true",
+          ...(datos.password && { password: datos.password }) 
+        });
+      } else {
+        const nuevo = await crearUsuario({ 
+          nombre_usuario: datos.nombre_usuario, 
+          email: datos.email, 
+          activo: datos.activo === "true", 
+          password: datos.password 
+        });
+        userId = nuevo.id_usuario;
+      }
+
+      // 2. Crear o Actualizar Perfil
+      try {
+        if (editandoId) {
+          await actualizarPerfil(editandoId, { nombres: datos.nombres, apellidos: datos.apellidos });
+        } else {
+          await crearPerfil({ usuario_id: userId, nombres: datos.nombres, apellidos: datos.apellidos });
+        }
+      } catch (perfilErr) {
+        // Si el perfil no existe al editar (error 404), lo creamos
+        if (perfilErr.message.includes("no encontrado") || perfilErr.message.includes("404")) {
+          await crearPerfil({ usuario_id: userId, nombres: datos.nombres, apellidos: datos.apellidos });
+        } else {
+          throw perfilErr;
+        }
+      }
+
+      // 3. Sincronizar Roles y Servidores
+      // Usamos las funciones existentes pero les pasamos los datos del formulario
+      await sincronizarRolesNuevos(userId, datos.roles_ids, datos.servidores_ids);
+      await sincronizarServidoresNuevos(userId, datos.servidores_ids);
+
+      // 4. Recargar
+      await recargarAsignaciones();
+      await recargarMembresias();
+      await cargarUsuarios(busqueda);
+      setModalOpen(false);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const sincronizarRolesNuevos = async (usuarioId, rolesIds, servidoresIds) => {
+    const rolesNuevos = rolesIds.map(Number);
     const actuales = asignaciones.filter((a) => a.usuario_id === usuarioId);
 
     for (const a of actuales) {
@@ -237,10 +258,10 @@ export default function UsuariosTab({
         
         let servidorAsignado = null;
         if (rolInfo?.tipo === "servidor") {
-          if (form.servidores_ids.length === 0) {
+          if (servidoresIds.length === 0) {
             throw new Error(`El rol "${rolInfo.nombre}" requiere que selecciones al menos un servidor.`);
           }
-          servidorAsignado = Number(form.servidores_ids[0]);
+          servidorAsignado = Number(servidoresIds[0]);
         }
 
         await crearUsuarioRol({
@@ -253,8 +274,8 @@ export default function UsuariosTab({
     }
   };
 
-  const sincronizarServidores = async (usuarioId) => {
-    const servidoresNuevos = form.servidores_ids.map(Number);
+  const sincronizarServidoresNuevos = async (usuarioId, servidoresIds) => {
+    const servidoresNuevos = servidoresIds.map(Number);
     const servidoresActuales = todosLosMiembros
       .filter(m => Number(m.usuario_id) === Number(usuarioId))
       .map(m => Number(m.servidor_id));
@@ -274,57 +295,6 @@ export default function UsuariosTab({
   const recargarAsignaciones = async () => {
     const { listarUsuarioRol } = await import("../../api/usuarioRol");
     setAsignaciones(await listarUsuarioRol());
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-
-    if (!form.nombre_usuario.trim()) return setError("El nombre es obligatorio");
-    if (!emailValido(form.email)) return setError("El email no es válido");
-    if (!editandoId) {
-      if (!form.contrasena || form.contrasena.length < 6) return setError("Contraseña inválida (mín. 6)");
-      if (form.contrasena !== form.contrasena2) return setError("Las contraseñas no coinciden");
-    }
-
-    // Validación temprana para evitar el error del backend
-    const rolesDeServidor = form.roles.filter(id => {
-      const r = roles.find(x => x.id_rol === Number(id));
-      return r?.tipo === "servidor";
-    });
-    if (rolesDeServidor.length > 0 && form.servidores_ids.length === 0) {
-      return setError("Asignaste un rol de tipo 'servidor' pero no elegiste ningún servidor. Marcá al menos uno.");
-    }
-
-    const ok = await pedir({
-      titulo: editandoId ? "Guardar cambios" : "Crear usuario",
-      mensaje: `¿Guardar a "${form.nombre_usuario}"?`,
-      textoConfirmar: "Guardar",
-    });
-    if (!ok) return;
-
-    setGuardando(true);
-    try {
-      let userId = editandoId;
-      if (editandoId) {
-        await actualizarUsuario(editandoId, { nombre_usuario: form.nombre_usuario, email: form.email, activo: form.activo === "true" });
-      } else {
-        const nuevo = await crearUsuario({ nombre_usuario: form.nombre_usuario, email: form.email, activo: form.activo === "true", password: form.contrasena });
-        userId = nuevo.id_usuario;
-      }
-
-      await sincronizarRoles(userId);
-      await sincronizarServidores(userId);
-
-      await recargarAsignaciones();
-      await recargarMembresias();
-      await cargarUsuarios(busqueda);
-      setModalOpen(false);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setGuardando(false);
-    }
   };
 
   const hayFiltros = busqueda || filtroRol || orden !== "nombre-asc";
@@ -364,7 +334,14 @@ export default function UsuariosTab({
             {!cargando && visibles.length === 0 && <tr><td colSpan={6} className="admin-celda-vacia">No hay usuarios.</td></tr>}
             {!cargando && visibles.map((u) => (
               <tr key={u.id_usuario} className={!u.activo ? "admin-fila-inactiva" : ""}>
-                <td><strong>{u.nombre_usuario}</strong><span className="admin-id">#{u.id_usuario}</span></td>
+                <td>
+                  <strong>
+                    {u.perfil?.apellidos && u.perfil?.nombres 
+                      ? `${u.perfil.apellidos}, ${u.perfil.nombres}` 
+                      : u.nombre_usuario}
+                  </strong>
+                  <span className="admin-id">@{u.nombre_usuario}</span>
+                </td>
                 <td>{u.email}</td>
                 <td>
                   <div className="admin-chips">
@@ -397,65 +374,27 @@ export default function UsuariosTab({
         </div>
       )}
 
+      {/* MODAL COMPARTIDO DE USUARIO */}
       {modalOpen && (
         <Modal title={editandoId ? "Editar usuario" : "Nuevo usuario"} onClose={() => !guardando && setModalOpen(false)}>
-          <form className="admin-form" onSubmit={handleSubmit}>
-            <Input label="Nombre de usuario" name="nombre_usuario" value={form.nombre_usuario} onChange={handleChange} />
-            <Input label="Email" name="email" type="email" value={form.email} onChange={handleChange} />
-
-            {!editandoId && (
-              <>
-                <div className="admin-clave">
-                  <label className="admin-clave-label">Contraseña</label>
-                  <div className="admin-clave-caja">
-                    <input name="contrasena" type={verClave ? "text" : "password"} value={form.contrasena} onChange={handleChange} placeholder="Mínimo 6 caracteres" />
-                    <button type="button" onClick={() => setVerClave((v) => !v)}>{verClave ? <EyeOff size={16} /> : <Eye size={16} />}</button>
-                  </div>
-                </div>
-                <Input label="Repetir contraseña" name="contrasena2" type={verClave ? "text" : "password"} value={form.contrasena2} onChange={handleChange} error={form.contrasena2 && form.contrasena !== form.contrasena2 ? "No coinciden" : ""} />
-              </>
-            )}
-
-            <Select label="Estado" name="activo" value={form.activo} onChange={handleChange} options={[{ value: "true", label: "Activo" }, { value: "false", label: "Inactivo" }]} />
-
-            <div className="admin-grupo">
-              <span className="admin-grupo-label">Roles Globales y de Servidor</span>
-              <div className="admin-checks">
-                {roles.map((r) => (
-                  <label key={r.id_rol} className="admin-check">
-                    <input type="checkbox" checked={form.roles.includes(r.id_rol)} onChange={() => toggleRol(r.id_rol)} />
-                    <span>{r.nombre} <em>({r.tipo})</em></span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="admin-grupo">
-              <span className="admin-grupo-label">Servidores a los que pertenece</span>
-              <div className="admin-checks">
-                {servidores.map((s) => (
-                  <label key={s.id_servidor} className="admin-check">
-                    <input 
-                      type="checkbox" 
-                      checked={form.servidores_ids.includes(s.id_servidor)} 
-                      onChange={() => toggleServidor(s.id_servidor)} 
-                    />
-                    <span>{s.nombre}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {error && <div className="admin-tab__error">{error}</div>}
-
-            <div className="admin-form__actions">
-              <Button type="button" variant="outline" onClick={() => setModalOpen(false)} disabled={guardando}>Cancelar</Button>
-              <Button type="submit" disabled={guardando}>{guardando ? "Guardando..." : editandoId ? "Guardar cambios" : "Crear usuario"}</Button>
-            </div>
-          </form>
+          <UsuarioForm 
+            usuarioEditar={editandoId ? {
+              ...usuarios.find(u => u.id_usuario === editandoId),
+              roles_asignados: asignaciones.filter(a => a.usuario_id === editandoId).map(a => a.rol_id)
+            } : null}
+            rolesDisponibles={roles}
+            servidoresDisponibles={servidores}
+            servidoresActuales={todosLosMiembros.filter(m => Number(m.usuario_id) === Number(editandoId)).map(m => m.servidor_id)}
+            mostrarServidores={true}
+            mostrarRolesGlobales={true}
+            guardando={guardando}
+            onCancel={() => setModalOpen(false)}
+            onSubmit={handleFormSubmit}
+          />
         </Modal>
       )}
 
+      {/* MODAL CAMBIAR CLAVE (se mantiene igual) */}
       {modalClave && formClave.usuario && (
         <Modal title={`Contraseña de ${formClave.usuario.nombre_usuario}`} onClose={() => !guardando && setModalClave(false)}>
           <form className="admin-form" onSubmit={handleCambiarClave}>

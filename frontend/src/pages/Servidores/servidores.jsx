@@ -8,20 +8,13 @@ import Button from "../../components/ui/Button/Button";
 import Input from "../../components/ui/Input/Input";
 import Select from "../../components/ui/Select/Select";
 import Modal from "../../components/ui/Modal/Modal";
+import UsuarioForm from "../../components/forms/UsuarioForm";
 import "./servidores.css";
 import { listarServidores, obtenerJerarquiaServidor } from "../../api/servidores";
-import {
-  listarCategoriasPorServidor,
-  crearCategoria,
-  actualizarCategoria,
-  eliminarCategoria,
-} from "../../api/categorias";
-import {
-  crearCanal,
-  actualizarCanal,
-  eliminarCanal
-} from "../../api/canales";
+import { listarCategoriasPorServidor, crearCategoria, actualizarCategoria, eliminarCategoria } from "../../api/categorias";
+import { crearCanal, actualizarCanal, eliminarCanal } from "../../api/canales";
 import { listarUsuarios, crearUsuario } from "../../api/usuarios";
+import { crearPerfil } from "../../api/perfiles";
 import { crearMiembroServidor, eliminarMiembroServidor, listarMiembrosServidor } from "../../api/miembrosServidor";
 import { listarUsuarioRol, crearUsuarioRol, eliminarUsuarioRol } from "../../api/usuarioRol";
 import { listarRoles } from "../../api/roles";
@@ -31,7 +24,6 @@ export default function Servidores() {
   const navigate = useNavigate();
   const { user, hasRole } = useAuth();
 
-  // --- Estados de datos ---
   const [todosLosServidores, setTodosLosServidores] = useState([]);
   const [todosLosRoles, setTodosLosRoles] = useState([]);
   const [rolesDefinidos, setRolesDefinidos] = useState([]);
@@ -41,54 +33,42 @@ export default function Servidores() {
   const [loadingServidores, setLoadingServidores] = useState(true);
   const [errorServidores, setErrorServidores] = useState("");
 
-  // --- Estados de UI ---
   const [busquedaServidor, setBusquedaServidor] = useState("");
   const [servidorSeleccionado, setServidorSeleccionado] = useState(null);
-  const [activeTab, setActiveTab] = useState("canales"); // "canales" | "categorias" | "miembros"
+  const [activeTab, setActiveTab] = useState("canales");
   
   const [jerarquia, setJerarquia] = useState(null);
   const [loadingJerarquia, setLoadingJerarquia] = useState(false);
   const [canalActivoId, setCanalActivoId] = useState(null);
 
-  // --- Estados de Gestión (Categorías) ---
   const [categoriasGestion, setCategoriasGestion] = useState([]);
   const [modalCategoria, setModalCategoria] = useState(false);
   const [categoriaEditando, setCategoriaEditando] = useState(null);
   const [guardandoCategoria, setGuardandoCategoria] = useState(false);
   const [formCategoria, setFormCategoria] = useState({ nombre: "", descripcion: "" });
 
-  // --- Estados de Gestión (Canales) ---
   const [modalCanal, setModalCanal] = useState(false);
   const [canalEditando, setCanalEditando] = useState(null);
   const [guardandoCanal, setGuardandoCanal] = useState(false);
   const [formCanal, setFormCanal] = useState({ nombre: "", tipo: "chat", categoria_id: "" });
 
-  // --- Estados de Gestión (Miembros) ---
   const [modalMiembro, setModalMiembro] = useState(false);
   const [busquedaUsuario, setBusquedaUsuario] = useState("");
   const [usuarioSeleccionado, setUsuarioSeleccionado] = useState("");
   const [creandoUsuarioNuevo, setCreandoUsuarioNuevo] = useState(false);
-  const [formNuevoUsuario, setFormNuevoUsuario] = useState({ nombre_usuario: "", email: "", password: "" });
-  const [rolesNuevoUsuario, setRolesNuevoUsuario] = useState([]);
   const [guardandoUsuario, setGuardandoUsuario] = useState(false);
 
-  // --- Estados de Edición de Roles ---
   const [modalEditarRoles, setModalEditarRoles] = useState(false);
   const [usuarioEditandoRoles, setUsuarioEditandoRoles] = useState(null);
   const [rolesSeleccionadosEdicion, setRolesSeleccionadosEdicion] = useState([]);
 
-  // 1. Cargar datos iniciales
   useEffect(() => {
     let cancelado = false;
     async function cargarDatos() {
       setLoadingServidores(true);
       try {
         const [servidores, asignaciones, membresias, roles, usuarios] = await Promise.all([
-          listarServidores(),
-          listarUsuarioRol(),
-          listarMiembrosServidor(),
-          listarRoles(),
-          listarUsuarios(),
+          listarServidores(), listarUsuarioRol(), listarMiembrosServidor(), listarRoles(), listarUsuarios(),
         ]);
         if (cancelado) return;
         setTodosLosServidores(servidores || []);
@@ -106,19 +86,15 @@ export default function Servidores() {
     return () => { cancelado = true; };
   }, []);
 
-  // 2. Filtrado estricto de servidores
   const misServidores = useMemo(() => {
     if (!user) return [];
     if (hasRole(["super_admin", "admin"])) return todosLosServidores;
-    
     const misIds = misMembresias
       .filter((m) => Number(m.usuario_id) === Number(user.id_usuario) && m.activo !== false)
       .map((m) => Number(m.servidor_id));
-      
     return todosLosServidores.filter((s) => misIds.includes(Number(s.id_servidor)));
   }, [todosLosServidores, misMembresias, user, hasRole]);
 
-  // Auto-seleccionar primer servidor
   useEffect(() => {
     if (misServidores.length > 0 && !misServidores.some(s => s.id_servidor === servidorSeleccionado)) {
       setServidorSeleccionado(misServidores[0].id_servidor);
@@ -133,12 +109,10 @@ export default function Servidores() {
 
   const servidorActivo = misServidores.find((s) => s.id_servidor === servidorSeleccionado);
 
-  // 3. Permisos de gestión
   const puedeGestionar = useMemo(() => {
     if (!user || !servidorActivo) return false;
     if (hasRole(["super_admin", "admin"])) return true;
     if (Number(servidorActivo.creador_id) === Number(user.id_usuario)) return true;
-
     return todosLosRoles.some((ur) => {
       if (Number(ur.usuario_id) !== Number(user.id_usuario)) return false;
       if (Number(ur.servidor_id) !== Number(servidorActivo.id_servidor)) return false;
@@ -147,7 +121,6 @@ export default function Servidores() {
     });
   }, [user, servidorActivo, hasRole, todosLosRoles, rolesDefinidos]);
 
-  // 4. Miembros actuales del servidor seleccionado
   const miembrosActuales = useMemo(() => {
     if (!servidorSeleccionado) return [];
     const idsMiembros = misMembresias
@@ -156,12 +129,8 @@ export default function Servidores() {
     return todosLosUsuarios.filter(u => idsMiembros.includes(Number(u.id_usuario)));
   }, [misMembresias, servidorSeleccionado, todosLosUsuarios]);
 
-  // 5. Cargar Jerarquía y Categorías
   useEffect(() => {
-    if (!servidorSeleccionado) {
-      setJerarquia(null);
-      return;
-    }
+    if (!servidorSeleccionado) { setJerarquia(null); return; }
     let cancelado = false;
     async function cargarJerarquia() {
       setLoadingJerarquia(true);
@@ -169,21 +138,15 @@ export default function Servidores() {
       try {
         const data = await obtenerJerarquiaServidor(servidorSeleccionado);
         if (!cancelado) setJerarquia(data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        if (!cancelado) setLoadingJerarquia(false);
-      }
+      } catch (err) { console.error(err); }
+      finally { if (!cancelado) setLoadingJerarquia(false); }
     }
     cargarJerarquia();
     return () => { cancelado = true; };
   }, [servidorSeleccionado]);
 
   useEffect(() => {
-    if (!servidorSeleccionado || !puedeGestionar) {
-      setCategoriasGestion([]);
-      return;
-    }
+    if (!servidorSeleccionado || !puedeGestionar) { setCategoriasGestion([]); return; }
     let cancelado = false;
     async function cargarCat() {
       try {
@@ -195,19 +158,11 @@ export default function Servidores() {
     return () => { cancelado = true; };
   }, [servidorSeleccionado, puedeGestionar, jerarquia]);
 
-  // 6. Handlers
-  const canalActivo = jerarquia?.categorias?.flatMap((c) => c.canales || [])
-    .concat(jerarquia?.sinCategoria || [])
-    .find((c) => c.id_canal === canalActivoId) || null;
-
-  const abrirCanal = () => {
-    if (canalActivo) navigate("/mensajes", { state: { canal: canalActivo } });
-  };
-
+  const canalActivo = jerarquia?.categorias?.flatMap((c) => c.canales || []).concat(jerarquia?.sinCategoria || []).find((c) => c.id_canal === canalActivoId) || null;
+  const abrirCanal = () => { if (canalActivo) navigate("/mensajes", { state: { canal: canalActivo } }); };
   const recargarJerarquia = async () => {
     if (!servidorSeleccionado) return;
-    const j = await obtenerJerarquiaServidor(servidorSeleccionado);
-    setJerarquia(j);
+    setJerarquia(await obtenerJerarquiaServidor(servidorSeleccionado));
   };
 
   const guardarCategoria = async (e) => {
@@ -218,7 +173,6 @@ export default function Servidores() {
       const payload = { nombre: formCategoria.nombre.trim(), descripcion: formCategoria.descripcion.trim() || null, padre_id: null, orden: 0 };
       if (categoriaEditando) await actualizarCategoria(categoriaEditando.id_categoria, payload);
       else await crearCategoria({ ...payload, servidor_id: Number(servidorSeleccionado) });
-      
       await recargarJerarquia();
       setCategoriasGestion(await listarCategoriasPorServidor(servidorSeleccionado));
       setModalCategoria(false);
@@ -242,7 +196,6 @@ export default function Servidores() {
       const payload = { nombre: formCanal.nombre.trim(), tipo: formCanal.tipo, categoria_id: formCanal.categoria_id ? Number(formCanal.categoria_id) : null };
       if (canalEditando) await actualizarCanal(canalEditando.id_canal, payload);
       else await crearCanal({ ...payload, servidor_id: Number(servidorSeleccionado), creador_id: user?.id_usuario });
-      
       await recargarJerarquia();
       setModalCanal(false);
     } catch (err) { alert(err.message); } finally { setGuardandoCanal(false); }
@@ -256,7 +209,6 @@ export default function Servidores() {
     } catch (err) { alert(err.message); }
   };
 
-  // --- Handlers de Miembros ---
   const agregarMiembroExistente = async () => {
     if (!usuarioSeleccionado || !servidorSeleccionado) return;
     setGuardandoUsuario(true);
@@ -269,23 +221,19 @@ export default function Servidores() {
     } catch (e) { alert(e.message); } finally { setGuardandoUsuario(false); }
   };
 
-  const toggleRolNuevo = (rolId) => {
-    setRolesNuevoUsuario(prev => prev.includes(rolId) ? prev.filter(id => id !== rolId) : [...prev, rolId]);
-  };
-
-  const crearEInscribirUsuario = async () => {
+  const crearEInscribirUsuario = async (datos) => {
     if (!servidorSeleccionado) return;
-    if (rolesNuevoUsuario.length === 0) return alert("Seleccioná al menos un rol.");
-    
     setGuardandoUsuario(true);
     try {
-      const nuevo = await crearUsuario({ ...formNuevoUsuario, activo: true });
+      const nuevo = await crearUsuario({ 
+        nombre_usuario: datos.nombre_usuario, email: datos.email, password: datos.password, activo: datos.activo === "true" 
+      });
+      
+      await crearPerfil({ usuario_id: nuevo.id_usuario, nombres: datos.nombres, apellidos: datos.apellidos });
       await crearMiembroServidor({ usuario_id: nuevo.id_usuario, servidor_id: Number(servidorSeleccionado), activo: true });
 
-      for (const rolId of rolesNuevoUsuario) {
-        await crearUsuarioRol({
-          usuario_id: nuevo.id_usuario, rol_id: Number(rolId), servidor_id: Number(servidorSeleccionado), asignado_por: user?.id_usuario,
-        });
+      for (const rolId of datos.roles_ids) {
+        await crearUsuarioRol({ usuario_id: nuevo.id_usuario, rol_id: Number(rolId), servidor_id: Number(servidorSeleccionado), asignado_por: user?.id_usuario });
       }
       
       setMisMembresias(await listarMiembrosServidor());
@@ -293,34 +241,24 @@ export default function Servidores() {
       setTodosLosRoles(await listarUsuarioRol());
 
       setModalMiembro(false);
-      setFormNuevoUsuario({ nombre_usuario: "", email: "", password: "" });
-      setRolesNuevoUsuario([]);
+      setCreandoUsuarioNuevo(false);
     } catch (e) { alert(e.message); } finally { setGuardandoUsuario(false); }
   };
 
   const quitarMiembro = async (usuarioId) => {
     if (!window.confirm("¿Quitar a este usuario del servidor? Se le quitarán todos sus roles en este servidor.")) return;
     try {
-      // 1. Quitar membresía
       await eliminarMiembroServidor(usuarioId, servidorSeleccionado);
-      
-      // 2. Quitar roles asociados a este servidor
       const rolesAEliminar = todosLosRoles.filter(ur => Number(ur.usuario_id) === Number(usuarioId) && Number(ur.servidor_id) === Number(servidorSeleccionado));
-      for (const ur of rolesAEliminar) {
-        await eliminarUsuarioRol(usuarioId, ur.rol_id, servidorSeleccionado);
-      }
-
+      for (const ur of rolesAEliminar) await eliminarUsuarioRol(usuarioId, ur.rol_id, servidorSeleccionado);
       setMisMembresias(await listarMiembrosServidor());
       setTodosLosRoles(await listarUsuarioRol());
     } catch (e) { alert(e.message); }
   };
 
-  // --- Handlers de Edición de Roles ---
   const abrirEditarRoles = (u) => {
     setUsuarioEditandoRoles(u);
-    const rolesActuales = todosLosRoles
-      .filter(ur => Number(ur.usuario_id) === Number(u.id_usuario) && Number(ur.servidor_id) === Number(servidorSeleccionado))
-      .map(ur => Number(ur.rol_id));
+    const rolesActuales = todosLosRoles.filter(ur => Number(ur.usuario_id) === Number(u.id_usuario) && Number(ur.servidor_id) === Number(servidorSeleccionado)).map(ur => Number(ur.rol_id));
     setRolesSeleccionadosEdicion(rolesActuales);
     setModalEditarRoles(true);
   };
@@ -333,35 +271,26 @@ export default function Servidores() {
     if (!usuarioEditandoRoles || !servidorSeleccionado) return;
     setGuardandoUsuario(true);
     try {
-      const rolesActuales = todosLosRoles
-        .filter(ur => Number(ur.usuario_id) === Number(usuarioEditandoRoles.id_usuario) && Number(ur.servidor_id) === Number(servidorSeleccionado))
-        .map(ur => Number(ur.rol_id));
-
-      // Quitar los desmarcados
+      const rolesActuales = todosLosRoles.filter(ur => Number(ur.usuario_id) === Number(usuarioEditandoRoles.id_usuario) && Number(ur.servidor_id) === Number(servidorSeleccionado)).map(ur => Number(ur.rol_id));
       for (const rolId of rolesActuales) {
-        if (!rolesSeleccionadosEdicion.includes(rolId)) {
-          await eliminarUsuarioRol(usuarioEditandoRoles.id_usuario, rolId, servidorSeleccionado);
-        }
+        if (!rolesSeleccionadosEdicion.includes(rolId)) await eliminarUsuarioRol(usuarioEditandoRoles.id_usuario, rolId, servidorSeleccionado);
       }
-      // Agregar los nuevos marcados
       for (const rolId of rolesSeleccionadosEdicion) {
-        if (!rolesActuales.includes(rolId)) {
-          await crearUsuarioRol({
-            usuario_id: usuarioEditandoRoles.id_usuario, rol_id: rolId, servidor_id: Number(servidorSeleccionado), asignado_por: user?.id_usuario,
-          });
-        }
+        if (!rolesActuales.includes(rolId)) await crearUsuarioRol({ usuario_id: usuarioEditandoRoles.id_usuario, rol_id: rolId, servidor_id: Number(servidorSeleccionado), asignado_por: user?.id_usuario });
       }
-
       setTodosLosRoles(await listarUsuarioRol());
       setModalEditarRoles(false);
     } catch (e) { alert(e.message); } finally { setGuardandoUsuario(false); }
   };
 
   const obtenerRolesDeUsuario = (usuarioId) => {
-    return todosLosRoles
-      .filter(ur => Number(ur.usuario_id) === Number(usuarioId) && Number(ur.servidor_id) === Number(servidorSeleccionado))
-      .map(ur => rolesDefinidos.find(r => r.id_rol === ur.rol_id)?.nombre)
-      .filter(Boolean);
+    return todosLosRoles.filter(ur => Number(ur.usuario_id) === Number(usuarioId) && Number(ur.servidor_id) === Number(servidorSeleccionado))
+      .map(ur => rolesDefinidos.find(r => r.id_rol === ur.rol_id)?.nombre).filter(Boolean);
+  };
+
+  const nombreCompleto = (u) => {
+    if (u.perfil?.apellidos && u.perfil?.nombres) return `${u.perfil.apellidos}, ${u.perfil.nombres}`;
+    return u.nombre_usuario;
   };
 
   return (
@@ -371,7 +300,6 @@ export default function Servidores() {
       </div>
 
       <div className="servidores__explorer">
-        {/* BARRA LATERAL */}
         <aside className="servidores__panel servidores__panel--servers">
           <div className="servidores__search">
             <Search size={18} />
@@ -384,10 +312,7 @@ export default function Servidores() {
           <ul className="servidores__server-list">
             {servidoresFiltrados.map((s) => (
               <li key={s.id_servidor}>
-                <button
-                  className={`servidores__server-item ${s.id_servidor === servidorSeleccionado ? "servidores__server-item--active" : ""}`}
-                  onClick={() => setServidorSeleccionado(s.id_servidor)}
-                >
+                <button className={`servidores__server-item ${s.id_servidor === servidorSeleccionado ? "servidores__server-item--active" : ""}`} onClick={() => setServidorSeleccionado(s.id_servidor)}>
                   <Server size={18} />
                   <div className="servidores__server-text">
                     <span className="servidores__server-name">{s.nombre}</span>
@@ -400,7 +325,6 @@ export default function Servidores() {
           </ul>
         </aside>
 
-        {/* PANEL DERECHO */}
         <main className="servidores__panel servidores__panel--detail">
           {servidorSeleccionado === null ? (
             <div className="servidores__empty-state">
@@ -417,8 +341,6 @@ export default function Servidores() {
               </header>
 
               <div style={{ display: "flex", gap: "2rem", alignItems: "flex-start", flexWrap: "wrap" }}>
-                
-                {/* COLUMNA IZQUIERDA: TABS */}
                 {puedeGestionar && (
                   <div style={{ width: "200px", flexShrink: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
                     <button onClick={() => setActiveTab("canales")} style={{ padding: "10px 12px", textAlign: "left", borderRadius: "8px", border: "none", cursor: "pointer", background: activeTab === "canales" ? "var(--color-azul-petroleo)" : "transparent", color: activeTab === "canales" ? "white" : "var(--texto-oscuro)", fontWeight: 600 }}>
@@ -433,10 +355,7 @@ export default function Servidores() {
                   </div>
                 )}
 
-                {/* COLUMNA DERECHA: CONTENIDO */}
                 <div style={{ flex: 1, minWidth: "300px" }}>
-                  
-                  {/* VISTA: CANALES */}
                   {(!puedeGestionar || activeTab === "canales") && (
                     <div>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
@@ -494,7 +413,6 @@ export default function Servidores() {
                     </div>
                   )}
 
-                  {/* VISTA: CATEGORÍAS */}
                   {puedeGestionar && activeTab === "categorias" && (
                     <div>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
@@ -519,7 +437,6 @@ export default function Servidores() {
                     </div>
                   )}
 
-                  {/* VISTA: MIEMBROS */}
                   {puedeGestionar && activeTab === "miembros" && (
                     <div>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
@@ -534,7 +451,7 @@ export default function Servidores() {
                           {miembrosActuales.map((u) => (
                             <li key={u.id_usuario} style={{ display: "flex", justifyContent: "space-between", padding: "12px", background: "var(--color-gris-azulado)", marginBottom: "8px", borderRadius: "8px", alignItems: "center" }}>
                               <div>
-                                <strong style={{ display: "block" }}>{u.nombre_usuario} <span style={{ fontSize: "11px", fontWeight: "normal", color: "var(--color-teal-medio)", marginLeft: "6px" }}>{obtenerRolesDeUsuario(u.id_usuario).join(", ")}</span></strong>
+                                <strong style={{ display: "block" }}>{nombreCompleto(u)} <span style={{ fontSize: "11px", fontWeight: "normal", color: "var(--color-teal-medio)", marginLeft: "6px" }}>{obtenerRolesDeUsuario(u.id_usuario).join(", ")}</span></strong>
                                 <span style={{ fontSize: "12px", color: "#666" }}>{u.email}</span>
                               </div>
                               <div style={{ display: "flex", gap: "6px" }}>
@@ -548,7 +465,6 @@ export default function Servidores() {
                     </div>
                   )}
 
-                  {/* BARRA DE CANAL SELECCIONADO */}
                   {canalActivo && activeTab === "canales" && (
                     <div style={{ marginTop: "2rem", padding: "1rem", background: "#EDF2F7", display: "flex", justifyContent: "space-between", borderRadius: "8px" }}>
                       <span>Canal seleccionado: <strong>{canalActivo.nombre}</strong></span>
@@ -562,7 +478,6 @@ export default function Servidores() {
         </main>
       </div>
 
-      {/* MODAL CATEGORIA */}
       {modalCategoria && (
         <Modal title={categoriaEditando ? "Editar categoría" : "Nueva categoría"} onClose={() => setModalCategoria(false)}>
           <form className="categorias__form" onSubmit={guardarCategoria} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -576,19 +491,12 @@ export default function Servidores() {
         </Modal>
       )}
 
-      {/* MODAL CANAL */}
       {modalCanal && (
         <Modal title={canalEditando ? "Editar canal" : "Nuevo canal"} onClose={() => setModalCanal(false)}>
           <form className="categorias__form" onSubmit={guardarCanal} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             <Input label="Nombre" value={formCanal.nombre} onChange={(e) => setFormCanal({...formCanal, nombre: e.target.value})} />
-            <Select 
-              label="Categoría (opcional)" value={formCanal.categoria_id} onChange={(e) => setFormCanal({...formCanal, categoria_id: e.target.value})} 
-              options={[{ value: "", label: "Sin categoría" }, ...categoriasGestion.map(c => ({ value: c.id_categoria, label: c.nombre }))]} 
-            />
-            <Select 
-              label="Tipo de canal" value={formCanal.tipo} onChange={(e) => setFormCanal({...formCanal, tipo: e.target.value})} 
-              options={[{ value: "chat", label: "Chat" }, { value: "informativo", label: "Informativo" }]} 
-            />
+            <Select label="Categoría (opcional)" value={formCanal.categoria_id} onChange={(e) => setFormCanal({...formCanal, categoria_id: e.target.value})} options={[{ value: "", label: "Sin categoría" }, ...categoriasGestion.map(c => ({ value: c.id_categoria, label: c.nombre }))]} />
+            <Select label="Tipo de canal" value={formCanal.tipo} onChange={(e) => setFormCanal({...formCanal, tipo: e.target.value})} options={[{ value: "chat", label: "Chat" }, { value: "informativo", label: "Informativo" }]} />
             <div style={{ display: "flex", gap: "1rem", justifyContent: "flex-end", marginTop: "1rem" }}>
               <Button type="button" variant="outline" onClick={() => setModalCanal(false)}>Cancelar</Button>
               <Button type="submit" disabled={guardandoCanal}>{guardandoCanal ? "Guardando..." : "Guardar"}</Button>
@@ -597,10 +505,10 @@ export default function Servidores() {
         </Modal>
       )}
 
-      {/* MODAL AGREGAR MIEMBROS */}
       {modalMiembro && (
         <Modal title="Agregar miembro al servidor" onClose={() => setModalMiembro(false)}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          {/* width: 100% y overflow para evitar que el form se bloquee */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem", width: "100%", overflowY: "auto", maxHeight: "70vh", paddingRight: "4px" }}>
             {!creandoUsuarioNuevo ? (
               <>
                 <Input label="Buscar usuario por nombre o email" value={busquedaUsuario} onChange={(e) => setBusquedaUsuario(e.target.value)} placeholder="Ej: juan" />
@@ -608,49 +516,47 @@ export default function Servidores() {
                   label="Seleccionar usuario"
                   value={usuarioSeleccionado}
                   onChange={(e) => setUsuarioSeleccionado(e.target.value)}
-                  options={todosLosUsuarios.filter(u => (u.nombre_usuario.toLowerCase().includes(busquedaUsuario.toLowerCase()) || u.email.toLowerCase().includes(busquedaUsuario.toLowerCase())) && !miembrosActuales.some(m => m.id_usuario === u.id_usuario)).map(u => ({ value: u.id_usuario, label: `${u.nombre_usuario} (${u.email})` }))}
+                  options={todosLosUsuarios
+                    .filter(u => 
+                      (u.nombre_usuario.toLowerCase().includes(busquedaUsuario.toLowerCase()) || 
+                       u.email.toLowerCase().includes(busquedaUsuario.toLowerCase()) || 
+                       u.perfil?.apellidos?.toLowerCase().includes(busquedaUsuario.toLowerCase())) && 
+                      !miembrosActuales.some(m => m.id_usuario === u.id_usuario)
+                    )
+                    .map(u => ({ value: u.id_usuario, label: `${nombreCompleto(u)} (${u.email})` }))}
                   placeholder="Elegir usuario..."
                 />
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: "1rem" }}>
-                  <Button type="button" variant="outline" onClick={() => setCreandoUsuarioNuevo(true)}>¿No existe? Crear nuevo</Button>
-                  <Button disabled={!usuarioSeleccionado || guardandoUsuario} onClick={agregarMiembroExistente}>{guardandoUsuario ? "Agregando..." : "Agregar al servidor"}</Button>
+                
+                {/* BOTONES CORREGIDOS: flex-direction column en mobile, fila en desktop */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "1rem", width: "100%" }}>
+                  <Button type="button" variant="outline" onClick={() => setCreandoUsuarioNuevo(true)} style={{ width: "100%", padding: "10px" }}>
+                    ¿No existe? Crear nuevo
+                  </Button>
+                  <Button disabled={!usuarioSeleccionado || guardandoUsuario} onClick={agregarMiembroExistente} style={{ width: "100%", padding: "10px" }}>
+                    {guardandoUsuario ? "Agregando..." : "Agregar al servidor"}
+                  </Button>
                 </div>
               </>
             ) : (
-              <>
-                <p style={{ fontSize: "14px", color: "#666" }}>Creá la cuenta. Se agregará al servidor con los roles que elijas (puede tener más de uno).</p>
-                <Input label="Nombre de usuario" value={formNuevoUsuario.nombre_usuario} onChange={e => setFormNuevoUsuario({...formNuevoUsuario, nombre_usuario: e.target.value})} />
-                <Input label="Email" type="email" value={formNuevoUsuario.email} onChange={e => setFormNuevoUsuario({...formNuevoUsuario, email: e.target.value})} />
-                <Input label="Contraseña temporal" type="password" value={formNuevoUsuario.password} onChange={e => setFormNuevoUsuario({...formNuevoUsuario, password: e.target.value})} />
-                
-                <div className="admin-grupo" style={{ marginTop: "0.5rem" }}>
-                  <span className="admin-grupo-label" style={{ fontWeight: "bold", fontSize: "14px", display: "block", marginBottom: "8px" }}>Roles en este servidor:</span>
-                  <div className="admin-checks" style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                    {rolesDefinidos.filter(r => r.tipo === "servidor").map(r => (
-                        <label key={r.id_rol} className="admin-check" style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 10px", background: "var(--color-gris-azulado)", borderRadius: "6px", cursor: "pointer" }}>
-                          <input type="checkbox" checked={rolesNuevoUsuario.includes(r.id_rol)} onChange={() => toggleRolNuevo(r.id_rol)} />
-                          <span style={{ fontSize: "13px" }}>{r.nombre}</span>
-                        </label>
-                    ))}
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: "1rem" }}>
-                  <Button type="button" variant="outline" onClick={() => setCreandoUsuarioNuevo(false)}>Volver</Button>
-                  <Button disabled={guardandoUsuario} onClick={crearEInscribirUsuario}>{guardandoUsuario ? "Creando..." : "Crear y agregar"}</Button>
-                </div>
-              </>
+              <div style={{ width: "100%" }}>
+                <UsuarioForm 
+                  rolesDisponibles={rolesDefinidos}
+                  mostrarServidores={false} 
+                  mostrarRolesGlobales={false} 
+                  guardando={guardandoUsuario}
+                  onCancel={() => setCreandoUsuarioNuevo(false)}
+                  onSubmit={crearEInscribirUsuario}
+                />
+              </div>
             )}
           </div>
         </Modal>
       )}
 
-      {/* MODAL EDITAR ROLES DE MIEMBRO */}
       {modalEditarRoles && usuarioEditandoRoles && (
-        <Modal title={`Roles de ${usuarioEditandoRoles.nombre_usuario}`} onClose={() => setModalEditarRoles(false)}>
+        <Modal title={`Roles de ${nombreCompleto(usuarioEditandoRoles)}`} onClose={() => setModalEditarRoles(false)}>
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             <p style={{ fontSize: "14px", color: "#666" }}>Modificá los roles de este usuario <strong>solo en este servidor</strong>.</p>
-            
             <div className="admin-grupo">
               <div className="admin-checks" style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
                 {rolesDefinidos.filter(r => r.tipo === "servidor").map(r => (
@@ -661,7 +567,6 @@ export default function Servidores() {
                 ))}
               </div>
             </div>
-
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "1rem" }}>
               <Button type="button" variant="outline" onClick={() => setModalEditarRoles(false)} style={{ marginRight: "8px" }}>Cancelar</Button>
               <Button disabled={guardandoUsuario} onClick={guardarEdicionRoles}>{guardandoUsuario ? "Guardando..." : "Guardar roles"}</Button>
@@ -669,7 +574,6 @@ export default function Servidores() {
           </div>
         </Modal>
       )}
-
     </section>
   );
 }
