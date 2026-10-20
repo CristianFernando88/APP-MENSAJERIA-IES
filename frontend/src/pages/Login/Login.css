@@ -6,41 +6,194 @@
   padding: var(--space-md);
 }
 
+.login {
+  --gradiente-login: linear-gradient(
+    135deg,
+    var(--color-teal-medio) 0%,
+    var(--color-verde-teal) 55%,
+    var(--color-verde-esmeralda) 100%
+  );
+}
+
 .login__card {
   width: 100%;
-  max-width: 360px;
+  max-width: 400px;
   background-color: var(--color-blanco);
   border-radius: var(--radius-lg);
-  padding: var(--space-xl) var(--space-lg);
+  padding: var(--space-xl);
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 12px 40px rgba(2, 40, 80, 0.22);
 }
 
-.login__title {
-  font-size: var(--font-size-lg);
-  font-weight: 700;
+/* --- Marca --- */
+.login__brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
   text-align: center;
-  color: var(--color-azul-petroleo);
-}
-
-.login__subtitle {
-  text-align: center;
-  color: var(--texto-secundario);
   margin-bottom: var(--space-sm);
 }
 
+.login__logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: var(--gradiente-login);
+  color: var(--texto-claro);
+  box-shadow: 0 6px 18px rgba(12, 118, 133, 0.34);
+  margin-bottom: var(--space-xs);
+}
+
+.login__title {
+  margin: 0;
+  font-size: 2.1rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  background: var(--gradiente-login);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: var(--color-teal-medio);
+}
+
+.login__subtitle {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--color-teal-medio);
+  letter-spacing: -0.01em;
+}
+
+.login__campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.login__label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--texto-oscuro);
+}
+
+.login__input {
+  width: 100%;
+  padding: 11px var(--space-md);
+  border: 1px solid var(--color-gris-azulado);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-md);
+  font-family: inherit;
+  color: var(--texto-oscuro);
+  background-color: var(--color-blanco);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.login__input::placeholder {
+  color: var(--color-celeste-gris);
+}
+
+.login__input:focus {
+  outline: none;
+  border-color: var(--color-verde-teal);
+  box-shadow: 0 0 0 3px rgba(34, 138, 141, 0.16);
+}
+
+/* --- Campo con ojo --- */
+.login__clave {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.login__input--clave {
+  padding-right: 46px;
+}
+
+.login__ojo {
+  position: absolute;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--texto-secundario);
+  cursor: pointer;
+}
+
+.login__ojo:hover {
+  background-color: var(--color-gris-azulado);
+  color: var(--color-verde-teal);
+}
+
+
+.login__error {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  background-color: #FDDEDE;
+  color: #C0292C;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.login__card .button--dark {
+  background: var(--gradiente-login);
+  color: var(--texto-claro);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  padding: var(--space-md) var(--space-lg);
+  box-shadow: 0 6px 18px rgba(12, 118, 133, 0.28);
+}
+
+.login__card .button--dark:hover:not(:disabled) {
+  opacity: 1;
+  filter: brightness(1.08);
+  box-shadow: 0 8px 22px rgba(12, 118, 133, 0.34);
+}
+
+.login__card .button--dark:disabled {
+  opacity: 0.65;
+}
+
+
 .login__demo-hint {
-  margin-top: var(--space-md);
+  margin-top: var(--space-sm);
   padding-top: var(--space-md);
   border-top: 1px dashed var(--color-celeste-gris);
   font-size: var(--font-size-sm);
   color: var(--texto-secundario);
 }
 
+.login__demo-hint p {
+  margin: 0 0 var(--space-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+}
+
 .login__demo-hint ul {
-  list-style: disc;
-  padding-left: var(--space-lg);
-  margin-top: var(--space-xs);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.login__demo-hint code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.78rem;
+  color: var(--color-teal-medio);
+  font-weight: 600;
 }
