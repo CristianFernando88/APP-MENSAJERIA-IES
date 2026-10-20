@@ -1,344 +1,347 @@
-import { useState } from "react";
-import { Send, Plus, Search, X, Hash } from "lucide-react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { Send, Search, Hash, ChevronLeft, Plus } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
+import { useWebSocket } from "../../hooks/useWebSocket";
+import { listarMensajes } from "../../api/mensajes";
+import { listarMensajesDirectos } from "../../api/mensajesDirectos";
+import { listarUsuarios } from "../../api/usuarios";
+import { listarCanales } from "../../api/canales";
+import { listarMiembrosCanal } from "../../api/miembrosCanal";
 import Modal from "../../components/ui/Modal/Modal";
 import "./Mensajes.css";
 
-
-const CONTACTOS = [
-  { id: 1, nombre: "Martina Ruiz", rol: "admin", cargo: "Preceptor" },
-  { id: 2, nombre: "Ana Pérez", rol: "admin", cargo: "Directora" },
-  { id: 3, nombre: "Roberto Pérez", rol: "tutor", cargo: "Tutor de Mateo Castro" },
-  { id: 4, nombre: "María Gómez", rol: "tutor", cargo: "Tutora de Sofía Gómez" },
-  { id: 5, nombre: "Mateo Castro", rol: "alumno", cargo: "4to Grado A" },
-];
-
-const CANALES = [
-  { id: 101, nombre: "4to Grado A", cargo: "Canal del curso" },
-  { id: 102, nombre: "5to Grado B", cargo: "Canal del curso" },
-];
-
-const YO_ID = 99;
-
-const conversacionesIniciales = [
-  {
-    id: 1,
-    tipo: "privado",
-    contactoId: 1,
-    leido: true,
-    mensajes: [
-      { id: 1, emisorId: 1, texto: "Hola, recordá que mañana es la reunión de padres.", hora: "09:15" },
-      { id: 2, emisorId: YO_ID, texto: "Perfecto, ahí estaré. Gracias!", hora: "09:20" },
-    ],
-  },
-  {
-    id: 2,
-    tipo: "privado",
-    contactoId: 3,
-    leido: false,
-    mensajes: [
-      { id: 1, emisorId: 3, texto: "Buenas, quería consultar sobre la matrícula.", hora: "10:30" },
-    ],
-  },
-  {
-    id: 3,
-    tipo: "canal",
-    canalId: 101,
-    leido: false,
-    mensajes: [
-      { id: 1, emisorId: 1, texto: "Recuerden traer firmada la autorización para la salida.", hora: "08:00" },
-    ],
-  },
-  {
-    id: 4,
-    tipo: "canal",
-    canalId: 102,
-    leido: true,
-    mensajes: [
-      { id: 1, emisorId: 2, texto: "Mañana el acto es a las 9:00 en el patio.", hora: "Ayer" },
-    ],
-  },
-];
-
-const TABS = [
-  { key: "todos", label: "Todos" },
-  { key: "no-leidos", label: "No leídos" },
-  { key: "canales", label: "Canales" },
-];
-
 export default function Mensajes() {
-  const [rolPrueba, setRolPrueba] = useState("admin");
-
-  const [conversaciones, setConversaciones] = useState(conversacionesIniciales);
-  const [activeTab, setActiveTab] = useState("todos");
-  const [selectedId, setSelectedId] = useState(null);
+  const { user, hasRole } = useAuth();
+  
+  // --- ESTADOS DE DATOS ---
+  const [canales, setCanales] = useState([]);
+  const [usuarios, setUsuarios] = useState([]);
+  const [miembrosCanal, setMiembrosCanal] = useState([]);
+  const [mensajesDirectos, setMensajesDirectos] = useState([]);
+  
+  // --- ESTADOS DE UI ---
+  const [chatActivo, setChatActivo] = useState(null); 
+  const [mensajes, setMensajes] = useState([]);
   const [texto, setTexto] = useState("");
-  const [nuevoChatOpen, setNuevoChatOpen] = useState(false);
+  const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
+  
+  // --- MODAL NUEVO CHAT ---
+  const [modalNuevoChat, setModalNuevoChat] = useState(false);
+  const [busquedaUsuario, setBusquedaUsuario] = useState("");
 
-  const getContacto = (id) => CONTACTOS.find((c) => c.id === id);
-  const getCanal = (id) => CANALES.find((c) => c.id === id);
+  const mensajesEndRef = useRef(null);
 
-  const getInfo = (conv) =>
-    conv.tipo === "canal"
-      ? { nombre: getCanal(conv.canalId)?.nombre, cargo: getCanal(conv.canalId)?.cargo, esCanal: true }
-      : { nombre: getContacto(conv.contactoId)?.nombre, cargo: getContacto(conv.contactoId)?.cargo, esCanal: false };
+  // 1. Cargar datos iniciales
+  useEffect(() => {
+    async function cargarDatos() {
+      try {
+        const [resCanales, resUsuarios, resMiembros, resDMs] = await Promise.all([
+          listarCanales(),
+          listarUsuarios(),
+          listarMiembrosCanal(),
+          listarMensajesDirectos()
+        ]);
 
-  const seleccionada = conversaciones.find((c) => c.id === selectedId);
-  const infoSeleccionada = seleccionada ? getInfo(seleccionada) : null;
+        let misCanales = resCanales;
+        if (!hasRole(["super_admin", "admin"])) {
+          const misIdsCanales = resMiembros
+            .filter(m => Number(m.usuario_id) === Number(user.id_usuario))
+            .map(m => Number(m.canal_id));
+          misCanales = resCanales.filter(c => misIdsCanales.includes(Number(c.id_canal)));
+        }
 
-  const conversacionesFiltradas = conversaciones.filter((c) => {
-    if (activeTab === "no-leidos") return !c.leido;
-    if (activeTab === "canales") return c.tipo === "canal";
-    return true;
-  });
-
-  const contactosPermitidos = CONTACTOS.filter((c) =>
-    rolPrueba === "admin" ? c.rol !== "admin" : c.rol === "admin"
-  );
-
-  const contactosParaNuevoChat = contactosPermitidos.filter((c) =>
-    c.nombre.toLowerCase().includes(busqueda.toLowerCase())
-  );
-
-  const canalesParaNuevoChat = CANALES.filter((c) =>
-    c.nombre.toLowerCase().includes(busqueda.toLowerCase())
-  );
-
-  const marcarLeido = (id) => {
-    setConversaciones((prev) => prev.map((c) => (c.id === id ? { ...c, leido: true } : c)));
-  };
-
-  const handleSeleccionar = (id) => {
-    setSelectedId(id);
-    marcarLeido(id);
-  };
-
-  const handleSeleccionarContacto = (contacto) => {
-    const existente = conversaciones.find((c) => c.tipo === "privado" && c.contactoId === contacto.id);
-    if (existente) {
-      handleSeleccionar(existente.id);
-    } else {
-      const nueva = { id: Date.now(), tipo: "privado", contactoId: contacto.id, leido: true, mensajes: [] };
-      setConversaciones([nueva, ...conversaciones]);
-      setSelectedId(nueva.id);
+        setCanales(misCanales);
+        setUsuarios(resUsuarios);
+        setMiembrosCanal(resMiembros);
+        setMensajesDirectos(resDMs);
+      } catch (error) {
+        console.error("Error al cargar datos:", error);
+      } finally {
+        setCargando(false);
+      }
     }
-    setNuevoChatOpen(false);
-  };
+    if (user) cargarDatos();
+  }, [user, hasRole]);
 
-  const handleSeleccionarCanal = (canal) => {
-    const existente = conversaciones.find((c) => c.tipo === "canal" && c.canalId === canal.id);
-    if (existente) {
-      handleSeleccionar(existente.id);
+  // 2. Cargar historial cuando cambia el chat activo
+  useEffect(() => {
+    if (!chatActivo) return;
+    setMensajes([]);
+
+    if (chatActivo.tipo === "canal") {
+      listarMensajes(chatActivo.id)
+        .then(data => {
+          const ordenados = data.sort((a, b) => new Date(a.fecha_envio) - new Date(b.fecha_envio));
+          setMensajes(ordenados);
+        });
     } else {
-      const nueva = { id: Date.now(), tipo: "canal", canalId: canal.id, leido: true, mensajes: [] };
-      setConversaciones([nueva, ...conversaciones]);
-      setSelectedId(nueva.id);
+      const misDMs = mensajesDirectos.filter(dm => 
+        (dm.emisor_id === user.id_usuario && dm.receptor_id === chatActivo.id) ||
+        (dm.emisor_id === chatActivo.id && dm.receptor_id === user.id_usuario)
+      );
+      const ordenados = misDMs.sort((a, b) => new Date(a.fecha_envio) - new Date(b.fecha_envio));
+      setMensajes(ordenados);
     }
-    setNuevoChatOpen(false);
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatActivo]);
 
-  const puedeEscribir = !infoSeleccionada?.esCanal || rolPrueba === "admin";
+  // 3. Conectar WebSocket
+  const wsPath = chatActivo 
+    ? (chatActivo.tipo === "canal" ? `canal/${chatActivo.id}` : `directo/${user.id_usuario}`) 
+    : null;
+
+  const handleNuevoMensajeWS = useCallback((nuevoMensaje) => {
+    if (!chatActivo) return;
+    if (chatActivo.tipo === "canal") {
+      setMensajes(prev => [...prev, nuevoMensaje]);
+    } else {
+      if (
+        (nuevoMensaje.emisor_id === user.id_usuario && nuevoMensaje.receptor_id === chatActivo.id) ||
+        (nuevoMensaje.emisor_id === chatActivo.id && nuevoMensaje.receptor_id === user.id_usuario)
+      ) {
+        setMensajes(prev => [...prev, nuevoMensaje]);
+      }
+    }
+  }, [chatActivo, user.id_usuario]);
+
+  const { isConnected, sendMessage } = useWebSocket(wsPath, handleNuevoMensajeWS);
+
+  // 4. Auto-scroll
+  useEffect(() => {
+    mensajesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [mensajes]);
 
   const handleEnviar = (e) => {
     e.preventDefault();
-    if (!texto.trim() || !seleccionada || !puedeEscribir) return;
+    if (!texto.trim() || !isConnected || !chatActivo) return;
 
-    const hora = new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
-    const nuevoMensaje = { id: Date.now(), emisorId: YO_ID, texto: texto.trim(), hora };
-
-    setConversaciones(
-      conversaciones.map((c) =>
-        c.id === seleccionada.id ? { ...c, mensajes: [...c.mensajes, nuevoMensaje] } : c
-      )
-    );
+    if (chatActivo.tipo === "canal") {
+      sendMessage({ contenido: texto, usuario_id: user.id_usuario });
+    } else {
+      sendMessage({ contenido: texto, receptor_id: chatActivo.id });
+    }
     setTexto("");
   };
 
+  const getNombre = (id) => {
+    const u = usuarios.find(x => x.id_usuario === id);
+    return u?.perfil ? `${u.perfil.nombres} ${u.perfil.apellidos}` : u?.nombre_usuario || "Desconocido";
+  };
+
+  // --- FILTROS DE BÚSQUEDA ---
+  const canalesFiltrados = canales.filter(c => c.nombre.toLowerCase().includes(busqueda.toLowerCase()));
+  
+  const usuariosFiltrados = useMemo(() => {
+    const idsConHistorial = new Set();
+    mensajesDirectos.forEach(dm => {
+      if (dm.emisor_id === user.id_usuario) idsConHistorial.add(dm.receptor_id);
+      if (dm.receptor_id === user.id_usuario) idsConHistorial.add(dm.emisor_id);
+    });
+    // Filtramos por búsqueda también
+    return usuarios.filter(u => 
+      idsConHistorial.has(u.id_usuario) && 
+      u.id_usuario !== user.id_usuario &&
+      getNombre(u.id_usuario).toLowerCase().includes(busqueda.toLowerCase())
+    );
+  }, [usuarios, mensajesDirectos, user.id_usuario, busqueda]);
+
+    const contactosParaNuevoChat = useMemo(() => {
+      // 1. Obtener los IDs de los canales a los que YO pertenezco
+      const misCanalesIds = miembrosCanal
+        .filter(m => Number(m.usuario_id) === Number(user.id_usuario))
+        .map(m => Number(m.canal_id));
+
+      // 2. Obtener los IDs de los usuarios que están en ESOS canales
+      const usuariosEnMisCanales = new Set();
+      miembrosCanal.forEach(m => {
+        if (misCanalesIds.includes(Number(m.canal_id))) {
+          usuariosEnMisCanales.add(Number(m.usuario_id));
+        }
+      });
+
+      // 3. Filtrar la lista de usuarios generales
+      return usuarios
+        .filter(u => 
+          usuariosEnMisCanales.has(Number(u.id_usuario)) && // Está en mis canales
+          Number(u.id_usuario) !== Number(user.id_usuario) && // No soy yo
+          getNombre(u.id_usuario).toLowerCase().includes(busquedaUsuario.toLowerCase()) // Coincide con la búsqueda
+        )
+        .sort((a, b) => getNombre(a.id_usuario).localeCompare(getNombre(b.id_usuario))); // Ordenar alfabéticamente
+    }, [usuarios, miembrosCanal, user.id_usuario, busquedaUsuario]);
+
+  if (cargando) return <p style={{ textAlign: "center", padding: "2rem" }}>Cargando...</p>;
+
   return (
     <section className="mensajes">
-      {/* SOLO PARA LA DEMO */}
-      <div className="mensajes__dev-switch">
-        <span>Ver como:</span>
-        <select
-          value={rolPrueba}
-          onChange={(e) => {
-            setRolPrueba(e.target.value);
-            setSelectedId(null);
-          }}
-        >
-          <option value="admin">Administrador</option>
-          <option value="tutor">Tutor</option>
-          <option value="alumno">Alumno</option>
-        </select>
-      </div>
-
       <div className="mensajes__body">
-        <div className={`mensajes__list-panel${selectedId ? " mensajes__list-panel--hidden-mobile" : ""}`}>
+        
+        {/* PANEL IZQUIERDO: LISTA ÚNICA CON SCROLL */}
+        <div className={`mensajes__list-panel ${chatActivo ? "mensajes__list-panel--hidden-mobile" : ""}`}>
           <div className="mensajes__list-header">
             <h1 className="mensajes__title">Mensajes</h1>
-            <button className="mensajes__new-btn" onClick={() => { setBusqueda(""); setNuevoChatOpen(true); }} aria-label="Nuevo chat">
+            <button className="mensajes__new-btn" onClick={() => setModalNuevoChat(true)}>
               <Plus size={20} />
             </button>
           </div>
 
-          <div className="mensajes__tabs">
-            {TABS.map(({ key, label }) => (
-              <button
-                key={key}
-                className={`mensajes__tab${activeTab === key ? " mensajes__tab--active" : ""}`}
-                onClick={() => setActiveTab(key)}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="mensajes__search-contacts" style={{ margin: "0 1rem 1rem 1rem", border: "none", padding: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", background: "var(--color-gris-azulado)", padding: "8px 12px", borderRadius: "8px", width: "100%" }}>
+              <Search size={16} style={{ color: "var(--texto-secundario)" }} />
+              <input
+                type="text"
+                placeholder="Buscar conversación..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                style={{ border: "none", background: "transparent", outline: "none", marginLeft: "8px", width: "100%" }}
+              />
+            </div>
           </div>
 
           <div className="mensajes__list">
-            {conversacionesFiltradas.length === 0 && (
-              <p className="mensajes__list-empty">No hay conversaciones acá.</p>
+            {/* SECCIÓN CANALES */}
+            {canalesFiltrados.length > 0 && (
+              <>
+                <p className="mensajes__section-title">Canales</p>
+                {canalesFiltrados.map((canal) => (
+                  <button
+                    key={`c-${canal.id_canal}`}
+                    className={`mensajes__item ${chatActivo?.tipo === "canal" && chatActivo?.id === canal.id_canal ? "mensajes__item--active" : ""}`}
+                    onClick={() => setChatActivo({ tipo: "canal", id: canal.id_canal, nombre: canal.nombre })}
+                  >
+                    <div className="mensajes__avatar mensajes__avatar--canal"><Hash size={20} /></div>
+                    <div className="mensajes__item-content">
+                      <div className="mensajes__item-top"><span className="mensajes__item-name">{canal.nombre}</span></div>
+                      <p className="mensajes__item-snippet">Canal de {canal.tipo}</p>
+                    </div>
+                  </button>
+                ))}
+              </>
             )}
 
-            {conversacionesFiltradas.map((c) => {
-              const info = getInfo(c);
-              const ultimo = c.mensajes[c.mensajes.length - 1];
-              if (!info.nombre) return null;
-
-              return (
-                <button
-                  key={c.id}
-                  className={`mensajes__item${selectedId === c.id ? " mensajes__item--active" : ""}${!c.leido ? " mensajes__item--unread" : ""}`}
-                  onClick={() => handleSeleccionar(c.id)}
-                >
-                  <div className={`mensajes__avatar${info.esCanal ? " mensajes__avatar--canal" : ""}`}>
-                    {info.esCanal ? <Hash size={20} /> : info.nombre.charAt(0)}
-                  </div>
-                  <div className="mensajes__item-content">
-                    <div className="mensajes__item-top">
-                      <span className="mensajes__item-name">{info.nombre}</span>
-                      {ultimo && <span className="mensajes__item-time">{ultimo.hora}</span>}
+            {/* SECCIÓN DIRECTOS */}
+            {usuariosFiltrados.length > 0 && (
+              <>
+                <p className="mensajes__section-title">Mensajes Directos</p>
+                {usuariosFiltrados.map((u) => (
+                  <button
+                    key={`u-${u.id_usuario}`}
+                    className={`mensajes__item ${chatActivo?.tipo === "directo" && chatActivo?.id === u.id_usuario ? "mensajes__item--active" : ""}`}
+                    onClick={() => setChatActivo({ tipo: "directo", id: u.id_usuario, nombre: getNombre(u.id_usuario) })}
+                  >
+                    <div className="mensajes__avatar">{getNombre(u.id_usuario).charAt(0)}</div>
+                    <div className="mensajes__item-content">
+                      <div className="mensajes__item-top"><span className="mensajes__item-name">{getNombre(u.id_usuario)}</span></div>
+                      <p className="mensajes__item-snippet">Mensaje privado</p>
                     </div>
-                    <p className="mensajes__item-snippet">
-                      {ultimo ? ultimo.texto : "Iniciar conversación"}
-                    </p>
-                  </div>
-                  {!c.leido && <span className="mensajes__dot" />}
-                </button>
-              );
-            })}
+                  </button>
+                ))}
+              </>
+            )}
+
+            {(canalesFiltrados.length === 0 && usuariosFiltrados.length === 0) && (
+              <p className="mensajes__list-empty">No se encontraron conversaciones.</p>
+            )}
           </div>
         </div>
 
-        <div className={`mensajes__chat-panel${selectedId ? " mensajes__chat-panel--visible-mobile" : ""}`}>
-          {seleccionada && infoSeleccionada ? (
+        {/* PANEL DERECHO (CHAT) */}
+        <div className={`mensajes__chat-panel ${chatActivo ? "mensajes__chat-panel--visible-mobile" : ""}`}>
+          {chatActivo ? (
             <>
               <div className="mensajes__chat-header">
-                <button className="mensajes__back" onClick={() => setSelectedId(null)}>←</button>
-                <div className={`mensajes__avatar mensajes__avatar--sm${infoSeleccionada.esCanal ? " mensajes__avatar--canal" : ""}`}>
-                  {infoSeleccionada.esCanal ? <Hash size={16} /> : infoSeleccionada.nombre.charAt(0)}
+                <button className="mensajes__back" onClick={() => setChatActivo(null)}><ChevronLeft size={20} /></button>
+                <div className={`mensajes__avatar mensajes__avatar--sm ${chatActivo.tipo === "canal" ? "mensajes__avatar--canal" : ""}`}>
+                  {chatActivo.tipo === "canal" ? <Hash size={16} /> : chatActivo.nombre.charAt(0)}
                 </div>
                 <div>
-                  <p className="mensajes__chat-name">{infoSeleccionada.nombre}</p>
-                  <p className="mensajes__chat-cargo">{infoSeleccionada.cargo}</p>
+                  <p className="mensajes__chat-name">{chatActivo.nombre}</p>
+                  <p className="mensajes__chat-cargo" style={{ color: isConnected ? "var(--color-verde-teal)" : "#C0292C" }}>
+                    {isConnected ? "🟢 En línea" : "🔴 Desconectado"}
+                  </p>
                 </div>
               </div>
 
               <div className="mensajes__bubbles">
-                {seleccionada.mensajes.map((m) => (
-                  <div key={m.id} className={`mensajes__bubble${m.emisorId === YO_ID ? " mensajes__bubble--propio" : ""}`}>
-                    <p>{m.texto}</p>
-                    <span className="mensajes__bubble-time">{m.hora}</span>
-                  </div>
-                ))}
-                {seleccionada.mensajes.length === 0 && (
-                  <p className="mensajes__bubbles-empty">Todavía no hay mensajes acá.</p>
-                )}
+                {mensajes.length === 0 && <p className="mensajes__bubbles-empty">No hay mensajes aún.</p>}
+
+                {mensajes.map((m, index) => {
+                  const esMio = chatActivo.tipo === "canal" 
+                    ? m.usuario_id === user.id_usuario 
+                    : m.emisor_id === user.id_usuario;
+                  
+                  return (
+                    <div key={m.id_mensaje || m.id_mensaje_directo || index} className={`mensajes__bubble ${esMio ? "mensajes__bubble--propio" : ""}`}>
+                      {!esMio && chatActivo.tipo === "canal" && (
+                        <span style={{ fontSize: "0.75rem", fontWeight: "bold", display: "block", marginBottom: "4px", color: "var(--color-azul-petroleo)" }}>
+                          {getNombre(m.usuario_id)}
+                        </span>
+                      )}
+                      <p>{m.contenido}</p>
+                      <span className="mensajes__bubble-time">
+                        {new Date(m.fecha_envio).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  );
+                })}
+                <div ref={mensajesEndRef} />
               </div>
 
-              {puedeEscribir ? (
-                <form className="mensajes__input-row" onSubmit={handleEnviar}>
-                  <input
-                    type="text"
-                    placeholder="Escribí un mensaje..."
-                    value={texto}
-                    onChange={(e) => setTexto(e.target.value)}
-                  />
-                  <button type="submit" aria-label="Enviar">
-                    <Send size={18} />
-                  </button>
-                </form>
-              ) : (
-                <div className="mensajes__readonly">
-                  Solo el administrador puede escribir en este canal.
-                </div>
-              )}
+              <form className="mensajes__input-row" onSubmit={handleEnviar}>
+                <input
+                  type="text"
+                  placeholder="Escribí un mensaje..."
+                  value={texto}
+                  onChange={(e) => setTexto(e.target.value)}
+                  disabled={!isConnected}
+                />
+                <button type="submit" disabled={!isConnected || !texto.trim()}><Send size={18} /></button>
+              </form>
             </>
           ) : (
             <div className="mensajes__empty-state">
               <p>Seleccioná una conversación</p>
-              <span>o iniciá una nueva con el botón +</span>
+              <span>para comenzar a chatear</span>
             </div>
           )}
         </div>
       </div>
 
-      {nuevoChatOpen && (
-        <Modal title="Nuevo mensaje" onClose={() => setNuevoChatOpen(false)}>
-          <div className="mensajes__search-contacts">
+      {/* MODAL NUEVO CHAT */}
+      {modalNuevoChat && (
+        <Modal title="Nuevo mensaje directo" onClose={() => setModalNuevoChat(false)}>
+          <div className="mensajes__search-contacts" style={{ marginBottom: "1rem" }}>
             <Search size={18} />
             <input
               type="text"
-              placeholder="Buscar..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar usuario..."
+              value={busquedaUsuario}
+              onChange={(e) => setBusquedaUsuario(e.target.value)}
               autoFocus
             />
-            {busqueda && (
-              <button onClick={() => setBusqueda("")} aria-label="Limpiar búsqueda">
-                <X size={16} />
-              </button>
-            )}
           </div>
-
-          {canalesParaNuevoChat.length > 0 && (
-            <>
-              <p className="mensajes__modal-section">Canales</p>
-              <div className="mensajes__contacts-list">
-                {canalesParaNuevoChat.map((c) => (
-                  <button key={c.id} className="mensajes__contact-item" onClick={() => handleSeleccionarCanal(c)}>
-                    <div className="mensajes__avatar mensajes__avatar--canal">
-                      <Hash size={18} />
-                    </div>
-                    <div>
-                      <p className="mensajes__contact-name">{c.nombre}</p>
-                      <p className="mensajes__contact-cargo">{c.cargo}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-
-          <p className="mensajes__modal-section">Contactos</p>
+          
           <div className="mensajes__contacts-list">
             {contactosParaNuevoChat.length === 0 && (
-              <p className="mensajes__list-empty">No hay contactos disponibles.</p>
+              <p className="mensajes__list-empty">No se encontraron usuarios.</p>
             )}
-            {contactosParaNuevoChat.map((c) => (
-              <button key={c.id} className="mensajes__contact-item" onClick={() => handleSeleccionarContacto(c)}>
-                <div className="mensajes__avatar">{c.nombre.charAt(0)}</div>
+            {contactosParaNuevoChat.map((u) => (
+              <button 
+                key={u.id_usuario} 
+                className="mensajes__contact-item" 
+                onClick={() => {
+                  setChatActivo({ tipo: "directo", id: u.id_usuario, nombre: getNombre(u.id_usuario) });
+                  setModalNuevoChat(false);
+                }}
+              >
+                <div className="mensajes__avatar">{getNombre(u.id_usuario).charAt(0)}</div>
                 <div>
-                  <p className="mensajes__contact-name">{c.nombre}</p>
-                  <p className="mensajes__contact-cargo">{c.cargo}</p>
+                  <p className="mensajes__contact-name">{getNombre(u.id_usuario)}</p>
+                  <p className="mensajes__contact-cargo">@{u.nombre_usuario}</p>
                 </div>
               </button>
             ))}
           </div>
-
-          {rolPrueba !== "admin" && (
-            <p className="mensajes__hint">
-              Como {rolPrueba}, solo podés escribirle al administrador (preceptor/director). Los canales se pueden ver, pero solo el administrador escribe ahí.
-            </p>
-          )}
         </Modal>
       )}
     </section>
