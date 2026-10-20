@@ -7,6 +7,7 @@ class PerfilBase(BaseModel):
     apellidos: str | None = Field(default=None, max_length=100)
     foto_perfil: str | None = Field(default=None, max_length=255)
     biografia: str | None = None
+    dni: str | None = Field(default=None, max_length=8)
 
 
 class PerfilCreate(PerfilBase):
@@ -18,6 +19,7 @@ class PerfilUpdate(BaseModel):
     apellidos: str | None = Field(default=None, max_length=100)
     foto_perfil: str | None = Field(default=None, max_length=255)
     biografia: str | None = None
+    dni: str | None = Field(default=None, max_length=8)
 
 
 class PerfilResponse(PerfilBase):

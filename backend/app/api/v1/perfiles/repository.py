@@ -15,6 +15,7 @@ def create(db: Session, data: PerfilCreate) -> Perfil:
         apellidos=data.apellidos,
         foto_perfil=data.foto_perfil,
         biografia=data.biografia,
+        dni=data.dni,
     )
     db.add(nuevo)
     db.commit()
