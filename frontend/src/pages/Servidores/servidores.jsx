@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Search, Server, FolderTree, Hash, Megaphone, ChevronRight,
-  AlertCircle, Loader2, Tags, Pencil, Trash2, Users, UserPlus
+  AlertCircle, Loader2, Tags, Pencil, Trash2, Users, UserPlus, UserCog
 } from "lucide-react";
 import Button from "../../components/ui/Button/Button";
 import Input from "../../components/ui/Input/Input";
@@ -16,9 +16,11 @@ import { crearCanal, actualizarCanal, eliminarCanal } from "../../api/canales";
 import { listarUsuarios, crearUsuario } from "../../api/usuarios";
 import { crearPerfil } from "../../api/perfiles";
 import { crearMiembroServidor, eliminarMiembroServidor, listarMiembrosServidor } from "../../api/miembrosServidor";
+import { listarMiembrosCanal } from "../../api/miembrosCanal";
 import { listarUsuarioRol, crearUsuarioRol, eliminarUsuarioRol } from "../../api/usuarioRol";
 import { listarRoles } from "../../api/roles";
 import { useAuth } from "../../context/AuthContext";
+import useListaInfinita from "../../hooks/useListaInfinita";
 
 export default function Servidores() {
   const navigate = useNavigate();
@@ -29,14 +31,17 @@ export default function Servidores() {
   const [rolesDefinidos, setRolesDefinidos] = useState([]);
   const [misMembresias, setMisMembresias] = useState([]);
   const [todosLosUsuarios, setTodosLosUsuarios] = useState([]);
-  
+  const [miembrosCanal, setMiembrosCanal] = useState([]);
+
   const [loadingServidores, setLoadingServidores] = useState(true);
   const [errorServidores, setErrorServidores] = useState("");
 
   const [busquedaServidor, setBusquedaServidor] = useState("");
+  const [filtroRol, setFiltroRol] = useState("");
+  const [filtroRolCanal, setFiltroRolCanal] = useState("");
   const [servidorSeleccionado, setServidorSeleccionado] = useState(null);
   const [activeTab, setActiveTab] = useState("canales");
-  
+
   const [jerarquia, setJerarquia] = useState(null);
   const [loadingJerarquia, setLoadingJerarquia] = useState(false);
   const [canalActivoId, setCanalActivoId] = useState(null);
@@ -86,6 +91,18 @@ export default function Servidores() {
     return () => { cancelado = true; };
   }, []);
 
+  useEffect(() => {
+    let cancelado = false;
+    async function cargarMiembrosCanal() {
+      try {
+        const data = await listarMiembrosCanal();
+        if (!cancelado) setMiembrosCanal(Array.isArray(data) ? data : []);
+      } catch (err) { console.error(err); }
+    }
+    cargarMiembrosCanal();
+    return () => { cancelado = true; };
+  }, []);
+
   const misServidores = useMemo(() => {
     if (!user) return [];
     if (hasRole(["super_admin", "admin"])) return todosLosServidores;
@@ -103,9 +120,68 @@ export default function Servidores() {
     }
   }, [misServidores, servidorSeleccionado]);
 
-  const servidoresFiltrados = misServidores.filter((s) =>
-    (s.nombre || "").toLowerCase().includes(busquedaServidor.toLowerCase())
+  // ---- Roles por servidor (para el filtro) ----
+  const rolesPorServidor = useMemo(() => {
+    const nombrePorId = new Map(rolesDefinidos.map((r) => [Number(r.id_rol), r.nombre]));
+    const mapa = {};
+    (todosLosRoles || []).forEach((ur) => {
+      if (ur.servidor_id === null || ur.servidor_id === undefined) return;
+      const nombre = nombrePorId.get(Number(ur.rol_id));
+      if (!nombre) return;
+      const servidor = Number(ur.servidor_id);
+      if (!mapa[servidor]) mapa[servidor] = [];
+      if (!mapa[servidor].includes(nombre)) mapa[servidor].push(nombre);
+    });
+    return mapa;
+  }, [todosLosRoles, rolesDefinidos]);
+
+  const rolesGlobalesPorUsuario = useMemo(() => {
+    const nombrePorId = new Map(rolesDefinidos.map((r) => [Number(r.id_rol), r.nombre]));
+    const mapa = {};
+    (todosLosRoles || []).forEach((ur) => {
+      if (ur.servidor_id !== null && ur.servidor_id !== undefined) return;
+      const nombre = nombrePorId.get(Number(ur.rol_id));
+      if (!nombre) return;
+      const usuario = Number(ur.usuario_id);
+      if (!mapa[usuario]) mapa[usuario] = [];
+      if (!mapa[usuario].includes(nombre)) mapa[usuario].push(nombre);
+    });
+    return mapa;
+  }, [todosLosRoles, rolesDefinidos]);
+
+  const nombresRol = useMemo(
+    () => rolesDefinidos.map((r) => r.nombre).sort((a, b) => a.localeCompare(b)),
+    [rolesDefinidos]
   );
+
+  const rolesDeServidorId = (servidorId) => {
+    const porServidor = rolesPorServidor[Number(servidorId)] || [];
+    const srv = misServidores.find((s) => Number(s.id_servidor) === Number(servidorId));
+    const delCreador = srv ? rolesGlobalesPorUsuario[Number(srv.creador_id)] || [] : [];
+    return Array.from(new Set([...porServidor, ...delCreador]));
+  };
+
+  const servidoresFiltrados = useMemo(() => {
+    const texto = busquedaServidor.trim().toLowerCase();
+    const rol = filtroRol.trim().toLowerCase();
+    return misServidores.filter((s) => {
+      const coincideTexto = !texto || (s.nombre || "").toLowerCase().includes(texto);
+      const coincideRol = !rol || rolesDeServidorId(s.id_servidor).some((r) => r.toLowerCase() === rol);
+      return coincideTexto && coincideRol;
+    });
+  }, [misServidores, busquedaServidor, filtroRol, rolesPorServidor, rolesGlobalesPorUsuario]);
+
+  const {
+    visibles: servidoresVisibles,
+    hayMas: hayMasServidores,
+    total: totalServidores,
+    contenedorRef: contenedorServidoresRef,
+    manejarScroll: manejarScrollServidores,
+    cargarMas: cargarMasServidores,
+  } = useListaInfinita(servidoresFiltrados, {
+    paso: 10,
+    resetKey: `${busquedaServidor}|${filtroRol}`,
+  });
 
   const servidorActivo = misServidores.find((s) => s.id_servidor === servidorSeleccionado);
 
@@ -157,6 +233,37 @@ export default function Servidores() {
     cargarCat();
     return () => { cancelado = true; };
   }, [servidorSeleccionado, puedeGestionar, jerarquia]);
+
+  // ---- Filtro de canales por tipo de usuario (miembros del canal con ese rol en el servidor) ----
+  const rolesDeUsuarioEnServidor = (usuarioId) => {
+    return (todosLosRoles || [])
+      .filter((ur) => Number(ur.usuario_id) === Number(usuarioId) && Number(ur.servidor_id) === Number(servidorSeleccionado))
+      .map((ur) => rolesDefinidos.find((r) => r.id_rol === ur.rol_id)?.nombre)
+      .filter(Boolean);
+  };
+
+  const jerarquiaFiltrada = useMemo(() => {
+    if (!jerarquia) return jerarquia;
+    if (!filtroRolCanal) return jerarquia;
+
+    const coincide = (canal) => {
+      const ids = miembrosCanal
+        .filter((m) => Number(m.canal_id) === Number(canal.id_canal))
+        .map((m) => Number(m.usuario_id));
+      return ids.some((id) =>
+        rolesDeUsuarioEnServidor(id).some((r) => r.toLowerCase() === filtroRolCanal.toLowerCase())
+      );
+    };
+
+    return {
+      ...jerarquia,
+      categorias: (jerarquia.categorias || []).map((cat) => ({
+        ...cat,
+        canales: (cat.canales || []).filter(coincide),
+      })),
+      sinCategoria: (jerarquia.sinCategoria || []).filter(coincide),
+    };
+  }, [jerarquia, filtroRolCanal, miembrosCanal, todosLosRoles, rolesDefinidos, servidorSeleccionado]);
 
   const canalActivo = jerarquia?.categorias?.flatMap((c) => c.canales || []).concat(jerarquia?.sinCategoria || []).find((c) => c.id_canal === canalActivoId) || null;
   const abrirCanal = () => { if (canalActivo) navigate("/mensajes", { state: { canal: canalActivo } }); };
@@ -225,17 +332,17 @@ export default function Servidores() {
     if (!servidorSeleccionado) return;
     setGuardandoUsuario(true);
     try {
-      const nuevo = await crearUsuario({ 
-        nombre_usuario: datos.nombre_usuario, email: datos.email, password: datos.password, activo: datos.activo === "true" 
+      const nuevo = await crearUsuario({
+        nombre_usuario: datos.nombre_usuario, email: datos.email, password: datos.password, activo: datos.activo === "true"
       });
-      
+
       await crearPerfil({ usuario_id: nuevo.id_usuario, nombres: datos.nombres, apellidos: datos.apellidos });
       await crearMiembroServidor({ usuario_id: nuevo.id_usuario, servidor_id: Number(servidorSeleccionado), activo: true });
 
       for (const rolId of datos.roles_ids) {
         await crearUsuarioRol({ usuario_id: nuevo.id_usuario, rol_id: Number(rolId), servidor_id: Number(servidorSeleccionado), asignado_por: user?.id_usuario });
       }
-      
+
       setMisMembresias(await listarMiembrosServidor());
       setTodosLosUsuarios(await listarUsuarios());
       setTodosLosRoles(await listarUsuarioRol());
@@ -306,23 +413,54 @@ export default function Servidores() {
             <input type="text" placeholder="Buscar servidor..." value={busquedaServidor} onChange={(e) => setBusquedaServidor(e.target.value)} />
           </div>
 
+          <div className="servidores__filter">
+            <UserCog size={16} />
+            <select value={filtroRol} onChange={(e) => setFiltroRol(e.target.value)} aria-label="Filtrar por tipo de usuario">
+              <option value="">Todos los tipos de usuario</option>
+              {nombresRol.map((rol) => (
+                <option key={rol} value={rol}>{rol}</option>
+              ))}
+            </select>
+          </div>
+
           {loadingServidores && <p className="servidores__empty">Cargando...</p>}
           {!loadingServidores && servidoresFiltrados.length === 0 && <p className="servidores__empty">No perteneces a ningún servidor.</p>}
 
-          <ul className="servidores__server-list">
-            {servidoresFiltrados.map((s) => (
-              <li key={s.id_servidor}>
-                <button className={`servidores__server-item ${s.id_servidor === servidorSeleccionado ? "servidores__server-item--active" : ""}`} onClick={() => setServidorSeleccionado(s.id_servidor)}>
-                  <Server size={18} />
-                  <div className="servidores__server-text">
-                    <span className="servidores__server-name">{s.nombre}</span>
-                    {s.descripcion && <span className="servidores__server-desc">{s.descripcion}</span>}
-                  </div>
-                  <ChevronRight size={16} />
-                </button>
-              </li>
-            ))}
-          </ul>
+          <div className="servidores__scroll" ref={contenedorServidoresRef} onScroll={manejarScrollServidores}>
+            <ul className="servidores__server-list">
+              {servidoresVisibles.map((s) => (
+                <li key={s.id_servidor}>
+                  <button className={`servidores__server-item ${s.id_servidor === servidorSeleccionado ? "servidores__server-item--active" : ""}`} onClick={() => setServidorSeleccionado(s.id_servidor)}>
+                    <Server size={18} />
+                    <div className="servidores__server-text">
+                      <span className="servidores__server-name">{s.nombre}</span>
+                      {s.descripcion && <span className="servidores__server-desc">{s.descripcion}</span>}
+                      {rolesDeServidorId(s.id_servidor).length > 0 && (
+                        <span className="servidores__server-roles">
+                          {rolesDeServidorId(s.id_servidor).join(" · ")}
+                        </span>
+                      )}
+                    </div>
+                    <ChevronRight size={16} />
+                  </button>
+                </li>
+              ))}
+              {hayMasServidores && (
+                <li className="servidores__load-more">↓ Bajá la lista o usá “Cargar más”</li>
+              )}
+            </ul>
+          </div>
+
+          <div className="servidores__scroll-footer">
+            <span className="servidores__contador">
+              Mostrando {servidoresVisibles.length} de {totalServidores} servidores
+            </span>
+            {hayMasServidores && (
+              <Button size="sm" variant="outline" onClick={cargarMasServidores}>
+                Cargar más
+              </Button>
+            )}
+          </div>
         </aside>
 
         <main className="servidores__panel servidores__panel--detail">
@@ -358,14 +496,22 @@ export default function Servidores() {
                 <div style={{ flex: 1, minWidth: "300px" }}>
                   {(!puedeGestionar || activeTab === "canales") && (
                     <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", gap: "8px", flexWrap: "wrap" }}>
                         <h3 style={{ margin: 0 }}>Canales del servidor</h3>
-                        {puedeGestionar && <Button size="sm" onClick={() => { setCanalEditando(null); setFormCanal({ nombre: "", tipo: "chat", categoria_id: "" }); setModalCanal(true); }}>+ Nuevo canal</Button>}
+                        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                          <select value={filtroRolCanal} onChange={(e) => setFiltroRolCanal(e.target.value)} aria-label="Filtrar canales por tipo de usuario" style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid #ccc", fontSize: "12px", background: "white" }}>
+                            <option value="">Todos los tipos de usuario</option>
+                            {nombresRol.map((rol) => (
+                              <option key={rol} value={rol}>{rol}</option>
+                            ))}
+                          </select>
+                          {puedeGestionar && <Button size="sm" onClick={() => { setCanalEditando(null); setFormCanal({ nombre: "", tipo: "chat", categoria_id: "" }); setModalCanal(true); }}>+ Nuevo canal</Button>}
+                        </div>
                       </div>
 
-                      {loadingJerarquia ? <p>Cargando canales...</p> : jerarquia && (
+                      {loadingJerarquia ? <p>Cargando canales...</p> : jerarquiaFiltrada && (
                         <div className="servidores__tree">
-                          {(jerarquia.categorias || []).map((cat) => (
+                          {(jerarquiaFiltrada.categorias || []).map((cat) => (
                             <section key={cat.id_categoria} className="servidores__categoria">
                               <h4 className="servidores__categoria-nombre">{cat.nombre}</h4>
                               <ul className="servidores__canal-list">
@@ -387,11 +533,11 @@ export default function Servidores() {
                               </ul>
                             </section>
                           ))}
-                          {(jerarquia.sinCategoria || []).length > 0 && (
+                          {(jerarquiaFiltrada.sinCategoria || []).length > 0 && (
                             <section className="servidores__categoria servidores__categoria--uncategorized">
                               <h4 className="servidores__categoria-nombre">Sin categoría</h4>
                               <ul className="servidores__canal-list">
-                                {jerarquia.sinCategoria.map((canal) => (
+                                {jerarquiaFiltrada.sinCategoria.map((canal) => (
                                   <li key={canal.id_canal} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                     <button className={`servidores__canal ${canal.id_canal === canalActivoId ? "servidores__canal--active" : ""}`} onClick={() => setCanalActivoId(canal.id_canal)} style={{ flex: 1 }}>
                                       {canal.tipo === "informativo" ? <Megaphone size={16} /> : <Hash size={16} />}
@@ -517,16 +663,16 @@ export default function Servidores() {
                   value={usuarioSeleccionado}
                   onChange={(e) => setUsuarioSeleccionado(e.target.value)}
                   options={todosLosUsuarios
-                    .filter(u => 
-                      (u.nombre_usuario.toLowerCase().includes(busquedaUsuario.toLowerCase()) || 
-                       u.email.toLowerCase().includes(busquedaUsuario.toLowerCase()) || 
-                       u.perfil?.apellidos?.toLowerCase().includes(busquedaUsuario.toLowerCase())) && 
+                    .filter(u =>
+                      (u.nombre_usuario.toLowerCase().includes(busquedaUsuario.toLowerCase()) ||
+                        u.email.toLowerCase().includes(busquedaUsuario.toLowerCase()) ||
+                        u.perfil?.apellidos?.toLowerCase().includes(busquedaUsuario.toLowerCase())) &&
                       !miembrosActuales.some(m => m.id_usuario === u.id_usuario)
                     )
                     .map(u => ({ value: u.id_usuario, label: `${nombreCompleto(u)} (${u.email})` }))}
                   placeholder="Elegir usuario..."
                 />
-                
+
                 {/* BOTONES CORREGIDOS: flex-direction column en mobile, fila en desktop */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "1rem", width: "100%" }}>
                   <Button type="button" variant="outline" onClick={() => setCreandoUsuarioNuevo(true)} style={{ width: "100%", padding: "10px" }}>
@@ -539,10 +685,10 @@ export default function Servidores() {
               </>
             ) : (
               <div style={{ width: "100%" }}>
-                <UsuarioForm 
+                <UsuarioForm
                   rolesDisponibles={rolesDefinidos}
-                  mostrarServidores={false} 
-                  mostrarRolesGlobales={false} 
+                  mostrarServidores={false}
+                  mostrarRolesGlobales={false}
                   guardando={guardandoUsuario}
                   onCancel={() => setCreandoUsuarioNuevo(false)}
                   onSubmit={crearEInscribirUsuario}

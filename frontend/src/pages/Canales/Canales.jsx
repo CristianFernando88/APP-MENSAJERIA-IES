@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Search, Hash, Megaphone, Plus, Pencil, Trash2, Users, ChevronRight, AlertCircle, Loader2, X
+  Search, Hash, Megaphone, Plus, Pencil, Trash2, Users, ChevronRight, AlertCircle, Loader2, X, UserCog
 } from "lucide-react";
 import Button from "../../components/ui/Button/Button";
 import Input from "../../components/ui/Input/Input";
@@ -14,13 +14,27 @@ import { listarMiembrosServidor } from "../../api/miembrosServidor";
 import { listarUsuarioRol } from "../../api/usuarioRol";
 import { listarRoles } from "../../api/roles";
 import { useAuth } from "../../context/AuthContext";
+import useListaInfinita from "../../hooks/useListaInfinita";
 import "./Canales.css";
+
+function iniciales(usuario) {
+  const base =
+    usuario?.perfil?.nombres && usuario?.perfil?.apellidos
+      ? `${usuario.perfil.nombres} ${usuario.perfil.apellidos}`
+      : usuario?.nombre_usuario || "";
+
+  return base
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p.charAt(0).toUpperCase())
+    .join("");
+}
 
 export default function Canales() {
   const navigate = useNavigate();
   const { user, hasRole } = useAuth();
 
-  // --- Datos base ---
   const [canales, setCanales] = useState([]);
   const [todosLosUsuarios, setTodosLosUsuarios] = useState([]);
   const [todosLosRoles, setTodosLosRoles] = useState([]);
@@ -28,19 +42,17 @@ export default function Canales() {
   const [miembrosCanal, setMiembrosCanal] = useState([]);
   const [miembrosServidor, setMiembrosServidor] = useState([]);
 
-  // --- UI ---
   const [busqueda, setBusqueda] = useState("");
+  const [filtroRol, setFiltroRol] = useState("");
   const [canalSeleccionadoId, setCanalSeleccionadoId] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // --- Modales ---
   const [modalMiembro, setModalMiembro] = useState(false);
   const [usuarioSeleccionado, setUsuarioSeleccionado] = useState("");
   const [rolEnCanal, setRolEnCanal] = useState("miembro");
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
 
-  // 1. Cargar todo
   useEffect(() => {
     let cancelado = false;
     async function cargar() {
@@ -71,7 +83,6 @@ export default function Canales() {
     return () => { cancelado = true; };
   }, []);
 
-  // 2. Filtrar canales según membresía
   const misCanales = useMemo(() => {
     if (!user) return [];
     if (hasRole(["super_admin", "admin"])) return canales;
@@ -83,7 +94,6 @@ export default function Canales() {
     return canales.filter((c) => misIdsCanal.includes(Number(c.id_canal)));
   }, [canales, miembrosCanal, user, hasRole]);
 
-  // Auto-seleccionar el primer canal
   useEffect(() => {
     if (misCanales.length > 0 && !misCanales.some(c => c.id_canal === canalSeleccionadoId)) {
       setCanalSeleccionadoId(misCanales[0].id_canal);
@@ -92,15 +102,73 @@ export default function Canales() {
     }
   }, [misCanales, canalSeleccionadoId]);
 
-  const canalesFiltrados = misCanales.filter(c => (c.nombre || "").toLowerCase().includes(busqueda.toLowerCase()));
+  const rolesPorServidor = useMemo(() => {
+    const nombrePorId = new Map(rolesDefinidos.map((r) => [Number(r.id_rol), r.nombre]));
+    const mapa = {};
+    (todosLosRoles || []).forEach((ur) => {
+      if (ur.servidor_id === null || ur.servidor_id === undefined) return;
+      const nombre = nombrePorId.get(Number(ur.rol_id));
+      if (!nombre) return;
+      const servidor = Number(ur.servidor_id);
+      if (!mapa[servidor]) mapa[servidor] = [];
+      if (!mapa[servidor].includes(nombre)) mapa[servidor].push(nombre);
+    });
+    return mapa;
+  }, [todosLosRoles, rolesDefinidos]);
+
+  const rolesGlobalesPorUsuario = useMemo(() => {
+    const nombrePorId = new Map(rolesDefinidos.map((r) => [Number(r.id_rol), r.nombre]));
+    const mapa = {};
+    (todosLosRoles || []).forEach((ur) => {
+      if (ur.servidor_id !== null && ur.servidor_id !== undefined) return;
+      const nombre = nombrePorId.get(Number(ur.rol_id));
+      if (!nombre) return;
+      const usuario = Number(ur.usuario_id);
+      if (!mapa[usuario]) mapa[usuario] = [];
+      if (!mapa[usuario].includes(nombre)) mapa[usuario].push(nombre);
+    });
+    return mapa;
+  }, [todosLosRoles, rolesDefinidos]);
+
+  const nombresRol = useMemo(
+    () => rolesDefinidos.map((r) => r.nombre).sort((a, b) => a.localeCompare(b)),
+    [rolesDefinidos]
+  );
+
+  const rolesDeCanal = (canal) => {
+    const porServidor = rolesPorServidor[Number(canal.servidor_id)] || [];
+    const delCreador = rolesGlobalesPorUsuario[Number(canal.creador_id)] || [];
+    return Array.from(new Set([...porServidor, ...delCreador]));
+  };
+
+  const canalesFiltrados = useMemo(() => {
+    const texto = busqueda.trim().toLowerCase();
+    const rol = filtroRol.trim().toLowerCase();
+    return misCanales.filter((c) => {
+      const coincideTexto = !texto || (c.nombre || "").toLowerCase().includes(texto);
+      const coincideRol = !rol || rolesDeCanal(c).some((r) => r.toLowerCase() === rol);
+      return coincideTexto && coincideRol;
+    });
+  }, [misCanales, busqueda, filtroRol, rolesPorServidor, rolesGlobalesPorUsuario]);
+
+  const {
+    visibles: canalesVisibles,
+    hayMas: hayMasCanales,
+    total: totalCanales,
+    contenedorRef: contenedorCanalesRef,
+    manejarScroll: manejarScrollCanales,
+    cargarMas: cargarMasCanales,
+  } = useListaInfinita(canalesFiltrados, {
+    paso: 10,
+    resetKey: `${busqueda}|${filtroRol}`,
+  });
+
   const canalActivo = misCanales.find(c => c.id_canal === canalSeleccionadoId);
 
-  // 3. Permisos (Admin, Director del servidor, Preceptor del servidor)
   const puedeGestionar = useMemo(() => {
     if (!user || !canalActivo) return false;
     if (hasRole(["super_admin", "admin"])) return true;
 
-    // Verificamos si es director o preceptor en el servidor de este canal
     return todosLosRoles.some((ur) => {
       if (Number(ur.usuario_id) !== Number(user.id_usuario)) return false;
       if (Number(ur.servidor_id) !== Number(canalActivo.servidor_id)) return false;
@@ -109,7 +177,7 @@ export default function Canales() {
     });
   }, [user, canalActivo, hasRole, todosLosRoles, rolesDefinidos]);
 
-  // 4. Miembros del canal activo
+
   const miembrosDelCanal = useMemo(() => {
     if (!canalActivo) return [];
     const ids = miembrosCanal
@@ -118,7 +186,6 @@ export default function Canales() {
     return todosLosUsuarios.filter((u) => ids.includes(Number(u.id_usuario)));
   }, [miembrosCanal, canalActivo, todosLosUsuarios]);
 
-  // 5. Handlers
   const nombreDeUsuario = (id) => {
     const u = todosLosUsuarios.find(x => x.id_usuario === id);
     return u ? u.nombre_usuario : `Usuario ${id}`;
@@ -151,10 +218,9 @@ export default function Canales() {
   const cambiarRolMiembro = async (usuarioId, nuevoRol) => {
     if (!canalActivo) return;
     try {
-      // Como el backend pide el id del miembro_canal, lo buscamos en el array
       const registro = miembrosCanal.find(m => Number(m.usuario_id) === usuarioId && Number(m.canal_id) === canalActivo.id_canal);
       if (!registro) return;
-      
+
       await actualizarMiembroCanal(registro.id_miembro_canal, { rol_en_canal: nuevoRol });
       const data = await listarMiembrosCanal();
       setMiembrosCanal(data);
@@ -169,7 +235,7 @@ export default function Canales() {
     try {
       const registro = miembrosCanal.find(m => Number(m.usuario_id) === usuarioId && Number(m.canal_id) === canalActivo.id_canal);
       if (!registro) return;
-      
+
       await eliminarMiembroCanal(registro.id_miembro_canal);
       const data = await listarMiembrosCanal();
       setMiembrosCanal(data);
@@ -185,7 +251,7 @@ export default function Canales() {
       </div>
 
       <div className="canales__explorer" style={{ display: "flex", gap: "1rem", alignItems: "flex-start", flexWrap: "wrap" }}>
-        
+
         {/* BARRA LATERAL */}
         <aside style={{ width: "280px", flexShrink: 0, background: "var(--color-blanco)", padding: "1rem", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-sm)" }}>
           <div className="canales__search" style={{ marginBottom: "1rem", margin: 0 }}>
@@ -193,26 +259,52 @@ export default function Canales() {
             <input type="text" placeholder="Buscar canal..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
           </div>
 
+          <div className="canales__filter" style={{ marginBottom: "1rem" }}>
+            <UserCog size={16} />
+            <select value={filtroRol} onChange={(e) => setFiltroRol(e.target.value)} aria-label="Filtrar por tipo de usuario">
+              <option value="">Todos los tipos de usuario</option>
+              {nombresRol.map((rol) => (
+                <option key={rol} value={rol}>{rol}</option>
+              ))}
+            </select>
+          </div>
+
           {loading && <p className="canales__empty">Cargando...</p>}
           {!loading && canalesFiltrados.length === 0 && <p className="canales__empty">No estás en ningún canal.</p>}
 
-          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "4px" }}>
-            {canalesFiltrados.map((c) => (
-              <li key={c.id_canal}>
-                <button
-                  onClick={() => setCanalSeleccionadoId(c.id_canal)}
-                  style={{
-                    width: "100%", display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", border: "none", borderRadius: "8px", cursor: "pointer", textAlign: "left",
-                    background: c.id_canal === canalSeleccionadoId ? "var(--color-azul-petroleo)" : "transparent",
-                    color: c.id_canal === canalSeleccionadoId ? "white" : "var(--texto-oscuro)",
-                  }}
-                >
-                  {c.tipo === "informativo" ? <Megaphone size={16} /> : <Hash size={16} />}
-                  <span style={{ flex: 1, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.nombre}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <div className="canales__scroll" ref={contenedorCanalesRef} onScroll={manejarScrollCanales}>
+            <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "4px" }}>
+              {canalesVisibles.map((c) => (
+                <li key={c.id_canal}>
+                  <button
+                    onClick={() => setCanalSeleccionadoId(c.id_canal)}
+                    style={{
+                      width: "100%", display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", border: "none", borderRadius: "8px", cursor: "pointer", textAlign: "left",
+                      background: c.id_canal === canalSeleccionadoId ? "var(--color-azul-petroleo)" : "transparent",
+                      color: c.id_canal === canalSeleccionadoId ? "white" : "var(--texto-oscuro)",
+                    }}
+                  >
+                    {c.tipo === "informativo" ? <Megaphone size={16} /> : <Hash size={16} />}
+                    <span style={{ flex: 1, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.nombre}</span>
+                  </button>
+                </li>
+              ))}
+              {hayMasCanales && (
+                <li className="canales__load-more">↓ Bajá la lista o usá “Cargar más”</li>
+              )}
+            </ul>
+          </div>
+
+          <div className="canales__scroll-footer">
+            <span className="canales__contador">
+              Mostrando {canalesVisibles.length} de {totalCanales} canales
+            </span>
+            {hayMasCanales && (
+              <Button size="sm" variant="outline" onClick={cargarMasCanales}>
+                Cargar más
+              </Button>
+            )}
+          </div>
         </aside>
 
         {/* PANEL PRINCIPAL */}
@@ -252,16 +344,14 @@ export default function Canales() {
                   <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                     {miembrosDelCanal.map((u) => (
                       <li key={u.id_usuario} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px", background: "var(--color-gris-azulado)", borderRadius: "8px", marginBottom: "8px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                          <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "var(--color-menta-palido)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", color: "var(--color-azul-petroleo)" }}>
-                            {u.nombre_usuario.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+                          <div className="canales__avatar">{iniciales(u)}</div>
+                          <div style={{ minWidth: 0 }}>
                             <strong style={{ display: "block", fontSize: "14px" }}>{u.nombre_usuario}</strong>
                             <span style={{ fontSize: "12px", color: "var(--texto-secundario)" }}>{u.email}</span>
                           </div>
                         </div>
-                        
+
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                           {puedeGestionar ? (
                             <select
@@ -303,17 +393,16 @@ export default function Canales() {
               value={usuarioSeleccionado}
               onChange={(e) => setUsuarioSeleccionado(e.target.value)}
               options={todosLosUsuarios
-                .filter(u => 
+                .filter(u =>
                   // Solo usuarios que estén en el servidor de este canal
                   miembrosServidor.some(ms => Number(ms.servidor_id) === Number(canalActivo.servidor_id) && Number(ms.usuario_id) === Number(u.id_usuario)) &&
                   // Y que no estén ya en el canal
                   !miembrosDelCanal.some(m => m.id_usuario === u.id_usuario)
                 )
-                .map(u => ({ value: u.id_usuario, label: `${u.nombre_usuario} (${u.email})` }))
-              }
+                .map(u => ({ value: u.id_usuario, label: `${u.nombre_usuario} (${u.email})` }))}
               placeholder="Elegir usuario..."
             />
-            
+
             <Select
               label="Rol en el canal"
               value={rolEnCanal}

@@ -108,7 +108,6 @@
   gap: var(--space-sm);
 }
 
-/* ---- New hierarchical layout ---- */
 
 .servidores__explorer {
   display: grid;
@@ -187,6 +186,16 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.servidores__server-roles {
+  font-size: 11px;
+  color: var(--color-teal-medio);
+  text-transform: capitalize;
+}
+
+.servidores__server-item--active .servidores__server-roles {
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .servidores__state {
@@ -355,6 +364,77 @@
 }
 
 .servidores__active-channel-meta {
+  font-size: 12px;
+  color: var(--texto-secundario);
+}
+
+
+.servidores__filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background-color: var(--color-gris-azulado);
+  border-radius: var(--radius-md);
+  color: var(--texto-secundario);
+  margin-bottom: var(--space-sm);
+}
+
+.servidores__filter select {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: var(--font-size-sm);
+  color: var(--texto-oscuro);
+  cursor: pointer;
+}
+
+
+.servidores__scroll {
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.servidores__scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.servidores__scroll::-webkit-scrollbar-track {
+  background: var(--color-gris-azulado);
+  border-radius: 4px;
+}
+
+.servidores__scroll::-webkit-scrollbar-thumb {
+  background: var(--color-celeste-gris);
+  border-radius: 4px;
+}
+
+.servidores__load-more {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-teal-medio);
+  background: var(--color-gris-azulado);
+  border-radius: var(--radius-sm);
+  padding: 6px;
+  list-style: none;
+  margin-top: 6px;
+}
+
+.servidores__scroll-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-gris-azulado);
+}
+
+.servidores__contador {
   font-size: 12px;
   color: var(--texto-secundario);
 }
