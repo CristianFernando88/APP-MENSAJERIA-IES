@@ -3,7 +3,7 @@ import { Send, Search, Hash, ChevronLeft, Plus } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { listarMensajes } from "../../api/mensajes";
-import { listarMensajesDirectos } from "../../api/mensajesDirectos";
+import { listarMensajesDirectos, actualizarMensajeDirecto } from "../../api/mensajesDirectos";
 import { listarUsuarios } from "../../api/usuarios";
 import { listarCanales } from "../../api/canales";
 import { listarMiembrosCanal } from "../../api/miembrosCanal";
@@ -13,26 +13,29 @@ import "./Mensajes.css";
 export default function Mensajes() {
   const { user, hasRole } = useAuth();
   
+  // --- ESTADOS DE DATOS ---
   const [canales, setCanales] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [miembrosCanal, setMiembrosCanal] = useState([]);
   const [mensajesDirectos, setMensajesDirectos] = useState([]);
   
+  // --- ESTADOS DE UI ---
   const [chatActivo, setChatActivo] = useState(null); 
   const [mensajes, setMensajes] = useState([]);
   const [texto, setTexto] = useState("");
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   
-  // Estado para los no leídos (badge)
+  // --- NUEVO: Estado para el badge de no leídos ---
   const [noLeidos, setNoLeidos] = useState({}); 
   
+  // --- MODAL NUEVO CHAT ---
   const [modalNuevoChat, setModalNuevoChat] = useState(false);
   const [busquedaUsuario, setBusquedaUsuario] = useState("");
 
   const mensajesEndRef = useRef(null);
   
-  // Ref para saber si tengo un chat abierto sin re-renderizar
+  // Ref para no tener problemas con el estado dentro del WebSocket
   const chatActivoRef = useRef(chatActivo);
   useEffect(() => {
     chatActivoRef.current = chatActivo;
@@ -54,6 +57,36 @@ export default function Mensajes() {
       osc.start();
       osc.stop(ctx.currentTime + 0.3);
     } catch (e) {}
+  };
+
+  // NUEVA FUNCIÓN: Marcar como leídos en el backend
+  const marcarMensajesComoLeidos = async (usuarioId) => {
+    try {
+      const pendientes = mensajesDirectos.filter(dm => 
+        Number(dm.emisor_id) === Number(usuarioId) && 
+        Number(dm.receptor_id) === Number(user.id_usuario) && 
+        !dm.leido
+      );
+
+      if (pendientes.length > 0) {
+        // Enviamos el PUT por cada mensaje pendiente
+        const promesas = pendientes.map(dm => 
+          actualizarMensajeDirecto(dm.id_mensaje_directo, { leido: true })
+        );
+        await Promise.all(promesas);
+
+        // Actualizamos el estado local para que no vuelvan a aparecer como no leídos
+        setMensajesDirectos(prev => 
+          prev.map(dm => 
+            pendientes.some(p => p.id_mensaje_directo === dm.id_mensaje_directo) 
+              ? { ...dm, leido: true } 
+              : dm
+          )
+        );
+      }
+    } catch (error) {
+      console.error("Error al marcar mensajes como leídos:", error);
+    }
   };
 
   // 1. Cargar datos iniciales
@@ -80,7 +113,7 @@ export default function Mensajes() {
         setMiembrosCanal(resMiembros);
         setMensajesDirectos(resDMs);
 
-        // Calcular no leídos
+        // Calcular el badge inicial
         const inicialNoLeidos = {};
         resDMs.forEach(dm => {
           if (dm.receptor_id === user.id_usuario && !dm.leido) {
@@ -95,7 +128,7 @@ export default function Mensajes() {
     if (user) cargarDatos();
   }, [user, hasRole]);
 
-  // 2. Cargar historial
+  // 2. Cargar historial y marcar como leído
   useEffect(() => {
     if (!chatActivo) return;
     setMensajes([]);
@@ -113,18 +146,20 @@ export default function Mensajes() {
       const ordenados = misDMs.sort((a, b) => new Date(a.fecha_envio) - new Date(b.fecha_envio));
       setMensajes(ordenados);
 
-      // Al entrar, limpiamos los no leídos
+      // Limpiamos el badge visual
       setNoLeidos(prev => {
         const newState = { ...prev };
         delete newState[`directo-${chatActivo.id}`];
         return newState;
       });
+
+      // Avisamos al backend que los leímos
+      marcarMensajesComoLeidos(chatActivo.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatActivo]);
 
-  // 3. EL WEBSOCKET ÚNICO E INTELIGENTE
-  // Si hay un chat activo, se conecta a ese. Si no, se conecta a los DMs del usuario.
+  // 3. WEBSOCKET ÚNICO E INTELIGENTE
   const wsPath = chatActivo 
     ? (chatActivo.tipo === "canal" ? `canal/${chatActivo.id}` : `directo/${user.id_usuario}`) 
     : `directo/${user.id_usuario}`;
@@ -144,7 +179,7 @@ export default function Mensajes() {
     if (nuevoMensaje.emisor_id && nuevoMensaje.receptor_id) {
       const esMio = nuevoMensaje.emisor_id === user.id_usuario;
 
-      // Lo agregamos siempre al array global para actualizar la lista lateral
+      // Actualizamos la lista global
       setMensajesDirectos(prev => {
         if (prev.some(m => m.id_mensaje_directo === nuevoMensaje.id_mensaje_directo)) return prev;
         return [...prev, nuevoMensaje];
@@ -153,12 +188,13 @@ export default function Mensajes() {
       if (!esMio) {
         reproducirSonido();
 
-        // ¿Tengo abierto el chat con la persona que me escribe?
         if (chatActivo?.tipo === "directo" && chatActivo?.id === nuevoMensaje.emisor_id) {
+          // Si tengo el chat abierto, lo muestro y lo marco como leído en la DB
           setMensajes(prev => {
             if (prev.some(m => m.id_mensaje_directo === nuevoMensaje.id_mensaje_directo)) return prev;
             return [...prev, nuevoMensaje];
           });
+          actualizarMensajeDirecto(nuevoMensaje.id_mensaje_directo, { leido: true });
         } else {
           // Si no lo tengo abierto, sumo el badge
           setNoLeidos(prev => ({
@@ -177,16 +213,43 @@ export default function Mensajes() {
     mensajesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [mensajes]);
 
+  // 5. ENVIAR MENSAJE (Optimistic UI)
   const handleEnviar = (e) => {
     e.preventDefault();
     if (!texto.trim() || !isConnected || !chatActivo) return;
 
+    const textoAEnviar = texto.trim();
+    setTexto(""); // Limpiamos el input de inmediato
+
     if (chatActivo.tipo === "canal") {
-      sendMessage({ contenido: texto, usuario_id: user.id_usuario });
+      sendMessage({ contenido: textoAEnviar, usuario_id: user.id_usuario });
+      
+      // Dibujamos el mensaje en pantalla al instante (temporal)
+      const mensajeTemporal = {
+        id_mensaje: `temp-${Date.now()}`,
+        contenido: textoAEnviar,
+        usuario_id: user.id_usuario,
+        canal_id: chatActivo.id,
+        fecha_envio: new Date().toISOString(),
+        editado: false
+      };
+      setMensajes(prev => [...prev, mensajeTemporal]);
+      
     } else {
-      sendMessage({ contenido: texto, receptor_id: chatActivo.id });
+      sendMessage({ contenido: textoAEnviar, receptor_id: chatActivo.id });
+      
+      // Dibujamos el mensaje en pantalla al instante
+      const mensajeTemporal = {
+        id_mensaje_directo: `temp-${Date.now()}`,
+        contenido: textoAEnviar,
+        emisor_id: user.id_usuario,
+        receptor_id: chatActivo.id,
+        fecha_envio: new Date().toISOString(),
+        leido: false
+      };
+      setMensajes(prev => [...prev, mensajeTemporal]);
+      setMensajesDirectos(prev => [...prev, mensajeTemporal]);
     }
-    setTexto("");
   };
 
   const getNombre = (id) => {
