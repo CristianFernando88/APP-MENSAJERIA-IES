@@ -21,6 +21,7 @@ import {
 } from "../../api/miembrosCanal";
 import { listarServidores } from "../../api/servidores";
 import { listarCanales } from "../../api/canales";
+import { crearPerfil, actualizarPerfil } from "../../api/perfiles";
 import useConfirmacion from "../../hooks/useConfirmacion";
 import { useAuth } from "../../context/AuthContext";
 import "./Usuarios.css";
@@ -29,8 +30,10 @@ const ROLES_NECESITAN_CANAL = ["alumno", "tutor"];
 const POR_PAGINA = 10;
 
 const OPCIONES_ORDEN = [
-  { value: "nombre-asc", label: "Nombre (A - Z)" },
-  { value: "nombre-desc", label: "Nombre (Z - A)" },
+  { value: "nombre-asc", label: "Usuario (A - Z)" },
+  { value: "nombre-desc", label: "Usuario (Z - A)" },
+  { value: "apellido-asc", label: "Nombre y apellido (A - Z)" },
+  { value: "apellido-desc", label: "Nombre y apellido (Z - A)" },
   { value: "recientes", label: "Más recientes" },
   { value: "antiguos", label: "Más antiguos" },
   { value: "activos", label: "Activos primero" },
@@ -46,9 +49,20 @@ const formVacio = {
   roles: [],
   servidor_id: "",
   canal_id: "",
+  nombres: "",
+  apellidos: "",
+  dni: "",
+  biografia: "",
 };
 
 const emailValido = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+
+const dniValido = (v) => !v || /^\d{7,8}$/.test(v.trim());
+
+const nombreCompleto = (u) => {
+  if (!u.perfil) return "";
+  return [u.perfil.nombres, u.perfil.apellidos].filter(Boolean).join(" ").trim();
+};
 
 export default function Usuarios() {
   const { user } = useAuth();
@@ -79,7 +93,6 @@ export default function Usuarios() {
   const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(true);
 
-  // ---------- carga ----------
   const cargarUsuarios = async (query = "") => {
     try {
       setError("");
@@ -112,7 +125,6 @@ export default function Usuarios() {
     return () => clearTimeout(t);
   }, [busqueda]);
 
-  // ---------- helpers ----------
   const nombreDeRol = (rolId) => roles.find((r) => r.id_rol === rolId)?.nombre;
 
   const rolesDeUsuario = (usuarioId) =>
@@ -121,12 +133,12 @@ export default function Usuarios() {
       .map((a) => ({ id: a.rol_id, nombre: nombreDeRol(a.rol_id) }))
       .filter((r) => r.nombre);
 
-  // ---------- filtrado + orden + paginación ----------
+
   const filtrados = useMemo(() => {
     let lista = usuarios.filter((u) => {
       if (!filtroRol) return true;
       return asignaciones.some(
-        (a) => a.usuario_id === u.id_usuario && a.rol_id === Number(filtroRol)
+        (a) => a.us_usuario_id === u.id_usuario && a.rol_id === Number(filtroRol)
       );
     });
 
@@ -134,6 +146,10 @@ export default function Usuarios() {
       switch (orden) {
         case "nombre-desc":
           return b.nombre_usuario.localeCompare(a.nombre_usuario);
+        case "apellido-asc":
+          return nombreCompleto(a).localeCompare(nombreCompleto(b));
+        case "apellido-desc":
+          return nombreCompleto(b).localeCompare(nombreCompleto(a));
         case "recientes":
           return new Date(b.fecha_registro) - new Date(a.fecha_registro);
         case "antiguos":
@@ -165,7 +181,7 @@ export default function Usuarios() {
     setOrden("nombre-asc");
   };
 
-  // ---------- formulario ----------
+
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const toggleRol = (rolId) =>
@@ -175,6 +191,9 @@ export default function Usuarios() {
         ? prev.roles.filter((x) => x !== rolId)
         : [...prev.roles, rolId],
     }));
+
+  const inicialPreview = (form.nombres || form.nombre_usuario || "?").trim()[0].toUpperCase();
+  const nombrePreview = [form.nombres, form.apellidos].filter(Boolean).join(" ").trim();
 
   const abrirCrear = () => {
     setEditandoId(null);
@@ -194,6 +213,10 @@ export default function Usuarios() {
       roles: asignaciones.filter((a) => a.usuario_id === u.id_usuario).map((a) => a.rol_id),
       servidor_id: miembrosServidor.find((m) => m.usuario_id === u.id_usuario)?.servidor_id ?? "",
       canal_id: miembrosCanal.find((m) => m.usuario_id === u.id_usuario)?.canal_id ?? "",
+      nombres: u.perfil?.nombres ?? "",
+      apellidos: u.perfil?.apellidos ?? "",
+      dni: u.perfil?.dni ?? "",
+      biografia: u.perfil?.biografia ?? "",
     });
     setError(""); setVerClave(false);
     setModalOpen(true);
@@ -206,15 +229,14 @@ export default function Usuarios() {
     setModalClave(true);
   };
 
-  
   const handleToggleActivo = async (u) => {
     const activar = !u.activo;
 
     const ok = await pedir({
       titulo: activar ? "Activar usuario" : "Desactivar usuario",
       mensaje: activar
-        ? `¿Activar la cuenta de "${u.nombre_usuario}"? Va a poder volver a iniciar sesión.`
-        : `¿Desactivar la cuenta de "${u.nombre_usuario}"? No va a poder iniciar sesión hasta reactivarla.`,
+        ? `¿Activar la cuenta de "${nombreCompleto(u) || u.nombre_usuario}"? Va a poder volver a iniciar sesión.`
+        : `¿Desactivar la cuenta de "${nombreCompleto(u) || u.nombre_usuario}"? No va a poder iniciar sesión hasta reactivarla.`,
       textoConfirmar: activar ? "Activar" : "Desactivar",
       peligro: !activar,
     });
@@ -236,7 +258,7 @@ export default function Usuarios() {
   const handleEliminar = async (u) => {
     const ok = await pedir({
       titulo: "Eliminar usuario",
-      mensaje: `¿Eliminar a "${u.nombre_usuario}"? También se borran sus roles y membresías. Esta acción no se puede deshacer.`,
+      mensaje: `¿Eliminar a "${nombreCompleto(u) || u.nombre_usuario}"? También se borran sus roles, membresías y perfil. Esta acción no se puede deshacer.`,
       textoConfirmar: "Sí, eliminar",
       peligro: true,
     });
@@ -282,7 +304,6 @@ export default function Usuarios() {
     }
   };
 
- 
   const nombreRolParaCanal = () => {
     const nombres = form.roles.map((id) => nombreDeRol(Number(id))).filter(Boolean);
     return nombres.find((n) => ROLES_NECESITAN_CANAL.includes(n)) ?? nombres[0] ?? "";
@@ -337,7 +358,6 @@ export default function Usuarios() {
     setAsignaciones(ur); setMiembrosServidor(ms); setMiembrosCanal(mc);
   };
 
- 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -352,6 +372,10 @@ export default function Usuarios() {
     }
     if (!emailValido(form.email)) {
       setError("El email no tiene un formato válido");
+      return;
+    }
+    if (!dniValido(form.dni)) {
+      setError("El DNI debe tener 7 u 8 dígitos");
       return;
     }
     if (!editandoId) {
@@ -372,8 +396,8 @@ export default function Usuarios() {
     const ok = await pedir({
       titulo: editandoId ? "Guardar cambios" : "Crear usuario",
       mensaje: editandoId
-        ? `¿Guardar los cambios de "${form.nombre_usuario.trim()}"?`
-        : `¿Crear el usuario "${form.nombre_usuario.trim()}" con los roles y membresías seleccionados?`,
+        ? `¿Guardar los cambios de "${nombrePreview || form.nombre_usuario}"?`
+        : `¿Crear el usuario "${form.nombre_usuario.trim()}" con los roles, membresías y perfil seleccionados?`,
       textoConfirmar: editandoId ? "Guardar" : "Crear",
     });
     if (!ok) return;
@@ -381,6 +405,8 @@ export default function Usuarios() {
     setGuardando(true);
 
     try {
+      let usuarioId = editandoId;
+
       if (editandoId) {
         await actualizarUsuario(editandoId, {
           nombre_usuario: form.nombre_usuario,
@@ -388,7 +414,6 @@ export default function Usuarios() {
           activo: form.activo === "true",
         });
         await sincronizarMembresias(editandoId);
-        await recargarTodo();
       } else {
         const nuevo = await crearUsuario({
           nombre_usuario: form.nombre_usuario,
@@ -396,10 +421,11 @@ export default function Usuarios() {
           activo: form.activo === "true",
           password: form.contrasena,
         });
+        usuarioId = nuevo.id_usuario;
 
         for (const rolId of form.roles.map(Number)) {
           await crearUsuarioRol({
-            usuario_id: nuevo.id_usuario,
+            usuario_id: usuarioId,
             rol_id: rolId,
             servidor_id: form.servidor_id ? Number(form.servidor_id) : null,
             asignado_por: user?.id_usuario,
@@ -408,18 +434,36 @@ export default function Usuarios() {
 
         const srvId = form.servidor_id ? Number(form.servidor_id) : null;
         if (srvId) {
-          await crearMiembroServidor({ usuario_id: nuevo.id_usuario, servidor_id: srvId, activo: true });
+          await crearMiembroServidor({ usuario_id: usuarioId, servidor_id: srvId, activo: true });
         }
         if (form.canal_id) {
           await crearMiembroCanal({
-            usuario_id: nuevo.id_usuario,
+            usuario_id: usuarioId,
             canal_id: Number(form.canal_id),
             rol_en_canal: nombreRolParaCanal(),
           });
         }
-        await recargarTodo();
       }
 
+      const datosPerfil = {
+        nombres: form.nombres || null,
+        apellidos: form.apellidos || null,
+        dni: form.dni.trim() || null,
+        biografia: form.biografia || null,
+      };
+
+      if (editandoId) {
+        const tienePerfil = usuarios.find((u) => u.id_usuario === editandoId)?.perfil;
+        if (tienePerfil) {
+          await actualizarPerfil(usuarioId, datosPerfil);
+        } else {
+          await crearPerfil({ ...datosPerfil, usuario_id: usuarioId });
+        }
+      } else {
+        await crearPerfil({ ...datosPerfil, usuario_id: usuarioId });
+      }
+
+      await recargarTodo();
       await cargarUsuarios(busqueda);
       setModalOpen(false);
     } catch (err) {
@@ -449,7 +493,7 @@ export default function Usuarios() {
           <Search size={17} />
           <input
             type="text"
-            placeholder="Nombre, apellido, email o usuario..."
+            placeholder="Nombre, apellido, DNI, email o usuario..."
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
           />
@@ -498,7 +542,10 @@ export default function Usuarios() {
         <table className="usuarios__tabla">
           <thead>
             <tr>
+              <th className="usuarios__th-id">ID</th>
               <th>Usuario</th>
+              <th>Nombre y apellido</th>
+              <th>DNI</th>
               <th>Email</th>
               <th>Roles</th>
               <th>Estado</th>
@@ -509,7 +556,7 @@ export default function Usuarios() {
           <tbody>
             {cargando && (
               <tr>
-                <td colSpan={6} className="usuarios__celda-vacia">
+                <td colSpan={9} className="usuarios__celda-vacia">
                   <Loader2 size={18} className="usuarios__spinner" /> Cargando...
                 </td>
               </tr>
@@ -517,21 +564,30 @@ export default function Usuarios() {
 
             {!cargando && visibles.length === 0 && (
               <tr>
-                <td colSpan={6} className="usuarios__celda-vacia">No hay usuarios.</td>
+                <td colSpan={9} className="usuarios__celda-vacia">No hay usuarios.</td>
               </tr>
             )}
 
             {!cargando &&
               visibles.map((u) => {
                 const rolesU = rolesDeUsuario(u.id_usuario);
+                const completo = nombreCompleto(u);
 
                 return (
                   <tr key={u.id_usuario} className={!u.activo ? "usuarios__fila--inactiva" : ""}>
+                    <td className="usuarios__id-col">{u.id_usuario}</td>
+
                     <td>
-                      <span className="usuarios__nombre">{u.nombre_usuario}</span>
-                      <span className="usuarios__id">#{u.id_usuario}</span>
+                      <span className="usuarios__usuario">@{u.nombre_usuario}</span>
                     </td>
+
+                    <td>
+                      <span className="usuarios__nombre">{completo || "—"}</span>
+                    </td>
+
+                    <td className="usuarios__dni">{u.perfil?.dni || "—"}</td>
                     <td className="usuarios__email-col">{u.email}</td>
+
                     <td>
                       <div className="usuarios__roles">
                         {rolesU.length === 0 ? (
@@ -543,14 +599,17 @@ export default function Usuarios() {
                         )}
                       </div>
                     </td>
+
                     <td>
                       <Badge variant={u.activo ? "success" : "danger"}>
                         {u.activo ? "Activo" : "Inactivo"}
                       </Badge>
                     </td>
+
                     <td className="usuarios__fecha">
                       {new Date(u.fecha_registro).toLocaleDateString("es-AR")}
                     </td>
+
                     <td>
                       <div className="usuarios__acciones">
                         <button
@@ -626,109 +685,168 @@ export default function Usuarios() {
           onClose={() => setModalOpen(false)}
         >
           <form className="usuarios__form" onSubmit={handleSubmit}>
-            <Input
-              label="Nombre de usuario"
-              name="nombre_usuario"
-              value={form.nombre_usuario}
-              onChange={handleChange}
-              placeholder="Ej: juanperez"
-            />
-            <Input
-              label="Email"
-              name="email"
-              value={form.email}
-              onChange={handleChange}
-              placeholder="Ej: juan@colegio.com"
-            />
-
-            {!editandoId && (
-              <>
-                <div className="usuarios__clave">
-                  <label className="usuarios__clave-label" htmlFor="contrasena">
-                    Contraseña
-                  </label>
-                  <div className="usuarios__clave-caja">
-                    <input
-                      id="contrasena"
-                      name="contrasena"
-                      type={verClave ? "text" : "password"}
-                      value={form.contrasena}
-                      onChange={handleChange}
-                      placeholder="Mínimo 6 caracteres"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setVerClave((v) => !v)}
-                      aria-label={verClave ? "Ocultar contraseña" : "Ver contraseña"}
-                    >
-                      {verClave ? <EyeOff size={17} /> : <Eye size={17} />}
-                    </button>
-                  </div>
-                </div>
-
-                <Input
-                  label="Repetir contraseña"
-                  name="contrasena2"
-                  type={verClave ? "text" : "password"}
-                  value={form.contrasena2}
-                  onChange={handleChange}
-                  placeholder="Volvé a escribirla"
-                  error={
-                    form.contrasena2 && form.contrasena !== form.contrasena2
-                      ? "No coinciden"
-                      : ""
-                  }
-                />
-              </>
-            )}
-
-            <Select
-              label="Estado"
-              name="activo"
-              value={form.activo}
-              onChange={handleChange}
-              options={[
-                { value: "true", label: "Activo" },
-                { value: "false", label: "Inactivo" },
-              ]}
-              placeholder="Elegir estado"
-            />
-
-            <div className="usuarios__grupo">
-              <span className="usuarios__grupo-label">Roles</span>
-              <div className="usuarios__checks">
-                {roles.map((r) => (
-                  <label key={r.id_rol} className="usuarios__check">
-                    <input
-                      type="checkbox"
-                      checked={form.roles.includes(r.id_rol)}
-                      onChange={() => toggleRol(r.id_rol)}
-                    />
-                    <span>{r.nombre}</span>
-                  </label>
-                ))}
+            {/* Vista previa del avatar */}
+            <div className="usuarios__preview">
+              <span className="usuarios__preview-avatar">{inicialPreview}</span>
+              <div className="usuarios__preview-datos">
+                <span className="usuarios__preview-nombre">
+                  {nombrePreview || form.nombre_usuario || "Sin nombre"}
+                </span>
+                <span className="usuarios__preview-nota">
+                  Así se va a ver el avatar del usuario
+                </span>
               </div>
             </div>
 
-            <Select
-              label="Servidor"
-              name="servidor_id"
-              value={form.servidor_id}
-              onChange={handleChange}
-              options={servidores.map((s) => ({ value: s.id_servidor, label: s.nombre }))}
-              placeholder="Sin servidor"
-            />
+            <div className="usuarios__seccion-form">
+              <span className="usuarios__seccion-titulo">Datos de perfil</span>
 
-            {necesitaCanal && (
-              <Select
-                label="Canal / curso"
-                name="canal_id"
-                value={form.canal_id}
+              <div className="usuarios__fila-campos">
+                <Input
+                  label="Nombres"
+                  name="nombres"
+                  value={form.nombres}
+                  onChange={handleChange}
+                  placeholder="Ej: Pedro"
+                />
+                <Input
+                  label="Apellidos"
+                  name="apellidos"
+                  value={form.apellidos}
+                  onChange={handleChange}
+                  placeholder="Ej: López"
+                />
+              </div>
+
+              <Input
+                label="DNI (opcional)"
+                name="dni"
+                value={form.dni}
                 onChange={handleChange}
-                options={canales.map((c) => ({ value: c.id_canal, label: c.nombre }))}
-                placeholder="Elegir curso"
+                placeholder="Ej: 45678901"
+                error={form.dni && !dniValido(form.dni) ? "Debe tener 7 u 8 dígitos" : ""}
               />
-            )}
+
+              <Input
+                label="Biografía (opcional)"
+                name="biografia"
+                value={form.biografia}
+                onChange={handleChange}
+                placeholder="Ej: Alumno de 4º A"
+              />
+            </div>
+
+            <div className="usuarios__seccion-form">
+              <span className="usuarios__seccion-titulo">Cuenta</span>
+
+              <Input
+                label="Nombre de usuario"
+                name="nombre_usuario"
+                value={form.nombre_usuario}
+                onChange={handleChange}
+                placeholder="Ej: juanperez"
+              />
+              <Input
+                label="Email"
+                name="email"
+                value={form.email}
+                onChange={handleChange}
+                placeholder="Ej: juan@colegio.com"
+              />
+
+              {!editandoId && (
+                <>
+                  <div className="usuarios__clave">
+                    <label className="usuarios__clave-label" htmlFor="contrasena">
+                      Contraseña
+                    </label>
+                    <div className="usuarios__clave-caja">
+                      <input
+                        id="contrasena"
+                        name="contrasena"
+                        type={verClave ? "text" : "password"}
+                        value={form.contrasena}
+                        onChange={handleChange}
+                        placeholder="Mínimo 6 caracteres"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setVerClave((v) => !v)}
+                        aria-label={verClave ? "Ocultar contraseña" : "Ver contraseña"}
+                      >
+                        {verClave ? <EyeOff size={17} /> : <Eye size={17} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <Input
+                    label="Repetir contraseña"
+                    name="contrasena2"
+                    type={verClave ? "text" : "password"}
+                    value={form.contrasena2}
+                    onChange={handleChange}
+                    placeholder="Volvé a escribirla"
+                    error={
+                      form.contrasena2 && form.contrasena !== form.contrasena2
+                        ? "No coinciden"
+                        : ""
+                    }
+                  />
+                </>
+              )}
+
+              <Select
+                label="Estado"
+                name="activo"
+                value={form.activo}
+                onChange={handleChange}
+                options={[
+                  { value: "true", label: "Activo" },
+                  { value: "false", label: "Inactivo" },
+                ]}
+                placeholder="Elegir estado"
+              />
+            </div>
+
+            <div className="usuarios__seccion-form">
+              <span className="usuarios__seccion-titulo">Permisos</span>
+
+              <div className="usuarios__grupo">
+                <span className="usuarios__grupo-label">Roles</span>
+                <div className="usuarios__checks">
+                  {roles.map((r) => (
+                    <label key={r.id_rol} className="usuarios__check">
+                      <input
+                        type="checkbox"
+                        checked={form.roles.includes(r.id_rol)}
+                        onChange={() => toggleRol(r.id_rol)}
+                      />
+                      <span>{r.nombre}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <Select
+                label="Servidor"
+                name="servidor_id"
+                value={form.servidor_id}
+                onChange={handleChange}
+                options={servidores.map((s) => ({ value: s.id_servidor, label: s.nombre }))}
+                placeholder="Sin servidor"
+              />
+
+              {necesitaCanal && (
+                <Select
+                  label="Canal / curso"
+                  name="canal_id"
+                  value={form.canal_id}
+                  onChange={handleChange}
+                  options={canales.map((c) => ({ value: c.id_canal, label: c.nombre }))}
+                  placeholder="Elegir curso"
+                />
+              )}
+            </div>
 
             {error && <div className="usuarios__alerta">{error}</div>}
 
