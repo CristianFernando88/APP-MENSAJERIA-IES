@@ -168,7 +168,19 @@ export default function Mensajes() {
     // Si es un mensaje de canal
     if (chatActivo?.tipo === "canal") {
       if (nuevoMensaje.usuario_id !== user.id_usuario) reproducirSonido();
+      
       setMensajes(prev => {
+        // Buscamos si tenemos un mensaje temporal del mismo contenido (el que enviamos nosotros)
+        const tempIndex = prev.findIndex(m => m.id_mensaje?.toString().startsWith('temp-') && m.contenido === nuevoMensaje.contenido);
+        
+        if (tempIndex !== -1) {
+          // Si lo encontramos, lo reemplazamos con el mensaje real del backend
+          const nuevoArray = [...prev];
+          nuevoArray[tempIndex] = nuevoMensaje;
+          return nuevoArray;
+        }
+
+        // Si no existe en la lista, lo agregamos
         if (prev.some(m => m.id_mensaje === nuevoMensaje.id_mensaje)) return prev;
         return [...prev, nuevoMensaje];
       });
@@ -179,8 +191,17 @@ export default function Mensajes() {
     if (nuevoMensaje.emisor_id && nuevoMensaje.receptor_id) {
       const esMio = nuevoMensaje.emisor_id === user.id_usuario;
 
-      // Actualizamos la lista global
       setMensajesDirectos(prev => {
+        // Si es mi mensaje, busco y reemplazo el temporal
+        if (esMio) {
+          const tempIndex = prev.findIndex(m => m.id_mensaje_directo?.toString().startsWith('temp-') && m.contenido === nuevoMensaje.contenido);
+          if (tempIndex !== -1) {
+            const nuevoArray = [...prev];
+            nuevoArray[tempIndex] = nuevoMensaje;
+            return nuevoArray;
+          }
+        }
+        // Si no, lo agrego
         if (prev.some(m => m.id_mensaje_directo === nuevoMensaje.id_mensaje_directo)) return prev;
         return [...prev, nuevoMensaje];
       });
@@ -189,14 +210,12 @@ export default function Mensajes() {
         reproducirSonido();
 
         if (chatActivo?.tipo === "directo" && chatActivo?.id === nuevoMensaje.emisor_id) {
-          // Si tengo el chat abierto, lo muestro y lo marco como leído en la DB
           setMensajes(prev => {
             if (prev.some(m => m.id_mensaje_directo === nuevoMensaje.id_mensaje_directo)) return prev;
             return [...prev, nuevoMensaje];
           });
           actualizarMensajeDirecto(nuevoMensaje.id_mensaje_directo, { leido: true });
         } else {
-          // Si no lo tengo abierto, sumo el badge
           setNoLeidos(prev => ({
             ...prev,
             [`directo-${nuevoMensaje.emisor_id}`]: (prev[`directo-${nuevoMensaje.emisor_id}`] || 0) + 1
