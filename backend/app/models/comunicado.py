@@ -11,6 +11,7 @@ class Comunicado(Base):
     titulo = Column(String(200), nullable=False)
     contenido = Column(Text, nullable=False)
     fecha_publicacion = Column(DateTime, default=datetime.utcnow)
+    fecha_evento = Column(DateTime, nullable=True)
     publicado_por = Column(Integer, ForeignKey("usuario.id_usuario"), nullable=False)
     tipo = Column(String(20), nullable=False, default="global")
     eliminado = Column(Boolean, nullable=False, default=False, server_default="false")
