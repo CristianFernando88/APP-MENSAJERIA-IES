@@ -33,6 +33,7 @@ def create(db: Session, data: ComunicadoCreate) -> Comunicado:
         contenido=data.contenido,
         publicado_por=data.publicado_por,
         tipo=data.tipo,
+        fecha_evento=data.fecha_evento,
     )
     db.add(nuevo)
     db.commit()

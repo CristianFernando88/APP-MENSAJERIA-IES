@@ -12,6 +12,7 @@ class Perfil(Base):
     apellidos = Column(String(100))
     foto_perfil = Column(String(255))
     biografia = Column(Text)
+    dni=Column(String(8), unique=True, nullable=True)
 
     # Relaciones
     usuario = relationship("Usuario", back_populates="perfil")

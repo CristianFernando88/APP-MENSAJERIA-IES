@@ -67,15 +67,21 @@ def actualizar(
     data: MiembroCanalUpdate,
     db: Session = Depends(get_db)
 ):
-    updated = repo.update(db, miembro_canal_id, data)
+    miembro = repo.get_by_id(db, miembro_canal_id)
 
-    if updated is None:
+    if miembro is None:
         raise HTTPException(
             status_code=404,
             detail="Miembro de canal no encontrado"
         )
 
-    return updated
+    if data.canal_id is not None:
+        ok, error = repo.ensure_canal(db, data.canal_id)
+
+        if not ok:
+            raise HTTPException(status_code=400, detail=error)
+
+    return repo.update(db, miembro_canal_id, data)
 
 
 @router.delete(
