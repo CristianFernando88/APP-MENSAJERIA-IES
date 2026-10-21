@@ -1,176 +1,96 @@
-.calendario {
-    padding: var(--space-md);
-}
+.calendario { padding: var(--space-lg) var(--space-md); }
+
+.calendario__wrap { max-width: 1120px; margin: 0 auto; }
 
 .calendario__header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--space-md);
-    margin-bottom: var(--space-md);
+  display: flex; justify-content: space-between; align-items: center;
+  gap: var(--space-md); flex-wrap: wrap; margin-bottom: var(--space-md);
 }
 
-.calendario__title {
-    font-size: var(--font-size-lg);
-    font-weight: 700;
-    margin: 0;
-}
-
-.calendario__controls {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    flex-wrap: wrap;
-}
-
-.calendario__mes {
-    font-weight: 600;
-    min-width: 150px;
-    text-align: center;
-}
-
-.calendario__leyenda {
-    display: flex;
-    gap: var(--space-sm);
-    flex-wrap: wrap;
-    margin-bottom: var(--space-md);
-    font-size: var(--font-size-sm);
-}
-
-.leyenda-item {
-    padding: 4px 10px;
-    border-radius: var(--radius-pill);
-    color: #ffffff;
-    font-weight: 600;
-}
-
-.leyenda-laborable {
-    background: var(--color-azul-petroleo);
-}
-
-.leyenda-no-laborable {
-    background: #7b1f2f;
-}
-
-.leyenda-academico {
-    background: var(--color-teal-medio);
-}
-
-.leyenda-feriado {
-    background: #a61b2e;
-}
-
-.leyenda-jornada {
-    background: #8a5a00;
-}
-
-.leyenda-convivencia {
-    background: #4a3f8f;
-}
-
-.calendario__grid {
-    display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-    gap: var(--space-xs);
-    margin-bottom: var(--space-md);
-}
-
-.calendario__dia-nombre {
-    text-align: center;
-    font-weight: 700;
-    font-size: var(--font-size-sm);
-    color: var(--texto-secundario);
-    padding: var(--space-xs);
-}
-
-.calendario__dia {
-    min-height: 100px;
-    border: 1px solid var(--color-celeste-gris);
-    border-radius: var(--radius-sm);
-    padding: var(--space-xs);
-    background: var(--color-blanco);
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.calendario__dia--vacio {
-    background: transparent;
-    border: none;
-}
-
-.calendario__dia-numero {
-    font-weight: 700;
-    font-size: var(--font-size-sm);
-    color: var(--texto-oscuro);
-}
-
-.calendario__dia--feriado {
-    background: #fde2e2;
-    border-color: #d96b6b;
-}
-
-.calendario__dia--fin-de-semana {
-    background: var(--color-gris-azulado);
-}
-
-.calendario__dia--academico {
-    background: #e3f3f5;
-    border-color: var(--color-teal-medio);
-}
-
-.calendario__dia--jornada {
-    background: #fff3db;
-    border-color: #c98a16;
-}
-
-.calendario__dia--convivencia {
-    background: #ece7ff;
-    border-color: #7a68d6;
-}
-
-.calendario__evento-institucional {
-    font-size: 0.72rem;
-    font-weight: 700;
-    color: var(--texto-oscuro);
-    line-height: 1.2;
-}
-
-.calendario__recordatorio {
-    font-size: 0.72rem;
-    background: var(--color-menta-palido);
-    border-radius: var(--radius-sm);
-    padding: 2px 4px;
-    line-height: 1.2;
-}
-
-.calendario__recordatorio--completado {
-    text-decoration: line-through;
-    opacity: 0.65;
-}
-
-.calendario__recordatorio-toggle,
-.calendario__recordatorio-delete {
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    font-size: 0.75rem;
-    padding: 0;
-}
+.calendario__title { font-size: 1.4rem; font-weight: 700; margin: 0; color: var(--color-azul-petroleo); }
+.calendario__subtitle { margin: 2px 0 0 0; font-size: var(--font-size-sm); color: var(--texto-secundario); }
+.calendario__controls { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; }
+.calendario__mes { min-width: 150px; text-align: center; font-weight: 700; color: var(--texto-oscuro); }
 
 .calendario__error {
-    color: #a61b2e;
-    margin-bottom: var(--space-md);
+  color: #a61b2e; background: #fde2e2; border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md); margin-bottom: var(--space-md); font-size: var(--font-size-sm);
 }
 
-.calendario__empty {
-    color: var(--texto-secundario);
-    margin-top: var(--space-md);
+.calendario__leyenda { display: flex; gap: var(--space-sm); flex-wrap: wrap; margin-bottom: var(--space-md); }
+.leyenda-item { padding: 4px 10px; border-radius: var(--radius-pill); color: #fff; font-size: 12px; font-weight: 600; }
+.leyenda-laborable { background: var(--color-azul-petroleo); }
+.leyenda-no-laborable { background: #7b1f2f; }
+.leyenda-sinclases { background: #b3541e; }
+.leyenda-institucional { background: var(--color-teal-medio); }
+.leyenda-comunicado { background: #b8860b; }
+.leyenda-recordatorio { background: var(--color-verde-esmeralda); }
+
+.calendario__layout { display: grid; grid-template-columns: 1fr 300px; gap: var(--space-md); align-items: start; }
+@media (max-width: 900px) { .calendario__layout { grid-template-columns: 1fr; } }
+
+.calendario__grid {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px;
+  background: var(--color-blanco); padding: var(--space-sm);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
 }
 
-.calendario__form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-sm);
+.calendario__dia-nombre { text-align: center; font-weight: 700; font-size: 12px; color: var(--texto-secundario); padding: 4px 0; }
+
+.calendario__dia {
+  min-height: 92px; border: 1px solid var(--color-gris-azulado); border-radius: var(--radius-sm);
+  background: var(--color-blanco); padding: 6px; display: flex; flex-direction: column; gap: 3px;
+  text-align: left; cursor: pointer; font: inherit; transition: box-shadow 0.15s ease;
 }
+.calendario__dia:hover { box-shadow: var(--shadow-sm); }
+.calendario__dia--vacio { background: transparent; border: none; cursor: default; }
+.calendario__dia--fin-de-semana { background: var(--color-gris-azulado); }
+.calendario__dia--feriado { background: #fde2e2; border-color: #d96b6b; }
+.calendario__dia--academico { background: #e3f3f5; border-color: var(--color-teal-medio); }
+.calendario__dia--jornada { background: #fff3db; border-color: #c98a16; }
+.calendario__dia--convivencia { background: #ece7ff; border-color: #7a68d6; }
+.calendario__dia--sinclases { background: #fdecdc; border-color: #b3541e; }
+.calendario__dia--nolaborable { background-image: repeating-linear-gradient(45deg, rgba(0,0,0,0.04) 0 6px, transparent 6px 12px); }
+.calendario__dia--hoy { outline: 2px solid var(--color-teal-medio); }
+.calendario__dia--seleccionado { outline: 2px solid var(--color-azul-petroleo); }
+
+.calendario__dia-numero { font-weight: 700; font-size: 13px; color: var(--texto-oscuro); }
+
+.calendario__tag {
+  display: block; font-size: 10px; font-weight: 700; line-height: 1.2;
+  border-radius: 4px; padding: 2px 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.calendario__tag--institucional { background: var(--color-teal-medio); color: #fff; }
+.calendario__tag--sinclases { background: #b3541e; color: #fff; }
+.calendario__tag--comunicado { background: #b8860b; color: #fff; }
+.calendario__tag--recordatorio { background: var(--color-verde-esmeralda); color: #fff; }
+
+.calendario__mas { font-size: 10px; color: var(--texto-secundario); }
+
+.calendario__agenda {
+  background: var(--color-blanco); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm); padding: var(--space-md);
+}
+.calendario__agenda-title {
+  margin: 0 0 var(--space-sm) 0; font-size: var(--font-size-md);
+  text-transform: capitalize; color: var(--color-azul-petroleo);
+}
+.calendario__agenda-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-sm); }
+.calendario__agenda-item {
+  display: flex; gap: var(--space-sm); align-items: flex-start; padding: var(--space-sm);
+  border-radius: var(--radius-sm); background: var(--color-gris-azulado);
+}
+.calendario__agenda-item strong { font-size: 13px; }
+.calendario__agenda-desc {
+  margin: 2px 0 0 0; font-size: 12px; color: var(--texto-secundario);
+  overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+  -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+}
+.calendario__agenda-tipo { display: block; font-size: 10px; color: var(--texto-secundario); margin-top: 2px; }
+.calendario__punto { width: 10px; height: 10px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+.calendario__punto--comunicado { background: #b8860b; }
+.calendario__punto--recordatorio { background: var(--color-verde-esmeralda); }
+
+.calendario__empty { color: var(--texto-secundario); font-size: var(--font-size-sm); text-align: center; padding: var(--space-md) 0; }
+.calendario__form { display: flex; flex-direction: column; gap: var(--space-sm); }
+.calendario__form-actions { display: flex; justify-content: flex-end; gap: var(--space-sm); margin-top: var(--space-sm); }

@@ -31,7 +31,7 @@ const TIPO_VARIANT = {
   usuario: "success",
 };
 
-const formVacio = { titulo: "", contenido: "" };
+const formVacio = { titulo: "", contenido: "", fecha_evento: "" };
 const MS_TOAST = 8000;
 
 function tiempoRelativo(iso) {
@@ -132,7 +132,6 @@ export default function Comunicados() {
 
   useEffect(() => {
     cargarTodo();
-    
   }, [user?.id_usuario]);
 
   useEffect(() => {
@@ -151,7 +150,6 @@ export default function Comunicados() {
       document.removeEventListener("visibilitychange", alVolver);
       if (temporizadorToast.current) clearTimeout(temporizadorToast.current);
     };
-    
   }, [user?.id_usuario]);
 
   useEffect(() => {
@@ -330,6 +328,7 @@ export default function Comunicados() {
         contenido: form.contenido,
         tipo,
         publicado_por: user?.id_usuario,
+        fecha_evento: form.fecha_evento ? `${form.fecha_evento}T08:00:00` : null,
       });
 
       for (const canalId of selCanales) {
@@ -457,6 +456,12 @@ export default function Comunicados() {
                   <p className="comunicados__item-snippet">{c.contenido}</p>
                   <span className="comunicados__item-meta">
                     {nombreDe(c.publicado_por)} · {tiempoRelativo(c.fecha_publicacion)}
+                    {c.fecha_evento && (
+                      <>
+                        {" "}· Evento:{" "}
+                        {new Date(c.fecha_evento).toLocaleDateString("es-AR")}
+                      </>
+                    )}
                   </span>
                 </div>
                 {sinLeer && pestana === "recibidos" && (
@@ -488,6 +493,12 @@ export default function Comunicados() {
               Publicado por {nombreDe(seleccionado.publicado_por)} ·{" "}
               {new Date(seleccionado.fecha_publicacion).toLocaleString("es-AR")}
             </p>
+
+            {seleccionado.fecha_evento && (
+              <p className="comunicados__detail-meta">
+                📅 Evento: {new Date(seleccionado.fecha_evento).toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}
+              </p>
+            )}
 
             <p className="comunicados__detail-body">{seleccionado.contenido}</p>
 
@@ -580,6 +591,17 @@ export default function Comunicados() {
               onChange={handleChange}
               placeholder="Escribí el cuerpo del comunicado..."
             />
+
+            <Input
+              label="Fecha del evento (opcional)"
+              name="fecha_evento"
+              type="date"
+              value={form.fecha_evento}
+              onChange={handleChange}
+            />
+            <p className="comunicados__hint">
+              Si lo completás, el comunicado aparece en el calendario académico en ese día.
+            </p>
 
             <div className="comunicados__grupo">
               <span className="comunicados__label">A quién enviar</span>
