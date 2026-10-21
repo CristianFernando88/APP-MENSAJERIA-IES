@@ -14,6 +14,7 @@ class MiembroCanalCreate(MiembroCanalBase):
 
 
 class MiembroCanalUpdate(BaseModel):
+    canal_id: int | None = Field(default=None, ge=1)
     rol_en_canal: Literal["admin", "miembro", "tutor"] | None = None
 
 
