@@ -13,24 +13,48 @@ import "./Mensajes.css";
 export default function Mensajes() {
   const { user, hasRole } = useAuth();
   
-  // --- ESTADOS DE DATOS ---
   const [canales, setCanales] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [miembrosCanal, setMiembrosCanal] = useState([]);
   const [mensajesDirectos, setMensajesDirectos] = useState([]);
   
-  // --- ESTADOS DE UI ---
   const [chatActivo, setChatActivo] = useState(null); 
   const [mensajes, setMensajes] = useState([]);
   const [texto, setTexto] = useState("");
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   
-  // --- MODAL NUEVO CHAT ---
+  // Estado para los no leídos (badge)
+  const [noLeidos, setNoLeidos] = useState({}); 
+  
   const [modalNuevoChat, setModalNuevoChat] = useState(false);
   const [busquedaUsuario, setBusquedaUsuario] = useState("");
 
   const mensajesEndRef = useRef(null);
+  
+  // Ref para saber si tengo un chat abierto sin re-renderizar
+  const chatActivoRef = useRef(chatActivo);
+  useEffect(() => {
+    chatActivoRef.current = chatActivo;
+  }, [chatActivo]);
+
+  const reproducirSonido = () => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(800, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.3);
+    } catch (e) {}
+  };
 
   // 1. Cargar datos iniciales
   useEffect(() => {
@@ -55,26 +79,32 @@ export default function Mensajes() {
         setUsuarios(resUsuarios);
         setMiembrosCanal(resMiembros);
         setMensajesDirectos(resDMs);
-      } catch (error) {
-        console.error("Error al cargar datos:", error);
-      } finally {
-        setCargando(false);
-      }
+
+        // Calcular no leídos
+        const inicialNoLeidos = {};
+        resDMs.forEach(dm => {
+          if (dm.receptor_id === user.id_usuario && !dm.leido) {
+            const key = `directo-${dm.emisor_id}`;
+            inicialNoLeidos[key] = (inicialNoLeidos[key] || 0) + 1;
+          }
+        });
+        setNoLeidos(inicialNoLeidos);
+
+      } catch (error) { console.error("Error al cargar datos:", error); } finally { setCargando(false); }
     }
     if (user) cargarDatos();
   }, [user, hasRole]);
 
-  // 2. Cargar historial cuando cambia el chat activo
+  // 2. Cargar historial
   useEffect(() => {
     if (!chatActivo) return;
     setMensajes([]);
 
     if (chatActivo.tipo === "canal") {
-      listarMensajes(chatActivo.id)
-        .then(data => {
-          const ordenados = data.sort((a, b) => new Date(a.fecha_envio) - new Date(b.fecha_envio));
-          setMensajes(ordenados);
-        });
+      listarMensajes(chatActivo.id).then(data => {
+        const ordenados = data.sort((a, b) => new Date(a.fecha_envio) - new Date(b.fecha_envio));
+        setMensajes(ordenados);
+      });
     } else {
       const misDMs = mensajesDirectos.filter(dm => 
         (dm.emisor_id === user.id_usuario && dm.receptor_id === chatActivo.id) ||
@@ -82,25 +112,60 @@ export default function Mensajes() {
       );
       const ordenados = misDMs.sort((a, b) => new Date(a.fecha_envio) - new Date(b.fecha_envio));
       setMensajes(ordenados);
+
+      // Al entrar, limpiamos los no leídos
+      setNoLeidos(prev => {
+        const newState = { ...prev };
+        delete newState[`directo-${chatActivo.id}`];
+        return newState;
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatActivo]);
 
-  // 3. Conectar WebSocket
+  // 3. EL WEBSOCKET ÚNICO E INTELIGENTE
+  // Si hay un chat activo, se conecta a ese. Si no, se conecta a los DMs del usuario.
   const wsPath = chatActivo 
     ? (chatActivo.tipo === "canal" ? `canal/${chatActivo.id}` : `directo/${user.id_usuario}`) 
-    : null;
+    : `directo/${user.id_usuario}`;
 
   const handleNuevoMensajeWS = useCallback((nuevoMensaje) => {
-    if (!chatActivo) return;
-    if (chatActivo.tipo === "canal") {
-      setMensajes(prev => [...prev, nuevoMensaje]);
-    } else {
-      if (
-        (nuevoMensaje.emisor_id === user.id_usuario && nuevoMensaje.receptor_id === chatActivo.id) ||
-        (nuevoMensaje.emisor_id === chatActivo.id && nuevoMensaje.receptor_id === user.id_usuario)
-      ) {
-        setMensajes(prev => [...prev, nuevoMensaje]);
+    // Si es un mensaje de canal
+    if (chatActivo?.tipo === "canal") {
+      if (nuevoMensaje.usuario_id !== user.id_usuario) reproducirSonido();
+      setMensajes(prev => {
+        if (prev.some(m => m.id_mensaje === nuevoMensaje.id_mensaje)) return prev;
+        return [...prev, nuevoMensaje];
+      });
+      return;
+    }
+
+    // Si es un mensaje directo
+    if (nuevoMensaje.emisor_id && nuevoMensaje.receptor_id) {
+      const esMio = nuevoMensaje.emisor_id === user.id_usuario;
+
+      // Lo agregamos siempre al array global para actualizar la lista lateral
+      setMensajesDirectos(prev => {
+        if (prev.some(m => m.id_mensaje_directo === nuevoMensaje.id_mensaje_directo)) return prev;
+        return [...prev, nuevoMensaje];
+      });
+
+      if (!esMio) {
+        reproducirSonido();
+
+        // ¿Tengo abierto el chat con la persona que me escribe?
+        if (chatActivo?.tipo === "directo" && chatActivo?.id === nuevoMensaje.emisor_id) {
+          setMensajes(prev => {
+            if (prev.some(m => m.id_mensaje_directo === nuevoMensaje.id_mensaje_directo)) return prev;
+            return [...prev, nuevoMensaje];
+          });
+        } else {
+          // Si no lo tengo abierto, sumo el badge
+          setNoLeidos(prev => ({
+            ...prev,
+            [`directo-${nuevoMensaje.emisor_id}`]: (prev[`directo-${nuevoMensaje.emisor_id}`] || 0) + 1
+          }));
+        }
       }
     }
   }, [chatActivo, user.id_usuario]);
@@ -129,7 +194,6 @@ export default function Mensajes() {
     return u?.perfil ? `${u.perfil.nombres} ${u.perfil.apellidos}` : u?.nombre_usuario || "Desconocido";
   };
 
-  // --- FILTROS DE BÚSQUEDA ---
   const canalesFiltrados = canales.filter(c => c.nombre.toLowerCase().includes(busqueda.toLowerCase()));
   
   const usuariosFiltrados = useMemo(() => {
@@ -138,7 +202,6 @@ export default function Mensajes() {
       if (dm.emisor_id === user.id_usuario) idsConHistorial.add(dm.receptor_id);
       if (dm.receptor_id === user.id_usuario) idsConHistorial.add(dm.emisor_id);
     });
-    // Filtramos por búsqueda también
     return usuarios.filter(u => 
       idsConHistorial.has(u.id_usuario) && 
       u.id_usuario !== user.id_usuario &&
@@ -146,69 +209,61 @@ export default function Mensajes() {
     );
   }, [usuarios, mensajesDirectos, user.id_usuario, busqueda]);
 
-    const contactosParaNuevoChat = useMemo(() => {
-      // 1. Obtener los IDs de los canales a los que YO pertenezco
-      const misCanalesIds = miembrosCanal
-        .filter(m => Number(m.usuario_id) === Number(user.id_usuario))
-        .map(m => Number(m.canal_id));
+  const getUltimoMensaje = (usuarioId) => {
+    const msjs = mensajesDirectos.filter(dm => 
+      (dm.emisor_id === user.id_usuario && dm.receptor_id === usuarioId) ||
+      (dm.emisor_id === usuarioId && dm.receptor_id === user.id_usuario)
+    );
+    if (msjs.length === 0) return "Mensaje privado";
+    const ordenados = msjs.sort((a, b) => new Date(b.fecha_envio) - new Date(a.fecha_envio));
+    return `${ordenados[0].emisor_id === user.id_usuario ? "Tú: " : ""}${ordenados[0].contenido}`;
+  };
 
-      // 2. Obtener los IDs de los usuarios que están en ESOS canales
-      const usuariosEnMisCanales = new Set();
-      miembrosCanal.forEach(m => {
-        if (misCanalesIds.includes(Number(m.canal_id))) {
-          usuariosEnMisCanales.add(Number(m.usuario_id));
-        }
-      });
+  const contactosParaNuevoChat = useMemo(() => {
+    const misCanalesIds = miembrosCanal.filter(m => Number(m.usuario_id) === Number(user.id_usuario)).map(m => Number(m.canal_id));
+    const usuariosEnMisCanales = new Set();
+    miembrosCanal.forEach(m => { if (misCanalesIds.includes(Number(m.canal_id))) usuariosEnMisCanales.add(Number(m.usuario_id)); });
 
-      // 3. Filtrar la lista de usuarios generales
-      return usuarios
-        .filter(u => 
-          usuariosEnMisCanales.has(Number(u.id_usuario)) && // Está en mis canales
-          Number(u.id_usuario) !== Number(user.id_usuario) && // No soy yo
-          getNombre(u.id_usuario).toLowerCase().includes(busquedaUsuario.toLowerCase()) // Coincide con la búsqueda
-        )
-        .sort((a, b) => getNombre(a.id_usuario).localeCompare(getNombre(b.id_usuario))); // Ordenar alfabéticamente
-    }, [usuarios, miembrosCanal, user.id_usuario, busquedaUsuario]);
+    return usuarios
+      .filter(u => 
+        usuariosEnMisCanales.has(Number(u.id_usuario)) && 
+        Number(u.id_usuario) !== Number(user.id_usuario) && 
+        getNombre(u.id_usuario).toLowerCase().includes(busquedaUsuario.toLowerCase())
+      )
+      .sort((a, b) => getNombre(a.id_usuario).localeCompare(getNombre(b.id_usuario)));
+  }, [usuarios, miembrosCanal, user.id_usuario, busquedaUsuario]);
 
   if (cargando) return <p style={{ textAlign: "center", padding: "2rem" }}>Cargando...</p>;
+
+  const formatearHora = (fecha) => {
+    if (!fecha) return "";
+    const date = new Date(fecha.endsWith('Z') ? fecha : fecha + 'Z');
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
 
   return (
     <section className="mensajes">
       <div className="mensajes__body">
         
-        {/* PANEL IZQUIERDO: LISTA ÚNICA CON SCROLL */}
         <div className={`mensajes__list-panel ${chatActivo ? "mensajes__list-panel--hidden-mobile" : ""}`}>
           <div className="mensajes__list-header">
             <h1 className="mensajes__title">Mensajes</h1>
-            <button className="mensajes__new-btn" onClick={() => setModalNuevoChat(true)}>
-              <Plus size={20} />
-            </button>
+            <button className="mensajes__new-btn" onClick={() => setModalNuevoChat(true)}><Plus size={20} /></button>
           </div>
 
           <div className="mensajes__search-contacts" style={{ margin: "0 1rem 1rem 1rem", border: "none", padding: 0 }}>
             <div style={{ display: "flex", alignItems: "center", background: "var(--color-gris-azulado)", padding: "8px 12px", borderRadius: "8px", width: "100%" }}>
               <Search size={16} style={{ color: "var(--texto-secundario)" }} />
-              <input
-                type="text"
-                placeholder="Buscar conversación..."
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                style={{ border: "none", background: "transparent", outline: "none", marginLeft: "8px", width: "100%" }}
-              />
+              <input type="text" placeholder="Buscar..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} style={{ border: "none", background: "transparent", outline: "none", marginLeft: "8px", width: "100%" }} />
             </div>
           </div>
 
           <div className="mensajes__list">
-            {/* SECCIÓN CANALES */}
             {canalesFiltrados.length > 0 && (
               <>
                 <p className="mensajes__section-title">Canales</p>
                 {canalesFiltrados.map((canal) => (
-                  <button
-                    key={`c-${canal.id_canal}`}
-                    className={`mensajes__item ${chatActivo?.tipo === "canal" && chatActivo?.id === canal.id_canal ? "mensajes__item--active" : ""}`}
-                    onClick={() => setChatActivo({ tipo: "canal", id: canal.id_canal, nombre: canal.nombre })}
-                  >
+                  <button key={`c-${canal.id_canal}`} className={`mensajes__item ${chatActivo?.tipo === "canal" && chatActivo?.id === canal.id_canal ? "mensajes__item--active" : ""}`} onClick={() => setChatActivo({ tipo: "canal", id: canal.id_canal, nombre: canal.nombre })}>
                     <div className="mensajes__avatar mensajes__avatar--canal"><Hash size={20} /></div>
                     <div className="mensajes__item-content">
                       <div className="mensajes__item-top"><span className="mensajes__item-name">{canal.nombre}</span></div>
@@ -219,33 +274,32 @@ export default function Mensajes() {
               </>
             )}
 
-            {/* SECCIÓN DIRECTOS */}
             {usuariosFiltrados.length > 0 && (
               <>
                 <p className="mensajes__section-title">Mensajes Directos</p>
                 {usuariosFiltrados.map((u) => (
-                  <button
-                    key={`u-${u.id_usuario}`}
-                    className={`mensajes__item ${chatActivo?.tipo === "directo" && chatActivo?.id === u.id_usuario ? "mensajes__item--active" : ""}`}
-                    onClick={() => setChatActivo({ tipo: "directo", id: u.id_usuario, nombre: getNombre(u.id_usuario) })}
-                  >
+                  <button key={`u-${u.id_usuario}`} className={`mensajes__item ${chatActivo?.tipo === "directo" && chatActivo?.id === u.id_usuario ? "mensajes__item--active" : ""}`} onClick={() => setChatActivo({ tipo: "directo", id: u.id_usuario, nombre: getNombre(u.id_usuario) })}>
                     <div className="mensajes__avatar">{getNombre(u.id_usuario).charAt(0)}</div>
                     <div className="mensajes__item-content">
-                      <div className="mensajes__item-top"><span className="mensajes__item-name">{getNombre(u.id_usuario)}</span></div>
-                      <p className="mensajes__item-snippet">Mensaje privado</p>
+                      <div className="mensajes__item-top">
+                        <span className="mensajes__item-name">{getNombre(u.id_usuario)}</span>
+                        {noLeidos[`directo-${u.id_usuario}`] > 0 && (
+                          <span style={{ backgroundColor: "var(--color-turquesa-claro)", color: "white", borderRadius: "50%", padding: "2px 6px", fontSize: "0.7rem", fontWeight: "bold" }}>
+                            {noLeidos[`directo-${u.id_usuario}`]}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mensajes__item-snippet">{getUltimoMensaje(u.id_usuario)}</p>
                     </div>
                   </button>
                 ))}
               </>
             )}
 
-            {(canalesFiltrados.length === 0 && usuariosFiltrados.length === 0) && (
-              <p className="mensajes__list-empty">No se encontraron conversaciones.</p>
-            )}
+            {(canalesFiltrados.length === 0 && usuariosFiltrados.length === 0) && <p className="mensajes__list-empty">No se encontraron conversaciones.</p>}
           </div>
         </div>
 
-        {/* PANEL DERECHO (CHAT) */}
         <div className={`mensajes__chat-panel ${chatActivo ? "mensajes__chat-panel--visible-mobile" : ""}`}>
           {chatActivo ? (
             <>
@@ -266,21 +320,14 @@ export default function Mensajes() {
                 {mensajes.length === 0 && <p className="mensajes__bubbles-empty">No hay mensajes aún.</p>}
 
                 {mensajes.map((m, index) => {
-                  const esMio = chatActivo.tipo === "canal" 
-                    ? m.usuario_id === user.id_usuario 
-                    : m.emisor_id === user.id_usuario;
-                  
+                  const esMio = chatActivo.tipo === "canal" ? m.usuario_id === user.id_usuario : m.emisor_id === user.id_usuario;
                   return (
                     <div key={m.id_mensaje || m.id_mensaje_directo || index} className={`mensajes__bubble ${esMio ? "mensajes__bubble--propio" : ""}`}>
                       {!esMio && chatActivo.tipo === "canal" && (
-                        <span style={{ fontSize: "0.75rem", fontWeight: "bold", display: "block", marginBottom: "4px", color: "var(--color-azul-petroleo)" }}>
-                          {getNombre(m.usuario_id)}
-                        </span>
+                        <span style={{ fontSize: "0.75rem", fontWeight: "bold", display: "block", marginBottom: "4px", color: "var(--color-azul-petroleo)" }}>{getNombre(m.usuario_id)}</span>
                       )}
                       <p>{m.contenido}</p>
-                      <span className="mensajes__bubble-time">
-                        {new Date(m.fecha_envio).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
+                      <span className="mensajes__bubble-time">{formatearHora(m.fecha_envio)}</span>
                     </div>
                   );
                 })}
@@ -288,13 +335,7 @@ export default function Mensajes() {
               </div>
 
               <form className="mensajes__input-row" onSubmit={handleEnviar}>
-                <input
-                  type="text"
-                  placeholder="Escribí un mensaje..."
-                  value={texto}
-                  onChange={(e) => setTexto(e.target.value)}
-                  disabled={!isConnected}
-                />
+                <input type="text" placeholder="Escribí un mensaje..." value={texto} onChange={(e) => setTexto(e.target.value)} disabled={!isConnected} />
                 <button type="submit" disabled={!isConnected || !texto.trim()}><Send size={18} /></button>
               </form>
             </>
@@ -307,33 +348,17 @@ export default function Mensajes() {
         </div>
       </div>
 
-      {/* MODAL NUEVO CHAT */}
       {modalNuevoChat && (
         <Modal title="Nuevo mensaje directo" onClose={() => setModalNuevoChat(false)}>
           <div className="mensajes__search-contacts" style={{ marginBottom: "1rem" }}>
             <Search size={18} />
-            <input
-              type="text"
-              placeholder="Buscar usuario..."
-              value={busquedaUsuario}
-              onChange={(e) => setBusquedaUsuario(e.target.value)}
-              autoFocus
-            />
+            <input type="text" placeholder="Buscar usuario..." value={busquedaUsuario} onChange={(e) => setBusquedaUsuario(e.target.value)} autoFocus />
           </div>
           
           <div className="mensajes__contacts-list">
-            {contactosParaNuevoChat.length === 0 && (
-              <p className="mensajes__list-empty">No se encontraron usuarios.</p>
-            )}
+            {contactosParaNuevoChat.length === 0 && <p className="mensajes__list-empty">No se encontraron usuarios.</p>}
             {contactosParaNuevoChat.map((u) => (
-              <button 
-                key={u.id_usuario} 
-                className="mensajes__contact-item" 
-                onClick={() => {
-                  setChatActivo({ tipo: "directo", id: u.id_usuario, nombre: getNombre(u.id_usuario) });
-                  setModalNuevoChat(false);
-                }}
-              >
+              <button key={u.id_usuario} className="mensajes__contact-item" onClick={() => { setChatActivo({ tipo: "directo", id: u.id_usuario, nombre: getNombre(u.id_usuario) }); setModalNuevoChat(false); }}>
                 <div className="mensajes__avatar">{getNombre(u.id_usuario).charAt(0)}</div>
                 <div>
                   <p className="mensajes__contact-name">{getNombre(u.id_usuario)}</p>
