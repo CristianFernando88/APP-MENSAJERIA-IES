@@ -4,12 +4,22 @@ import { useAuth } from "../../context/AuthContext";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { listarMensajes } from "../../api/mensajes";
 import { listarMensajesDirectos, actualizarMensajeDirecto } from "../../api/mensajesDirectos";
-import { listarMensajesVistos, crearMensajeVisto } from "../../api/mensajesVistos"; // NUEVO
+import { listarMensajesVistos, crearMensajeVisto } from "../../api/mensajesVistos";
 import { listarUsuarios } from "../../api/usuarios";
 import { listarCanales } from "../../api/canales";
 import { listarMiembrosCanal } from "../../api/miembrosCanal";
 import Modal from "../../components/ui/Modal/Modal";
 import "./Mensajes.css";
+
+// Componente invisible para escuchar un canal en segundo plano
+function CanalListener({ canalId, userId, onNuevoMensaje }) {
+  useWebSocket(`canal/${canalId}`, (data) => {
+    if (data.usuario_id !== userId) {
+      onNuevoMensaje(canalId, data);
+    }
+  });
+  return null;
+}
 
 export default function Mensajes() {
   const { user, hasRole } = useAuth();
@@ -26,9 +36,9 @@ export default function Mensajes() {
   const [busqueda, setBusqueda] = useState("");
   
   const [noLeidos, setNoLeidos] = useState({}); 
-  
-  // NUEVO: Estado para saber qué mensajes de canal ya fueron vistos
   const [vistosIds, setVistosIds] = useState(new Set());
+  
+  const [notificacionesCanal, setNotificacionesCanal] = useState({}); // Para actualizar los badges en segundo plano
 
   const [modalNuevoChat, setModalNuevoChat] = useState(false);
   const [busquedaUsuario, setBusquedaUsuario] = useState("");
@@ -85,23 +95,19 @@ export default function Mensajes() {
     }
   };
 
-  // NUEVO: Función para marcar los mensajes de un canal como vistos
   const marcarCanalComoVisto = async (canalId, mensajesDelCanal) => {
     try {
-      // Filtramos los mensajes que NO son míos y que NO están en el set de vistos
       const noVistos = mensajesDelCanal.filter(m => 
         Number(m.usuario_id) !== Number(user.id_usuario) && 
         !vistosIds.has(m.id_mensaje)
       );
 
       if (noVistos.length > 0) {
-        // Hacemos el POST por cada mensaje
         const promesas = noVistos.map(m => 
           crearMensajeVisto({ mensaje_id: m.id_mensaje, usuario_id: user.id_usuario })
         );
         await Promise.all(promesas);
 
-        // Actualizamos el set local para no volver a enviarlos
         setVistosIds(prev => {
           const nuevoSet = new Set(prev);
           noVistos.forEach(m => nuevoSet.add(m.id_mensaje));
@@ -110,6 +116,22 @@ export default function Mensajes() {
       }
     } catch (error) {
       console.error("Error al marcar canal como visto:", error);
+    }
+  };
+
+  // Función que se ejecuta cuando un canal en segundo plano recibe un mensaje
+  const handleNuevoMensajeCanal = (canalId, mensaje) => {
+    // Reproducimos sonido si no es nuestro propio mensaje
+    if (mensaje.usuario_id !== user.id_usuario) {
+      reproducirSonido();
+      
+      // Si no tenemos el canal abierto, sumamos el badge
+      if (chatActivoRef.current?.tipo !== "canal" || chatActivoRef.current?.id !== canalId) {
+        setNoLeidos(prev => ({
+          ...prev,
+          [`canal-${canalId}`]: (prev[`canal-${canalId}`] || 0) + 1
+        }));
+      }
     }
   };
 
@@ -122,7 +144,7 @@ export default function Mensajes() {
           listarUsuarios(),
           listarMiembrosCanal(),
           listarMensajesDirectos(),
-          listarMensajesVistos() // NUEVO
+          listarMensajesVistos()
         ]);
 
         let misCanales = resCanales;
@@ -138,13 +160,11 @@ export default function Mensajes() {
         setMiembrosCanal(resMiembros);
         setMensajesDirectos(resDMs);
 
-        // NUEVO: Guardamos los IDs de los mensajes que el usuario ya vio
         const vistosDelUsuario = new Set(
           resVistos.filter(v => Number(v.usuario_id) === Number(user.id_usuario)).map(v => v.mensaje_id)
         );
         setVistosIds(vistosDelUsuario);
 
-        // Calcular el badge inicial para los DMs
         const inicialNoLeidos = {};
         resDMs.forEach(dm => {
           if (dm.receptor_id === user.id_usuario && !dm.leido) {
@@ -153,8 +173,6 @@ export default function Mensajes() {
           }
         });
 
-        // NUEVO: Calcular el badge inicial para los Canales
-        // Necesitamos traer todos los mensajes de los canales para ver cuáles no están vistos
         const promesasMensajes = misCanales.map(c => listarMensajes(c.id_canal));
         const respuestasMensajes = await Promise.all(promesasMensajes);
         
@@ -176,7 +194,7 @@ export default function Mensajes() {
     if (user) cargarDatos();
   }, [user, hasRole]);
 
-  // 2. Cargar historial y marcar como leído
+  // 2. Cargar historial
   useEffect(() => {
     if (!chatActivo) return;
     setMensajes([]);
@@ -186,7 +204,6 @@ export default function Mensajes() {
         const ordenados = data.sort((a, b) => new Date(a.fecha_envio) - new Date(b.fecha_envio));
         setMensajes(ordenados);
         
-        // NUEVO: Al entrar al canal, marcamos todo como visto y limpiamos el badge
         marcarCanalComoVisto(chatActivo.id, ordenados);
         setNoLeidos(prev => {
           const newState = { ...prev };
@@ -213,30 +230,26 @@ export default function Mensajes() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatActivo]);
 
-  // 3. WEBSOCKET ÚNICO E INTELIGENTE
+  // 3. WEBSOCKET PRINCIPAL
   const wsPath = chatActivo 
     ? (chatActivo.tipo === "canal" ? `canal/${chatActivo.id}` : `directo/${user.id_usuario}`) 
     : `directo/${user.id_usuario}`;
 
   const handleNuevoMensajeWS = (nuevoMensaje) => {
-    // Si es un mensaje de canal
     if (chatActivo?.tipo === "canal") {
       if (nuevoMensaje.usuario_id !== user.id_usuario) reproducirSonido();
       
       setMensajes(prev => {
         const tempIndex = prev.findIndex(m => m.id_mensaje?.toString().startsWith('temp-') && m.contenido === nuevoMensaje.contenido);
-        
         if (tempIndex !== -1) {
           const nuevoArray = [...prev];
           nuevoArray[tempIndex] = nuevoMensaje;
           return nuevoArray;
         }
-
         if (prev.some(m => m.id_mensaje === nuevoMensaje.id_mensaje)) return prev;
         return [...prev, nuevoMensaje];
       });
 
-      // Si el mensaje es de otra persona, lo marco como visto al toque porque estoy en el canal
       if (nuevoMensaje.usuario_id !== user.id_usuario) {
         crearMensajeVisto({ mensaje_id: nuevoMensaje.id_mensaje, usuario_id: user.id_usuario });
         setVistosIds(prev => new Set(prev).add(nuevoMensaje.id_mensaje));
@@ -244,7 +257,6 @@ export default function Mensajes() {
       return;
     }
 
-    // Si es un mensaje directo
     if (nuevoMensaje.emisor_id && nuevoMensaje.receptor_id) {
       const esMio = nuevoMensaje.emisor_id === user.id_usuario;
 
@@ -263,7 +275,6 @@ export default function Mensajes() {
 
       if (!esMio) {
         reproducirSonido();
-
         if (chatActivo?.tipo === "directo" && chatActivo?.id === nuevoMensaje.emisor_id) {
           setMensajes(prev => {
             if (prev.some(m => m.id_mensaje_directo === nuevoMensaje.id_mensaje_directo)) return prev;
@@ -277,12 +288,6 @@ export default function Mensajes() {
           }));
         }
       }
-    } else if (nuevoMensaje.canal_id && nuevoMensaje.usuario_id !== user.id_usuario) {
-      // NUEVO: Si es un mensaje de canal y no lo tengo abierto, sumo el badge
-      setNoLeidos(prev => ({
-        ...prev,
-        [`canal-${nuevoMensaje.canal_id}`]: (prev[`canal-${nuevoMensaje.canal_id}`] || 0) + 1
-      }));
     }
   };
 
@@ -293,10 +298,10 @@ export default function Mensajes() {
     mensajesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [mensajes]);
 
-  // 5. ENVIAR MENSAJE (Optimistic UI)
+  // 5. ENVIAR MENSAJE
   const handleEnviar = (e) => {
     e.preventDefault();
-    if (!texto.trim() || !isConnected || !chatActivo) return;
+    if (!texto.trim() || !chatActivo) return;
 
     const textoAEnviar = texto.trim();
     setTexto("");
@@ -384,6 +389,16 @@ export default function Mensajes() {
 
   return (
     <section className="mensajes">
+      {/* COMPONENTES INVISIBLES PARA ESCUCHAR TODOS LOS CANALES EN SEGUNDO PLANO */}
+      {canales.map(canal => (
+        <CanalListener 
+          key={`listener-${canal.id_canal}`} 
+          canalId={canal.id_canal} 
+          userId={user.id_usuario}
+          onNuevoMensaje={handleNuevoMensajeCanal}
+        />
+      ))}
+      
       <div className="mensajes__body">
         
         <div className={`mensajes__list-panel ${chatActivo ? "mensajes__list-panel--hidden-mobile" : ""}`}>
@@ -409,7 +424,6 @@ export default function Mensajes() {
                     <div className="mensajes__item-content">
                       <div className="mensajes__item-top">
                         <span className="mensajes__item-name">{canal.nombre}</span>
-                        {/* NUEVO: BADGE PARA CANALES */}
                         {noLeidos[`canal-${canal.id_canal}`] > 0 && (
                           <span style={{ backgroundColor: "var(--color-turquesa-claro)", color: "white", borderRadius: "50%", padding: "2px 6px", fontSize: "0.7rem", fontWeight: "bold" }}>
                             {noLeidos[`canal-${canal.id_canal}`]}
@@ -459,8 +473,8 @@ export default function Mensajes() {
                 </div>
                 <div>
                   <p className="mensajes__chat-name">{chatActivo.nombre}</p>
-                  <p className="mensajes__chat-cargo" style={{ color: isConnected ? "var(--color-verde-teal)" : "#C0292C" }}>
-                    {isConnected ? "🟢 En línea" : "🔴 Desconectado"}
+                  <p className="mensajes__chat-cargo" style={{ color: "var(--color-verde-teal)" }}>
+                    🟢 En línea
                   </p>
                 </div>
               </div>
@@ -484,8 +498,8 @@ export default function Mensajes() {
               </div>
 
               <form className="mensajes__input-row" onSubmit={handleEnviar}>
-                <input type="text" placeholder="Escribí un mensaje..." value={texto} onChange={(e) => setTexto(e.target.value)} disabled={!isConnected} />
-                <button type="submit" disabled={!isConnected || !texto.trim()}><Send size={18} /></button>
+                <input type="text" placeholder="Escribí un mensaje..." value={texto} onChange={(e) => setTexto(e.target.value)} />
+                <button type="submit" disabled={!texto.trim()}><Send size={18} /></button>
               </form>
             </>
           ) : (
