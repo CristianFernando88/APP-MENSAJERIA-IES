@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Send, Search, Hash, ChevronLeft, Plus } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { listarMensajes } from "../../api/mensajes";
 import { listarMensajesDirectos, actualizarMensajeDirecto } from "../../api/mensajesDirectos";
+import { listarMensajesVistos, crearMensajeVisto } from "../../api/mensajesVistos"; // NUEVO
 import { listarUsuarios } from "../../api/usuarios";
 import { listarCanales } from "../../api/canales";
 import { listarMiembrosCanal } from "../../api/miembrosCanal";
@@ -13,30 +14,28 @@ import "./Mensajes.css";
 export default function Mensajes() {
   const { user, hasRole } = useAuth();
   
-  // --- ESTADOS DE DATOS ---
   const [canales, setCanales] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [miembrosCanal, setMiembrosCanal] = useState([]);
   const [mensajesDirectos, setMensajesDirectos] = useState([]);
   
-  // --- ESTADOS DE UI ---
   const [chatActivo, setChatActivo] = useState(null); 
   const [mensajes, setMensajes] = useState([]);
   const [texto, setTexto] = useState("");
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   
-  // --- NUEVO: Estado para el badge de no leídos ---
   const [noLeidos, setNoLeidos] = useState({}); 
   
-  // --- MODAL NUEVO CHAT ---
+  // NUEVO: Estado para saber qué mensajes de canal ya fueron vistos
+  const [vistosIds, setVistosIds] = useState(new Set());
+
   const [modalNuevoChat, setModalNuevoChat] = useState(false);
   const [busquedaUsuario, setBusquedaUsuario] = useState("");
 
   const mensajesEndRef = useRef(null);
-  
-  // Ref para no tener problemas con el estado dentro del WebSocket
   const chatActivoRef = useRef(chatActivo);
+
   useEffect(() => {
     chatActivoRef.current = chatActivo;
   }, [chatActivo]);
@@ -59,7 +58,6 @@ export default function Mensajes() {
     } catch (e) {}
   };
 
-  // NUEVA FUNCIÓN: Marcar como leídos en el backend
   const marcarMensajesComoLeidos = async (usuarioId) => {
     try {
       const pendientes = mensajesDirectos.filter(dm => 
@@ -69,13 +67,11 @@ export default function Mensajes() {
       );
 
       if (pendientes.length > 0) {
-        // Enviamos el PUT por cada mensaje pendiente
         const promesas = pendientes.map(dm => 
           actualizarMensajeDirecto(dm.id_mensaje_directo, { leido: true })
         );
         await Promise.all(promesas);
 
-        // Actualizamos el estado local para que no vuelvan a aparecer como no leídos
         setMensajesDirectos(prev => 
           prev.map(dm => 
             pendientes.some(p => p.id_mensaje_directo === dm.id_mensaje_directo) 
@@ -89,15 +85,44 @@ export default function Mensajes() {
     }
   };
 
+  // NUEVO: Función para marcar los mensajes de un canal como vistos
+  const marcarCanalComoVisto = async (canalId, mensajesDelCanal) => {
+    try {
+      // Filtramos los mensajes que NO son míos y que NO están en el set de vistos
+      const noVistos = mensajesDelCanal.filter(m => 
+        Number(m.usuario_id) !== Number(user.id_usuario) && 
+        !vistosIds.has(m.id_mensaje)
+      );
+
+      if (noVistos.length > 0) {
+        // Hacemos el POST por cada mensaje
+        const promesas = noVistos.map(m => 
+          crearMensajeVisto({ mensaje_id: m.id_mensaje, usuario_id: user.id_usuario })
+        );
+        await Promise.all(promesas);
+
+        // Actualizamos el set local para no volver a enviarlos
+        setVistosIds(prev => {
+          const nuevoSet = new Set(prev);
+          noVistos.forEach(m => nuevoSet.add(m.id_mensaje));
+          return nuevoSet;
+        });
+      }
+    } catch (error) {
+      console.error("Error al marcar canal como visto:", error);
+    }
+  };
+
   // 1. Cargar datos iniciales
   useEffect(() => {
     async function cargarDatos() {
       try {
-        const [resCanales, resUsuarios, resMiembros, resDMs] = await Promise.all([
+        const [resCanales, resUsuarios, resMiembros, resDMs, resVistos] = await Promise.all([
           listarCanales(),
           listarUsuarios(),
           listarMiembrosCanal(),
-          listarMensajesDirectos()
+          listarMensajesDirectos(),
+          listarMensajesVistos() // NUEVO
         ]);
 
         let misCanales = resCanales;
@@ -113,7 +138,13 @@ export default function Mensajes() {
         setMiembrosCanal(resMiembros);
         setMensajesDirectos(resDMs);
 
-        // Calcular el badge inicial
+        // NUEVO: Guardamos los IDs de los mensajes que el usuario ya vio
+        const vistosDelUsuario = new Set(
+          resVistos.filter(v => Number(v.usuario_id) === Number(user.id_usuario)).map(v => v.mensaje_id)
+        );
+        setVistosIds(vistosDelUsuario);
+
+        // Calcular el badge inicial para los DMs
         const inicialNoLeidos = {};
         resDMs.forEach(dm => {
           if (dm.receptor_id === user.id_usuario && !dm.leido) {
@@ -121,6 +152,23 @@ export default function Mensajes() {
             inicialNoLeidos[key] = (inicialNoLeidos[key] || 0) + 1;
           }
         });
+
+        // NUEVO: Calcular el badge inicial para los Canales
+        // Necesitamos traer todos los mensajes de los canales para ver cuáles no están vistos
+        const promesasMensajes = misCanales.map(c => listarMensajes(c.id_canal));
+        const respuestasMensajes = await Promise.all(promesasMensajes);
+        
+        misCanales.forEach((canal, index) => {
+          const mensajesCanal = respuestasMensajes[index];
+          const noVistos = mensajesCanal.filter(m => 
+            Number(m.usuario_id) !== Number(user.id_usuario) && 
+            !vistosDelUsuario.has(m.id_mensaje)
+          );
+          if (noVistos.length > 0) {
+            inicialNoLeidos[`canal-${canal.id_canal}`] = noVistos.length;
+          }
+        });
+
         setNoLeidos(inicialNoLeidos);
 
       } catch (error) { console.error("Error al cargar datos:", error); } finally { setCargando(false); }
@@ -137,6 +185,14 @@ export default function Mensajes() {
       listarMensajes(chatActivo.id).then(data => {
         const ordenados = data.sort((a, b) => new Date(a.fecha_envio) - new Date(b.fecha_envio));
         setMensajes(ordenados);
+        
+        // NUEVO: Al entrar al canal, marcamos todo como visto y limpiamos el badge
+        marcarCanalComoVisto(chatActivo.id, ordenados);
+        setNoLeidos(prev => {
+          const newState = { ...prev };
+          delete newState[`canal-${chatActivo.id}`];
+          return newState;
+        });
       });
     } else {
       const misDMs = mensajesDirectos.filter(dm => 
@@ -146,14 +202,12 @@ export default function Mensajes() {
       const ordenados = misDMs.sort((a, b) => new Date(a.fecha_envio) - new Date(b.fecha_envio));
       setMensajes(ordenados);
 
-      // Limpiamos el badge visual
       setNoLeidos(prev => {
         const newState = { ...prev };
         delete newState[`directo-${chatActivo.id}`];
         return newState;
       });
 
-      // Avisamos al backend que los leímos
       marcarMensajesComoLeidos(chatActivo.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -164,26 +218,29 @@ export default function Mensajes() {
     ? (chatActivo.tipo === "canal" ? `canal/${chatActivo.id}` : `directo/${user.id_usuario}`) 
     : `directo/${user.id_usuario}`;
 
-  const handleNuevoMensajeWS = useCallback((nuevoMensaje) => {
+  const handleNuevoMensajeWS = (nuevoMensaje) => {
     // Si es un mensaje de canal
     if (chatActivo?.tipo === "canal") {
       if (nuevoMensaje.usuario_id !== user.id_usuario) reproducirSonido();
       
       setMensajes(prev => {
-        // Buscamos si tenemos un mensaje temporal del mismo contenido (el que enviamos nosotros)
         const tempIndex = prev.findIndex(m => m.id_mensaje?.toString().startsWith('temp-') && m.contenido === nuevoMensaje.contenido);
         
         if (tempIndex !== -1) {
-          // Si lo encontramos, lo reemplazamos con el mensaje real del backend
           const nuevoArray = [...prev];
           nuevoArray[tempIndex] = nuevoMensaje;
           return nuevoArray;
         }
 
-        // Si no existe en la lista, lo agregamos
         if (prev.some(m => m.id_mensaje === nuevoMensaje.id_mensaje)) return prev;
         return [...prev, nuevoMensaje];
       });
+
+      // Si el mensaje es de otra persona, lo marco como visto al toque porque estoy en el canal
+      if (nuevoMensaje.usuario_id !== user.id_usuario) {
+        crearMensajeVisto({ mensaje_id: nuevoMensaje.id_mensaje, usuario_id: user.id_usuario });
+        setVistosIds(prev => new Set(prev).add(nuevoMensaje.id_mensaje));
+      }
       return;
     }
 
@@ -192,7 +249,6 @@ export default function Mensajes() {
       const esMio = nuevoMensaje.emisor_id === user.id_usuario;
 
       setMensajesDirectos(prev => {
-        // Si es mi mensaje, busco y reemplazo el temporal
         if (esMio) {
           const tempIndex = prev.findIndex(m => m.id_mensaje_directo?.toString().startsWith('temp-') && m.contenido === nuevoMensaje.contenido);
           if (tempIndex !== -1) {
@@ -201,7 +257,6 @@ export default function Mensajes() {
             return nuevoArray;
           }
         }
-        // Si no, lo agrego
         if (prev.some(m => m.id_mensaje_directo === nuevoMensaje.id_mensaje_directo)) return prev;
         return [...prev, nuevoMensaje];
       });
@@ -222,8 +277,14 @@ export default function Mensajes() {
           }));
         }
       }
+    } else if (nuevoMensaje.canal_id && nuevoMensaje.usuario_id !== user.id_usuario) {
+      // NUEVO: Si es un mensaje de canal y no lo tengo abierto, sumo el badge
+      setNoLeidos(prev => ({
+        ...prev,
+        [`canal-${nuevoMensaje.canal_id}`]: (prev[`canal-${nuevoMensaje.canal_id}`] || 0) + 1
+      }));
     }
-  }, [chatActivo, user.id_usuario]);
+  };
 
   const { isConnected, sendMessage } = useWebSocket(wsPath, handleNuevoMensajeWS);
 
@@ -238,12 +299,11 @@ export default function Mensajes() {
     if (!texto.trim() || !isConnected || !chatActivo) return;
 
     const textoAEnviar = texto.trim();
-    setTexto(""); // Limpiamos el input de inmediato
+    setTexto("");
 
     if (chatActivo.tipo === "canal") {
       sendMessage({ contenido: textoAEnviar, usuario_id: user.id_usuario });
       
-      // Dibujamos el mensaje en pantalla al instante (temporal)
       const mensajeTemporal = {
         id_mensaje: `temp-${Date.now()}`,
         contenido: textoAEnviar,
@@ -257,7 +317,6 @@ export default function Mensajes() {
     } else {
       sendMessage({ contenido: textoAEnviar, receptor_id: chatActivo.id });
       
-      // Dibujamos el mensaje en pantalla al instante
       const mensajeTemporal = {
         id_mensaje_directo: `temp-${Date.now()}`,
         contenido: textoAEnviar,
@@ -348,7 +407,15 @@ export default function Mensajes() {
                   <button key={`c-${canal.id_canal}`} className={`mensajes__item ${chatActivo?.tipo === "canal" && chatActivo?.id === canal.id_canal ? "mensajes__item--active" : ""}`} onClick={() => setChatActivo({ tipo: "canal", id: canal.id_canal, nombre: canal.nombre })}>
                     <div className="mensajes__avatar mensajes__avatar--canal"><Hash size={20} /></div>
                     <div className="mensajes__item-content">
-                      <div className="mensajes__item-top"><span className="mensajes__item-name">{canal.nombre}</span></div>
+                      <div className="mensajes__item-top">
+                        <span className="mensajes__item-name">{canal.nombre}</span>
+                        {/* NUEVO: BADGE PARA CANALES */}
+                        {noLeidos[`canal-${canal.id_canal}`] > 0 && (
+                          <span style={{ backgroundColor: "var(--color-turquesa-claro)", color: "white", borderRadius: "50%", padding: "2px 6px", fontSize: "0.7rem", fontWeight: "bold" }}>
+                            {noLeidos[`canal-${canal.id_canal}`]}
+                          </span>
+                        )}
+                      </div>
                       <p className="mensajes__item-snippet">Canal de {canal.tipo}</p>
                     </div>
                   </button>
