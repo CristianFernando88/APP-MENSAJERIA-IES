@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Send, Search, Hash, ChevronLeft, Plus } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { useNotificaciones } from "../../context/NotificacionesContext"; // NUEVO: Contexto global
+import { useNotificaciones } from "../../context/NotificacionesContext";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { listarMensajes } from "../../api/mensajes";
 import { listarMensajesDirectos, actualizarMensajeDirecto } from "../../api/mensajesDirectos";
@@ -24,7 +24,8 @@ function CanalListener({ canalId, userId, onNuevoMensaje }) {
 
 export default function Mensajes() {
   const { user, hasRole } = useAuth();
-  const { setTotalNoLeidos } = useNotificaciones(); // NUEVO: Para limpiar el sidebar
+  // NUEVO: Traemos setPausarNotificaciones
+  const { setTotalNoLeidos, setPausarNotificaciones } = useNotificaciones();
   
   const [canales, setCanales] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
@@ -50,10 +51,16 @@ export default function Mensajes() {
     chatActivoRef.current = chatActivo;
   }, [chatActivo]);
 
-  // NUEVO: Limpiamos el contador global del sidebar al entrar a la pantalla
+  // NUEVO: Limpiamos el contador global y pausamos las notificaciones al entrar
   useEffect(() => {
     setTotalNoLeidos(0);
-  }, [setTotalNoLeidos]);
+    setPausarNotificaciones(true);
+
+    // Al salir de la pantalla, reanudamos las notificaciones
+    return () => {
+      setPausarNotificaciones(false);
+    };
+  }, [setTotalNoLeidos, setPausarNotificaciones]);
 
   const reproducirSonido = () => {
     try {

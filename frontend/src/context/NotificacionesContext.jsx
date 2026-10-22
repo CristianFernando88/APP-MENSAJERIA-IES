@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, useRef } from "react";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { useAuth } from "./AuthContext";
 import { listarCanales } from "../api/canales";
@@ -6,7 +6,6 @@ import { listarMiembrosCanal } from "../api/miembrosCanal";
 
 const NotificacionesContext = createContext(null);
 
-// Componente invisible para escuchar canales en segundo plano
 function CanalListener({ canalId, userId, onNuevoMensaje }) {
   useWebSocket(`canal/${canalId}`, (data) => {
     if (data.usuario_id !== userId) {
@@ -20,6 +19,15 @@ export function NotificacionesProvider({ children }) {
   const { user } = useAuth();
   const [totalNoLeidos, setTotalNoLeidos] = useState(0);
   const [canales, setCanales] = useState([]);
+  
+  // NUEVO: Estado para saber si estamos dentro de la pantalla de mensajes
+  const [pausarNotificaciones, setPausarNotificaciones] = useState(false);
+  
+  // Ref para leer el valor actual dentro del WebSocket sin re-renderizar
+  const pausarRef = useRef(pausarNotificaciones);
+  useEffect(() => {
+    pausarRef.current = pausarNotificaciones;
+  }, [pausarNotificaciones]);
 
   const reproducirSonido = () => {
     try {
@@ -39,7 +47,6 @@ export function NotificacionesProvider({ children }) {
     } catch (e) {}
   };
 
-  // 1. Cargar canales del usuario
   useEffect(() => {
     if (!user) return;
     async function cargar() {
@@ -57,28 +64,36 @@ export function NotificacionesProvider({ children }) {
     cargar();
   }, [user]);
 
-  // 2. Escuchar SIEMPRE los Mensajes Directos (NUEVO)
+  // WebSocket de Directos
   useWebSocket(`directo/${user?.id_usuario}`, (data) => {
     if (data && data.emisor_id && data.emisor_id !== user.id_usuario) {
       reproducirSonido();
-      setTotalNoLeidos(prev => prev + 1);
+      // SOLO sumamos si NO estamos en la pantalla de mensajes
+      if (!pausarRef.current) {
+        setTotalNoLeidos(prev => prev + 1);
+      }
     }
   });
 
-  // 3. Función que se ejecuta cuando un Canal recibe un mensaje
   const handleNuevoMensajeCanal = (data) => {
     reproducirSonido();
-    setTotalNoLeidos(prev => prev + 1);
+    // SOLO sumamos si NO estamos en la pantalla de mensajes
+    if (!pausarRef.current) {
+      setTotalNoLeidos(prev => prev + 1);
+    }
   };
 
-  // 4. Función para que los componentes limpien el contador
   const limpiarContador = (cantidad = 1) => {
     setTotalNoLeidos(prev => Math.max(0, prev - cantidad));
   };
 
   return (
-    <NotificacionesContext.Provider value={{ totalNoLeidos, limpiarContador, setTotalNoLeidos }}>
-      {/* Listeners invisibles para cada canal */}
+    <NotificacionesContext.Provider value={{ 
+      totalNoLeidos, 
+      limpiarContador, 
+      setTotalNoLeidos,
+      setPausarNotificaciones // NUEVO: Exponemos la función
+    }}>
       {canales.map(canal => (
         <CanalListener 
           key={canal.id_canal} 

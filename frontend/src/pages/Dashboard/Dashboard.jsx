@@ -9,7 +9,7 @@ import { listarMiembrosServidor } from "../../api/miembrosServidor";
 import { listarServidores } from "../../api/servidores";
 import useComunicadosNoLeidos from "../../hooks/useComunicadosNoLeidos";
 import { useAuth } from "../../context/AuthContext";
-import { useNotificaciones } from "../../context/NotificacionesContext"; // NUEVO
+import { useNotificaciones } from "../../context/NotificacionesContext";
 import "./Dashboard.css";
 
 const accesos = [
@@ -27,7 +27,7 @@ const iniciales = (nombre = "") => nombre.slice(0, 2).toUpperCase();
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { totalNoLeidos, setTotalNoLeidos } = useNotificaciones(); // NUEVO
+  const { totalNoLeidos, setTotalNoLeidos } = useNotificaciones();
 
   const noLeidos = useComunicadosNoLeidos();
 
@@ -131,7 +131,6 @@ export default function Dashboard() {
     }
   };
 
-  // NUEVO: Al hacer clic en Mensajes, limpiamos el contador
   const irAMensajes = () => {
     setTotalNoLeidos(0);
     navigate("/mensajes");
@@ -171,34 +170,21 @@ export default function Dashboard() {
 
             <div className="dash-accesos">
               {accesos.map(({ key, label, desc, icon: Icon }) => {
-                // NUEVO: Lógica de clic para limpiar contador si es mensajes
                 const onClickAcceso = key === "mensajes" ? irAMensajes : () => navigate(`/${key}`);
                 
                 return (
                   <button key={key} className="dash-acceso" onClick={onClickAcceso}>
-                    <span className="dash-acceso__icon" style={{ position: "relative" }}>
+                    <span className="dash-acceso__icon">
                       <Icon size={22} />
                       
-                      {/* Badge para Comunicados (ya existía) */}
+                      {/* Badge para Comunicados */}
                       {key === "comunicados" && noLeidos > 0 && (
                         <span className="dash-acceso__badge">{noLeidos}</span>
                       )}
                       
-                      {/* NUEVO: Badge para Mensajes */}
+                      {/* Badge para Mensajes (Ahora usa la misma clase) */}
                       {key === "mensajes" && totalNoLeidos > 0 && (
-                        <span style={{
-                          position: "absolute",
-                          top: "-6px",
-                          right: "-8px",
-                          backgroundColor: "#ef4444",
-                          color: "white",
-                          borderRadius: "50%",
-                          padding: "2px 6px",
-                          fontSize: "0.65rem",
-                          fontWeight: "bold",
-                          minWidth: "16px",
-                          textAlign: "center"
-                        }}>
+                        <span className="dash-acceso__badge">
                           {totalNoLeidos > 9 ? "+9" : totalNoLeidos}
                         </span>
                       )}
