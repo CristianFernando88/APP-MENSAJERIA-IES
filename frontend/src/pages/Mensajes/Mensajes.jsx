@@ -11,7 +11,7 @@ import { listarMiembrosCanal } from "../../api/miembrosCanal";
 import Modal from "../../components/ui/Modal/Modal";
 import "./Mensajes.css";
 
-// Componente invisible para escuchar un canal en segundo plano
+// Componente invisible para escuchar canales en segundo plano (para badges)
 function CanalListener({ canalId, userId, onNuevoMensaje }) {
   useWebSocket(`canal/${canalId}`, (data) => {
     if (data.usuario_id !== userId) {
@@ -37,8 +37,6 @@ export default function Mensajes() {
   
   const [noLeidos, setNoLeidos] = useState({}); 
   const [vistosIds, setVistosIds] = useState(new Set());
-  
-  const [notificacionesCanal, setNotificacionesCanal] = useState({}); // Para actualizar los badges en segundo plano
 
   const [modalNuevoChat, setModalNuevoChat] = useState(false);
   const [busquedaUsuario, setBusquedaUsuario] = useState("");
@@ -119,13 +117,9 @@ export default function Mensajes() {
     }
   };
 
-  // Función que se ejecuta cuando un canal en segundo plano recibe un mensaje
-  const handleNuevoMensajeCanal = (canalId, mensaje) => {
-    // Reproducimos sonido si no es nuestro propio mensaje
+  const handleNuevoMensajeCanalFondo = (canalId, mensaje) => {
     if (mensaje.usuario_id !== user.id_usuario) {
       reproducirSonido();
-      
-      // Si no tenemos el canal abierto, sumamos el badge
       if (chatActivoRef.current?.tipo !== "canal" || chatActivoRef.current?.id !== canalId) {
         setNoLeidos(prev => ({
           ...prev,
@@ -230,33 +224,30 @@ export default function Mensajes() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatActivo]);
 
-  // 3. WEBSOCKET PRINCIPAL
-  const wsPath = chatActivo 
-    ? (chatActivo.tipo === "canal" ? `canal/${chatActivo.id}` : `directo/${user.id_usuario}`) 
-    : `directo/${user.id_usuario}`;
-
-  const handleNuevoMensajeWS = (nuevoMensaje) => {
-    if (chatActivo?.tipo === "canal") {
-      if (nuevoMensaje.usuario_id !== user.id_usuario) reproducirSonido();
-      
-      setMensajes(prev => {
-        const tempIndex = prev.findIndex(m => m.id_mensaje?.toString().startsWith('temp-') && m.contenido === nuevoMensaje.contenido);
-        if (tempIndex !== -1) {
-          const nuevoArray = [...prev];
-          nuevoArray[tempIndex] = nuevoMensaje;
-          return nuevoArray;
-        }
-        if (prev.some(m => m.id_mensaje === nuevoMensaje.id_mensaje)) return prev;
-        return [...prev, nuevoMensaje];
-      });
-
-      if (nuevoMensaje.usuario_id !== user.id_usuario) {
-        crearMensajeVisto({ mensaje_id: nuevoMensaje.id_mensaje, usuario_id: user.id_usuario });
-        setVistosIds(prev => new Set(prev).add(nuevoMensaje.id_mensaje));
+  // --- HOOK 1: WEBSOCKET DE CANALES (Solo activo si hay un canal abierto) ---
+  const wsCanalPath = chatActivo?.tipo === "canal" ? `canal/${chatActivo.id}` : null;
+  const { sendMessage: sendCanal } = useWebSocket(wsCanalPath, (nuevoMensaje) => {
+    if (nuevoMensaje.usuario_id !== user.id_usuario) reproducirSonido();
+    
+    setMensajes(prev => {
+      const tempIndex = prev.findIndex(m => m.id_mensaje?.toString().startsWith('temp-') && m.contenido === nuevoMensaje.contenido);
+      if (tempIndex !== -1) {
+        const nuevoArray = [...prev];
+        nuevoArray[tempIndex] = nuevoMensaje;
+        return nuevoArray;
       }
-      return;
-    }
+      if (prev.some(m => m.id_mensaje === nuevoMensaje.id_mensaje)) return prev;
+      return [...prev, nuevoMensaje];
+    });
 
+    if (nuevoMensaje.usuario_id !== user.id_usuario) {
+      crearMensajeVisto({ mensaje_id: nuevoMensaje.id_mensaje, usuario_id: user.id_usuario });
+      setVistosIds(prev => new Set(prev).add(nuevoMensaje.id_mensaje));
+    }
+  });
+
+  // --- HOOK 2: WEBSOCKET DE DIRECTOS (SIEMPRE ACTIVO) ---
+  const { sendMessage: sendDirecto } = useWebSocket(`directo/${user?.id_usuario}`, (nuevoMensaje) => {
     if (nuevoMensaje.emisor_id && nuevoMensaje.receptor_id) {
       const esMio = nuevoMensaje.emisor_id === user.id_usuario;
 
@@ -275,7 +266,7 @@ export default function Mensajes() {
 
       if (!esMio) {
         reproducirSonido();
-        if (chatActivo?.tipo === "directo" && chatActivo?.id === nuevoMensaje.emisor_id) {
+        if (chatActivoRef.current?.tipo === "directo" && chatActivoRef.current?.id === nuevoMensaje.emisor_id) {
           setMensajes(prev => {
             if (prev.some(m => m.id_mensaje_directo === nuevoMensaje.id_mensaje_directo)) return prev;
             return [...prev, nuevoMensaje];
@@ -289,16 +280,14 @@ export default function Mensajes() {
         }
       }
     }
-  };
+  });
 
-  const { isConnected, sendMessage } = useWebSocket(wsPath, handleNuevoMensajeWS);
-
-  // 4. Auto-scroll
+  // 3. Auto-scroll
   useEffect(() => {
     mensajesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [mensajes]);
 
-  // 5. ENVIAR MENSAJE
+  // 4. ENVIAR MENSAJE (Usa el sendCanal o sendDirecto según corresponda)
   const handleEnviar = (e) => {
     e.preventDefault();
     if (!texto.trim() || !chatActivo) return;
@@ -307,7 +296,7 @@ export default function Mensajes() {
     setTexto("");
 
     if (chatActivo.tipo === "canal") {
-      sendMessage({ contenido: textoAEnviar, usuario_id: user.id_usuario });
+      sendCanal({ contenido: textoAEnviar, usuario_id: user.id_usuario });
       
       const mensajeTemporal = {
         id_mensaje: `temp-${Date.now()}`,
@@ -320,7 +309,7 @@ export default function Mensajes() {
       setMensajes(prev => [...prev, mensajeTemporal]);
       
     } else {
-      sendMessage({ contenido: textoAEnviar, receptor_id: chatActivo.id });
+      sendDirecto({ contenido: textoAEnviar, receptor_id: chatActivo.id });
       
       const mensajeTemporal = {
         id_mensaje_directo: `temp-${Date.now()}`,
@@ -389,13 +378,12 @@ export default function Mensajes() {
 
   return (
     <section className="mensajes">
-      {/* COMPONENTES INVISIBLES PARA ESCUCHAR TODOS LOS CANALES EN SEGUNDO PLANO */}
       {canales.map(canal => (
         <CanalListener 
           key={`listener-${canal.id_canal}`} 
           canalId={canal.id_canal} 
           userId={user.id_usuario}
-          onNuevoMensaje={handleNuevoMensajeCanal}
+          onNuevoMensaje={handleNuevoMensajeCanalFondo}
         />
       ))}
       
