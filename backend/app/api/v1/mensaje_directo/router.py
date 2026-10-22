@@ -122,15 +122,17 @@ async def websocket_directo(websocket: WebSocket, usuario_id: int):
                 "leido": nuevo.leido
             }
             
-            # Enviamos al receptor (si está conectado)
+            # Enviamos al receptor (a TODAS sus conexiones activas)
             if data["receptor_id"] in manager.directos:
-                await manager.directos[data["receptor_id"]].send_json(payload)
+                for ws in manager.directos[data["receptor_id"]]:
+                    await ws.send_json(payload)
                 
-            # Enviamos al emisor (para que vea su propio mensaje)
+            # Enviamos al emisor (a TODAS sus conexiones activas)
             if usuario_id in manager.directos:
-                await manager.directos[usuario_id].send_json(payload)
+                for ws in manager.directos[usuario_id]:
+                    await ws.send_json(payload)
 
     except WebSocketDisconnect:
-        manager.disconnect_directo(usuario_id)
+        manager.disconnect_directo(websocket, usuario_id)
     finally:
         db.close()

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useNotificaciones } from "../../context/NotificacionesContext"; // NUEVO
 import "./SideBar.css";
 
 const NAV_LINKS = [
@@ -21,7 +22,6 @@ const NAV_LINKS = [
     icon: Server,
     roles: ["admin", "super_admin", "director"],
   },
-  
   {
     to: "/canales",
     label: "Canales",
@@ -34,7 +34,7 @@ const NAV_LINKS = [
     icon: Users,
     roles: ["admin", "super_admin", "director", "profesor"],
   },
-    {
+  {
     to: "/admin",
     label: "Panel Administrador",
     icon: ShieldCheck,
@@ -52,6 +52,7 @@ const NAV_LINKS = [
 
 export default function SideBar({ isOpen, onClose }) {
   const { hasRole } = useAuth();
+  const { totalNoLeidos } = useNotificaciones(); // NUEVO
 
   const linksVisibles = NAV_LINKS.filter(
     (link) => !link.roles || hasRole(link.roles)
@@ -70,8 +71,29 @@ export default function SideBar({ isOpen, onClose }) {
             }
             onClick={onClose}
           >
-            <Icon size={20} />
-            <span>{label}</span>
+            <div style={{ position: "relative", display: "flex", alignItems: "center", gap: "8px" }}>
+              <Icon size={20} />
+              <span>{label}</span>
+              
+              {/* BADGE ROJO SOLO PARA MENSAJES */}
+              {to === "/mensajes" && totalNoLeidos > 0 && (
+                <span style={{
+                  backgroundColor: "#ef4444", 
+                  color: "white",
+                  borderRadius: "50%",
+                  padding: "2px 6px",
+                  fontSize: "0.65rem",
+                  fontWeight: "bold",
+                  position: "absolute",
+                  top: "-8px",
+                  left: "12px", 
+                  minWidth: "16px",
+                  textAlign: "center"
+                }}>
+                  {totalNoLeidos > 9 ? "+9" : totalNoLeidos}
+                </span>
+              )}
+            </div>
           </NavLink>
         ))}
       </nav>

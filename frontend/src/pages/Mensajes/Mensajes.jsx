@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Send, Search, Hash, ChevronLeft, Plus } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { useNotificaciones } from "../../context/NotificacionesContext"; // NUEVO: Contexto global
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { listarMensajes } from "../../api/mensajes";
 import { listarMensajesDirectos, actualizarMensajeDirecto } from "../../api/mensajesDirectos";
@@ -11,7 +12,7 @@ import { listarMiembrosCanal } from "../../api/miembrosCanal";
 import Modal from "../../components/ui/Modal/Modal";
 import "./Mensajes.css";
 
-// Componente invisible para escuchar canales en segundo plano (para badges)
+// Componente invisible para escuchar canales en segundo plano (para badges de la pantalla de mensajes)
 function CanalListener({ canalId, userId, onNuevoMensaje }) {
   useWebSocket(`canal/${canalId}`, (data) => {
     if (data.usuario_id !== userId) {
@@ -23,6 +24,7 @@ function CanalListener({ canalId, userId, onNuevoMensaje }) {
 
 export default function Mensajes() {
   const { user, hasRole } = useAuth();
+  const { setTotalNoLeidos } = useNotificaciones(); // NUEVO: Para limpiar el sidebar
   
   const [canales, setCanales] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
@@ -47,6 +49,11 @@ export default function Mensajes() {
   useEffect(() => {
     chatActivoRef.current = chatActivo;
   }, [chatActivo]);
+
+  // NUEVO: Limpiamos el contador global del sidebar al entrar a la pantalla
+  useEffect(() => {
+    setTotalNoLeidos(0);
+  }, [setTotalNoLeidos]);
 
   const reproducirSonido = () => {
     try {

@@ -1,6 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout/Layout";
 import RequireAuth from "./components/RequireAuth/RequireAuth";
+import { NotificacionesProvider } from "./context/NotificacionesContext"; // NUEVO
 import Dashboard from "./pages/Dashboard/Dashboard";
 import Servidores from "./pages/Servidores/Servidores";
 import Canales from "./pages/Canales/Canales";
@@ -27,9 +28,11 @@ export default function App() {
         path="/"
         element={
           <RequireAuth>
-            <Layout>
-              <Dashboard />
-            </Layout>
+            <NotificacionesProvider>
+              <Layout>
+                <Dashboard />
+              </Layout>
+            </NotificacionesProvider>
           </RequireAuth>
         }
       />
@@ -37,9 +40,11 @@ export default function App() {
         path="/calendario"
         element={
           <RequireAuth>
-            <Layout>
-              <Calendario />
-            </Layout>
+            <NotificacionesProvider>
+              <Layout>
+                <Calendario />
+              </Layout>
+            </NotificacionesProvider>
           </RequireAuth>
         }
       />
@@ -47,9 +52,11 @@ export default function App() {
         path="/mensajes"
         element={
           <RequireAuth>
-            <Layout>
-              <Mensajes />
-            </Layout>
+            <NotificacionesProvider>
+              <Layout>
+                <Mensajes />
+              </Layout>
+            </NotificacionesProvider>
           </RequireAuth>
         }
       />
@@ -57,20 +64,23 @@ export default function App() {
         path="/comunicados"
         element={
           <RequireAuth>
-            <Layout>
-              <Comunicados />
-            </Layout>
+            <NotificacionesProvider>
+              <Layout>
+                <Comunicados />
+              </Layout>
+            </NotificacionesProvider>
           </RequireAuth>
         }
       />
-      
       <Route
         path="/perfil"
         element={
           <RequireAuth>
-            <Layout>
-              <Perfil />
-            </Layout>
+            <NotificacionesProvider>
+              <Layout>
+                <Perfil />
+              </Layout>
+            </NotificacionesProvider>
           </RequireAuth>
         }
       />
@@ -80,9 +90,11 @@ export default function App() {
         path="/servidores"
         element={
           <RequireAuth roles={["admin", "super_admin", "director"]}>
-            <Layout>
-              <Servidores />
-            </Layout>
+            <NotificacionesProvider>
+              <Layout>
+                <Servidores />
+              </Layout>
+            </NotificacionesProvider>
           </RequireAuth>
         }
       />
@@ -90,9 +102,11 @@ export default function App() {
         path="/categorias"
         element={
           <RequireAuth roles={["admin", "super_admin", "director"]}>
-            <Layout>
-              <Categorias />
-            </Layout>
+            <NotificacionesProvider>
+              <Layout>
+                <Categorias />
+              </Layout>
+            </NotificacionesProvider>
           </RequireAuth>
         }
       />
@@ -100,9 +114,11 @@ export default function App() {
         path="/canales"
         element={
           <RequireAuth roles={["admin", "super_admin", "director", "profesor"]}>
-            <Layout>
-              <Canales />
-            </Layout>
+            <NotificacionesProvider>
+              <Layout>
+                <Canales />
+              </Layout>
+            </NotificacionesProvider>
           </RequireAuth>
         }
       />
@@ -110,9 +126,11 @@ export default function App() {
         path="/miembros"
         element={
           <RequireAuth roles={["admin", "super_admin", "director", "profesor"]}>
-            <Layout>
-              <Miembros />
-            </Layout>
+            <NotificacionesProvider>
+              <Layout>
+                <Miembros />
+              </Layout>
+            </NotificacionesProvider>
           </RequireAuth>
         }
       />
@@ -120,9 +138,11 @@ export default function App() {
         path="/usuarios"
         element={
           <RequireAuth roles={["admin", "super_admin"]}>
-            <Layout>
-              <Usuarios />
-            </Layout>
+            <NotificacionesProvider>
+              <Layout>
+                <Usuarios />
+              </Layout>
+            </NotificacionesProvider>
           </RequireAuth>
         }
       />
@@ -130,9 +150,11 @@ export default function App() {
         path="/admin"
         element={
           <RequireAuth roles={["admin", "super_admin"]}>
-            <Layout>
-              <PanelAdmin />
-            </Layout>
+            <NotificacionesProvider>
+              <Layout>
+                <PanelAdmin />
+              </Layout>
+            </NotificacionesProvider>
           </RequireAuth>
         }
       />
@@ -144,9 +166,11 @@ export default function App() {
       <Route
         path="*"
         element={
-          <Layout>
-            <NotFound />
-          </Layout>
+          <NotificacionesProvider>
+            <Layout>
+              <NotFound />
+            </Layout>
+          </NotificacionesProvider>
         }
       />
     </Routes>
