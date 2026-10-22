@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.db import engine
 from app import models  # noqa: F401 — registra los modelos en Base.metadata
+from app import cloudinary_config
 
 # aca importamos las rutas
 from app.api.v1.auth.router import router as auth_router
