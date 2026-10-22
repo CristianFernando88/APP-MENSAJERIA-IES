@@ -1,0 +1,206 @@
+FRONTEND - APP MENSAJERIA IES
+=============================
+
+Informe del frontend implementado en frontend/src. Resume la arquitectura, las
+pantallas y los flujos existentes para servir de referencia al continuar el
+desarrollo. El inventario describe el código actual; no implica que cada flujo
+este completo o validado en todos los roles y escenarios.
+
+
+1. TECNOLOGIAS
+--------------
+
+- React 19: componentes y estado de interfaz.
+- JavaScript con JSX: lenguaje de la aplicación.
+- Vite: servidor de desarrollo, HMR y compilación de producción.
+- React Router 7: navegación entre pantallas.
+- lucide-react: iconos.
+- CSS: estilos globales y hojas asociadas a páginas y componentes.
+- Fetch API: comunicación HTTP con el backend.
+- WebSocket nativo del navegador: recepción y envío de mensajes en tiempo real.
+- ESLint: análisis estático; scripts disponibles para lint y build.
+
+No se observa un framework de estilos adicional ni una biblioteca de estado
+global externa. El estado compartido se gestiona con React Context.
+
+
+2. ESTRUCTURA
+-------------
+
+frontend/
+|-- index.html
+|-- package.json
+|-- vite.config.js
+|-- public/
+|   Iconos y recursos públicos.
+|-- src/
+    |-- main.jsx
+    |   Monta React, BrowserRouter, AuthProvider y App.
+    |-- App.jsx
+    |   Define las rutas públicas, protegidas y las restricciones por rol.
+    |-- api/
+    |   apiClient.js centraliza las peticiones HTTP, el token Bearer y errores.
+    |   Los demás módulos agrupan operaciones por recurso.
+    |-- components/
+    |   Header, menú de usuario y notificaciones.
+    |   Layout, SideBar, Footer y RequireAuth.
+    |   forms/ contiene formularios reutilizables.
+    |   ui/ contiene Button, Input, Select, Modal, Card, Badge, Toast,
+    |   ConfirmDialog, Overlay e IconCircle.
+    |-- context/
+    |   AuthContext.jsx mantiene sesión, login, logout y comprobación de roles.
+    |   NotificacionesContext.jsx mantiene conexiones de notificaciones y
+    |   contador de mensajes no leídos.
+    |-- hooks/
+    |   useFetch.js, useWebSocket.js, useConfirmacion.jsx y
+    |   useComunicadosNoLeidos.js.
+    |-- pages/
+    |   Pantallas agrupadas por funcionalidad.
+    |-- services/
+    |   Servicios complementarios; incluye servidoresService.js.
+    |-- styles/
+        reset.css, variables.css y globals.css.
+
+
+3. RUTAS DE NAVEGACION Y ACCESO
+-------------------------------
+
+- /login: inicio de sesión público.
+- /: Dashboard; requiere sesión.
+- /calendario: calendario y recordatorios; requiere sesión.
+- /mensajes: canales y mensajes directos; requiere sesión.
+- /comunicados: lectura y publicación de comunicados; requiere sesión.
+- /perfil: consulta y edición de datos de cuenta; requiere sesión.
+- /servidores: gestión y acceso a servidores; admin, super_admin o director.
+- /categorias: administración de categorías; admin, super_admin o director.
+- /canales: gestión de canales y miembros; admin, super_admin, director o
+  profesor.
+- /miembros: pantalla de miembros; admin, super_admin, director o profesor.
+- /usuarios: administración de usuarios; admin o super_admin.
+- /admin: panel de administración; admin o super_admin.
+- /no-autorizado: página de acceso denegado.
+- Cualquier otra ruta: página 404.
+
+RequireAuth verifica que exista sesión y, si la ruta especifica roles, comprueba
+el rol antes de mostrar su contenido. Las comprobaciones de interfaz no
+sustituyen la autorización que debe aplicar el backend.
+
+
+4. FUNCIONALIDAD IMPLEMENTADA
+-----------------------------
+
+Autenticación y sesión
+  El login envía formulario URL-encoded al backend, guarda el token en
+  localStorage y carga al usuario mediante /auth/me al recargar la aplicación.
+  apiClient agrega el token a las peticiones autenticadas y redirige al login
+  ante una respuesta 401. La interfaz permite mostrar u ocultar la contraseña.
+
+Dashboard
+  Presenta accesos a funciones principales, comunicados recientes, información
+  de servidor y recordatorios del usuario. Permite crear y gestionar
+  recordatorios y muestra contadores de mensajes/comunicados no leídos.
+
+Servidores
+  Lista servidores accesibles, permite seleccionar uno y consultar su
+  estructura. Incluye flujos de gestión de categorías, canales, usuarios
+  miembros y asignaciones de roles, sujetos a las reglas de la pantalla.
+
+Categorías
+  Selección de servidor, navegación de categorías jerárquicas, búsqueda y
+  operaciones de creación, edición y eliminación.
+
+Canales
+  Lista y filtra canales disponibles para el usuario. Incluye la gestión de
+  miembros del canal y sus roles dentro del canal para usuarios autorizados.
+
+Mensajes
+  Interfaz de conversación para canales y mensajes directos. Carga mensajes,
+  permite conversar en tiempo real mediante WebSockets y utiliza registros de
+  mensajes vistos o estados de lectura. El hook useWebSocket gestiona la
+  conexión según el canal o usuario.
+
+Comunicados
+  Lista comunicados, permite buscar y filtrar no leídos, consultar destinatarios
+  y registrar visualizaciones. Los roles habilitados pueden publicar y elegir
+  destinos. También hay acceso a la papelera, restauración y eliminación
+  definitiva.
+
+Calendario
+  Muestra una cuadrícula mensual y recordatorios asociados a fechas. Permite
+  crear, actualizar o eliminar recordatorios. calendarioinstitucional.js
+  proporciona utilidades para clasificar días y consultar eventos/fechas
+  institucionales.
+
+Perfil
+  Consulta los datos de cuenta del usuario autenticado y permite actualizar
+  nombre de usuario, correo y contraseña.
+
+Usuarios
+  Gestión administrativa con búsqueda, filtros, orden y paginación. El
+  formulario integra datos de usuario y perfil, asignación de roles y
+  pertenencia a servidores/canales.
+
+Panel de administración
+  Tiene pestañas de resumen, servidores, usuarios y roles. Muestra métricas
+  calculadas a partir de datos del backend y ofrece operaciones de gestión.
+
+Miembros
+  La pantalla Miembros contiene actualmente datos de ejemplo y administra su
+  lista en estado local. No está conectada a los endpoints de membresía; debe
+  integrarse con las API de servidor/canal antes de considerarla persistente.
+
+Experiencia común
+  La aplicación usa un layout con cabecera, barra lateral y pie de página;
+  componentes reutilizables para formularios, modales y confirmaciones; y
+  estilos globales más CSS por pantalla y componente.
+
+
+5. CLIENTE DE API Y MODULOS DE DATOS
+------------------------------------
+
+apiClient.js proporciona apiGet, apiPost, apiPut, apiPatch y apiDelete. Lee
+VITE_API_URL, agrega el token de acceso cuando existe, maneja respuestas JSON,
+respuestas 204 y errores HTTP.
+
+Hay módulos por dominio para:
+
+- usuarios, perfiles, roles y asignaciones usuario-rol;
+- servidores, canales, categorías, miembros de servidor y miembros de canal;
+- mensajes, mensajes directos y registros de mensajes vistos;
+- comunicados, destinatarios y registros de comunicados vistos;
+- notificaciones y recordatorios;
+- calendario y fechas institucionales;
+- construcción de parámetros de consulta.
+
+La URL del backend se configura con la variable de entorno VITE_API_URL. La
+aplicación convierte el prefijo HTTP en WS para formar conexiones WebSocket.
+
+
+6. SCRIPTS Y EJECUCION
+----------------------
+
+Desde la carpeta frontend:
+
+- npm run dev: inicia el servidor local de Vite.
+- npm run build: genera la versión de producción.
+- npm run preview: sirve localmente la compilación generada.
+- npm run lint: ejecuta ESLint.
+
+
+7. PUNTOS DE CONTINUACION
+-------------------------
+
+1. Conectar la pantalla Miembros con los endpoints reales de membresía y
+   eliminar los datos de ejemplo cuando el flujo esté validado.
+2. Revisar que cada operación y pantalla respete los mismos permisos que el
+   backend; la protección visual del frontend no debe ser el único control.
+3. Completar y probar estados de carga, errores, vacío y confirmación en todas
+   las pantallas, especialmente en operaciones destructivas.
+4. Validar en conjunto WebSockets, reconexión/desconexión, mensajes leídos y
+   contadores de no leídos con varios usuarios.
+5. Verificar las reglas de calendario: actualmente la página trabaja con
+   recordatorios; decidir si también debe mostrar eventos institucionales o
+   eventos de comunicados y conectarlos según el alcance esperado.
+6. Mantener sincronizados los módulos de frontend con las rutas y schemas
+   vigentes del backend, y añadir pruebas de los flujos principales.
+

@@ -1,0 +1,170 @@
+BACKEND - APP MENSAJERIA IES
+============================
+
+Documento de referencia basado en las rutas y archivos que están implementados
+actualmente en la carpeta backend.
+
+
+1. TECNOLOGIAS
+--------------
+
+- Python: lenguaje del backend.
+- FastAPI: framework HTTP y WebSocket; genera documentación OpenAPI.
+- Uvicorn: servidor ASGI para ejecutar la aplicación.
+- Pydantic: validación de datos de entrada y salida mediante schemas.
+- SQLAlchemy: ORM y acceso a la base de datos.
+- Alembic: control y ejecución de migraciones de base de datos.
+- PostgreSQL: motor previsto para despliegue, con el driver psycopg2-binary.
+- SQLite: motor alternativo predeterminado para desarrollo cuando no se
+  configura DATABASE_URL.
+- PyJWT y bcrypt: creación y validación de tokens JWT y hash de contraseñas.
+- python-dotenv: carga de variables desde un archivo .env.
+- WebSockets: comunicación en tiempo real para mensajes en canales y mensajes
+  directos.
+
+
+2. ESTRUCTURA DEL BACKEND
+-------------------------
+
+backend/
+|-- main.py
+|   Punto de entrada de FastAPI. Crea la aplicación, configura CORS e incluye
+|   los routers de la API bajo /api/v1. También define / y /health.
+|-- requirements.txt
+|   Dependencias de Python del backend.
+|-- alembic.ini
+|   Configuración de Alembic.
+|-- seed.py
+|   Script de carga inicial de datos.
+|-- alembic/
+|   |-- env.py
+|   |   Configuración del entorno de migraciones.
+|   |-- versions/
+|       Revisiones de esquema de base de datos.
+|-- app/
+    |-- api/v1/
+    |   Un paquete por recurso o funcionalidad. Los paquetes suelen separar:
+    |   router.py (rutas HTTP/WebSocket), schemas.py (contratos de datos) y
+    |   repository.py (operaciones de persistencia).
+    |-- core/
+    |   db.py: conexión, sesiones y dependencia get_db.
+    |   deps.py: dependencias de autenticación y comprobación de roles.
+    |   security.py: hash de contraseñas y tokens JWT.
+    |   ws_manager.py: gestión de conexiones WebSocket.
+    |-- models/
+        Modelos SQLAlchemy que representan las entidades de la base de datos.
+
+
+3. CONFIGURACION Y FUNCIONAMIENTO
+---------------------------------
+
+- Prefijo común de las rutas REST: /api/v1
+- Documentación interactiva de FastAPI: /docs
+- Esquema OpenAPI: /openapi.json
+- Endpoint raíz: GET /
+- Comprobación de salud de la API y conexión a base de datos: GET /health
+- CORS está configurado para permitir el frontend local en
+  http://localhost:5173.
+- La conexión se configura mediante DATABASE_URL. Si no está definida, el
+  código usa sqlite:///./mensajeria_ies.db.
+- La autenticación utiliza tokens Bearer JWT. La configuración contempla
+  SECRET_KEY y ACCESS_TOKEN_MINUTES (60 minutos por defecto).
+- Los routers REST usan schemas Pydantic y respuestas JSON. Las operaciones de
+  creación devuelven normalmente HTTP 201; las eliminaciones exitosas devuelven
+  HTTP 204.
+- Las migraciones de producción se gestionan con Alembic. La creación directa
+  de tablas con Base.metadata.create_all está comentada en main.py.
+
+
+4. RUTAS IMPLEMENTADAS
+----------------------
+
+Todas las rutas de esta sección son relativas al prefijo /api/v1, salvo que se
+indique lo contrario. En los recursos CRUD estándar:
+
+  GET    /<recurso>/             Lista registros.
+  GET    /<recurso>/{id}         Obtiene un registro.
+  POST   /<recurso>/             Crea un registro.
+  PUT    /<recurso>/{id}         Actualiza un registro.
+  DELETE /<recurso>/{id}         Elimina un registro.
+
+Los nombres de recurso e identificadores concretos se indican en la tabla.
+
+Autenticacion
+  POST /auth/login
+      Recibe el formulario OAuth2 (username y password); el identificador
+      puede ser el correo electrónico o el nombre de usuario. Devuelve el
+      token Bearer y los datos del usuario.
+  GET /auth/me
+      Devuelve la información del usuario asociado al token válido.
+
+Usuarios y permisos
+  /usuarios/                 CRUD estándar; identificador {usuario_id}.
+  /perfiles/                 POST / para crear un perfil.
+                             GET /usuario/{usuario_id} para consultar el perfil
+                             de un usuario.
+                             PUT /usuario/{usuario_id} para actualizarlo.
+  /roles/                    CRUD estándar; identificador {rol_id}.
+  /usuario-rol/              CRUD estándar; identificador {usuario_rol_id}.
+                             DELETE /usuario/{usuario_id}/rol/{rol_id} permite
+                             borrar la asignación por usuario y rol.
+
+Servidores, categorias y canales
+  /servidores/               CRUD estándar; identificador {servidor_id}.
+  /categorias/               CRUD estándar; identificador {categoria_id}.
+  /canales/                  CRUD estándar; identificador {canal_id}.
+  /miembros-servidor/        GET / lista; POST / crea; las operaciones sobre
+                             un miembro usan
+                             /{usuario_id}/{servidor_id}.
+  /miembros-canal/           CRUD estándar; identificador {miembro_canal_id}.
+
+Mensajeria
+  /mensajes/                 CRUD; identificador {mensaje_id}. El listado
+                             acepta el parámetro opcional canal_id.
+  /mensajes-directos/        CRUD; identificador {mensaje_directo_id}.
+
+Comunicados y lecturas
+  /comunicados/              GET / lista, POST / crea, GET /{comunicado_id}
+                             consulta y PUT /{comunicado_id} actualiza.
+                             DELETE /{comunicado_id} mueve el comunicado a la
+                             papelera (borrado lógico).
+                             GET /papelera lista los eliminados.
+                             PATCH /{comunicado_id}/restaurar restaura uno.
+                             DELETE /{comunicado_id}/definitivo lo elimina de
+                             forma definitiva.
+  /comunicados-destinatarios/
+                             CRUD estándar; identificador {destinatario_id}.
+  /comunicados-vistos/       CRUD estándar; identificador {visto_id}.
+  /mensajes-vistos/          CRUD estándar; identificador {visto_id}.
+
+Otros recursos
+  /notificaciones/           CRUD estándar; identificador {notificacion_id}.
+  /recordatorios/            CRUD estándar; identificador {recordatorio_id}.
+  /relaciones-usuario/       CRUD estándar; identificador {relacion_id}.
+
+
+5. COMUNICACION EN TIEMPO REAL
+------------------------------
+
+Además de las rutas HTTP, hay dos WebSockets:
+
+- WS /api/v1/mensajes/ws/canal/{canal_id}
+  Recibe mensajes para el canal, los guarda y los retransmite a las conexiones
+  activas de ese canal.
+
+- WS /api/v1/mensajes-directos/ws/directo/{usuario_id}
+  Recibe mensajes directos para el usuario conectado, los guarda y los envía
+  al emisor y al receptor cuando tienen conexiones activas.
+
+
+6. NOTAS
+--------
+
+- Los routers REST se implementan por recurso; las rutas exactas y los
+  identificadores pueden consultarse en los archivos router.py de cada paquete
+  bajo app/api/v1/.
+- La presencia de una ruta en este inventario describe que está definida en el
+  código. La autenticación y autorización efectiva dependen de las dependencias
+  que aplique cada router.
+- La comprobación /health informa de los errores de conexión a la base de datos
+  en su respuesta cuando la comprobación falla.

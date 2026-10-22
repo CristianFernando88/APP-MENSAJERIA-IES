@@ -4,6 +4,46 @@ Este documento describe las 18 entidades registradas en `backend/app/models`, de
 
 > Los valores predeterminados de fecha se generan en la aplicación mediante `datetime.utcnow`. Las referencias a valores como `chat`, `global` o `tutor` describen convenciones del código: los modelos no declaran restricciones `CHECK` que limiten esos valores.
 
+## Diagrama entidad-relación
+
+```mermaid
+erDiagram
+    USUARIO ||--o| PERFIL : tiene
+    USUARIO ||--o{ USUARIO_ROL : recibe
+    ROL ||--o{ USUARIO_ROL : asignado
+    SERVIDOR o|--o{ USUARIO_ROL : contexto
+    USUARIO o|--o{ USUARIO_ROL : asigna
+    USUARIO ||--o{ SERVIDOR : crea
+    USUARIO ||--o{ MIEMBRO_SERVIDOR : participa
+    SERVIDOR ||--o{ MIEMBRO_SERVIDOR : incluye
+    SERVIDOR ||--o{ CATEGORIA : contiene
+    CATEGORIA o|--o{ CATEGORIA : padre
+    SERVIDOR ||--o{ CANAL : contiene
+    CATEGORIA o|--o{ CANAL : organiza
+    USUARIO ||--o{ CANAL : crea
+    USUARIO ||--o{ MIEMBRO_CANAL : participa
+    CANAL ||--o{ MIEMBRO_CANAL : incluye
+    USUARIO ||--o{ MENSAJE : escribe
+    CANAL ||--o{ MENSAJE : contiene
+    USUARIO ||--o{ MENSAJE_DIRECTO : emite
+    USUARIO ||--o{ MENSAJE_DIRECTO : recibe
+    USUARIO ||--o{ COMUNICADO : publica
+    COMUNICADO ||--o{ COMUNICADO_DESTINATARIO : dirige
+    SERVIDOR o|--o{ COMUNICADO_DESTINATARIO : destino
+    CANAL o|--o{ COMUNICADO_DESTINATARIO : destino
+    USUARIO o|--o{ COMUNICADO_DESTINATARIO : destino
+    COMUNICADO ||--o{ COMUNICADO_VISTO : registra
+    USUARIO ||--o{ COMUNICADO_VISTO : visualiza
+    MENSAJE ||--o{ MENSAJE_VISTO : registra
+    USUARIO ||--o{ MENSAJE_VISTO : visualiza
+    USUARIO ||--o{ NOTIFICACION : recibe
+    USUARIO ||--o{ RECORDATORIO : tiene
+    USUARIO ||--o{ RELACION_USUARIO : relacion
+    USUARIO ||--o{ RELACION_USUARIO : relacionado
+```
+
+Las relaciones opcionales del diagrama corresponden a claves foráneas que aceptan `NULL`. `USUARIO_ROL` y `MIEMBRO_SERVIDOR` son entidades de asociación; los destinos de `COMUNICADO_DESTINATARIO` son opcionales en el modelo.
+
 ## Entidades
 
 En las tablas siguientes, **Obligatorio** indica `nullable=False`; las claves primarias también son obligatorias. Si el modelo no especifica `nullable`, la columna permite `NULL` según la configuración predeterminada de SQLAlchemy.
@@ -29,6 +69,7 @@ En las tablas siguientes, **Obligatorio** indica `nullable=False`; las claves pr
 | `apellidos` | String(100) | No | — |
 | `foto_perfil` | String(255) | No | — |
 | `biografia` | Text | No | — |
+| `dni` | String(8) | No | Único |
 
 `usuario_id` único hace que cada perfil pertenezca a un solo usuario y que un usuario tenga como máximo un perfil.
 
@@ -138,15 +179,17 @@ El modelo no declara una restricción única sobre el par `usuario_id` y `canal_
 | `titulo` | String(200) | Sí | — |
 | `contenido` | Text | Sí | — |
 | `fecha_publicacion` | DateTime | No | `datetime.utcnow` |
+| `fecha_evento` | DateTime | No | — |
 | `publicado_por` | Integer | Sí | FK → `usuario.id_usuario` |
 | `tipo` | String(20) | Sí | `global`; también se documentan `servidor`, `canal` y `usuario`, sin restricción de valores en el modelo |
+| `eliminado` | Boolean | Sí | `False`, `server_default="false"` |
 
 ### ComunicadoDestinatario — `comunicado_destinatario`
 
 | Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
 |---|---|---:|---|
 | `id_comunicado_destinatario` | Integer | Sí | PK, autoincremental |
-| `comunicado_id` | Integer | Sí | FK → `comunicado.id_comunicado` |
+| `comunicado_id` | Integer | Sí | FK → `comunicado.id_comunicado`, `ON DELETE CASCADE` |
 | `servidor_id` | Integer | No | FK → `servidor.id_servidor` |
 | `canal_id` | Integer | No | FK → `canal.id_canal` |
 | `usuario_id` | Integer | No | FK → `usuario.id_usuario` |
@@ -158,7 +201,7 @@ Los modelos permiten que las tres columnas de destinatario sean nulas; no declar
 | Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
 |---|---|---:|---|
 | `id_comunicado_visto` | Integer | Sí | PK, autoincremental |
-| `comunicado_id` | Integer | Sí | FK → `comunicado.id_comunicado` |
+| `comunicado_id` | Integer | Sí | FK → `comunicado.id_comunicado`, `ON DELETE CASCADE` |
 | `usuario_id` | Integer | Sí | FK → `usuario.id_usuario` |
 | `fecha_visto` | DateTime | No | `datetime.utcnow` |
 
