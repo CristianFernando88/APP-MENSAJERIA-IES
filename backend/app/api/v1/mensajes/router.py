@@ -1,15 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
-from typing import Dict, List
 import json
 
-# Importamos tu SessionLocal desde core/db
 from app.core.db import get_db, SessionLocal 
+from app.core.ws_manager import manager  # Importamos el manager global
 from . import repository as repo
 from .schemas import MensajeCreate, MensajeUpdate, MensajeResponse
-# Importamos lo necesario para mensajes directos
-from app.api.v1.mensaje_directo import repository as repo_dm
-from app.api.v1.mensaje_directo.schemas import MensajeDirectoCreate
 
 router = APIRouter(prefix="/mensajes", tags=["Mensajes"])
 
@@ -73,45 +69,8 @@ def eliminar(
     return None
 
 # ==========================================
-# 2. WEBSOCKETS (Tiempo real)
+# 2. WEBSOCKET (Solo para Canales)
 # ==========================================
-
-class ConnectionManager:
-    def __init__(self):
-        # Conexiones para Canales: { canal_id: [ws1, ws2] }
-        self.canales: Dict[int, List[WebSocket]] = {}
-        # Conexiones para Directos: { usuario_id: ws }
-        self.directos: Dict[int, WebSocket] = {}
-
-    # --- Canales ---
-    async def connect_canal(self, websocket: WebSocket, canal_id: int):
-        await websocket.accept()
-        if canal_id not in self.canales:
-            self.canales[canal_id] = []
-        self.canales[canal_id].append(websocket)
-
-    def disconnect_canal(self, websocket: WebSocket, canal_id: int):
-        if canal_id in self.canales:
-            if websocket in self.canales[canal_id]:
-                self.canales[canal_id].remove(websocket)
-            if not self.canales[canal_id]:
-                del self.canales[canal_id]
-
-    async def broadcast_canal(self, message: dict, canal_id: int):
-        if canal_id in self.canales:
-            for connection in self.canales[canal_id]:
-                await connection.send_json(message)
-
-    # --- Directos ---
-    async def connect_directo(self, websocket: WebSocket, usuario_id: int):
-        await websocket.accept()
-        self.directos[usuario_id] = websocket
-
-    def disconnect_directo(self, usuario_id: int):
-        if usuario_id in self.directos:
-            del self.directos[usuario_id]
-
-manager = ConnectionManager()
 
 @router.websocket("/ws/canal/{canal_id}")
 async def websocket_canal(websocket: WebSocket, canal_id: int):
@@ -141,43 +100,5 @@ async def websocket_canal(websocket: WebSocket, canal_id: int):
             
     except WebSocketDisconnect:
         manager.disconnect_canal(websocket, canal_id)
-    finally:
-        db.close()
-
-@router.websocket("/ws/directo/{usuario_id}")
-async def websocket_directo(websocket: WebSocket, usuario_id: int):
-    await manager.connect_directo(websocket, usuario_id)
-    db = SessionLocal()
-    try:
-        while True:
-            data_str = await websocket.receive_text()
-            data = json.loads(data_str)
-            
-            mensaje_data = MensajeDirectoCreate(
-                contenido=data["contenido"],
-                emisor_id=usuario_id,
-                receptor_id=data["receptor_id"]
-            )
-            nuevo = repo_dm.create(db, mensaje_data)
-            
-            payload = {
-                "id_mensaje_directo": nuevo.id_mensaje_directo,
-                "contenido": nuevo.contenido,
-                "emisor_id": nuevo.emisor_id,
-                "receptor_id": nuevo.receptor_id,
-                "fecha_envio": nuevo.fecha_envio.isoformat(),
-                "leido": nuevo.leido
-            }
-            
-            # Enviamos al receptor (si está conectado)
-            if data["receptor_id"] in manager.directos:
-                await manager.directos[data["receptor_id"]].send_json(payload)
-                
-            # Enviamos al emisor (para que vea su propio mensaje)
-            if usuario_id in manager.directos:
-                await manager.directos[usuario_id].send_json(payload)
-
-    except WebSocketDisconnect:
-        manager.disconnect_directo(usuario_id)
     finally:
         db.close()

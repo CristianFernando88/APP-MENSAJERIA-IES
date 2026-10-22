@@ -7,8 +7,6 @@ const WS_URL = API_URL.replace(/^http/, "ws");
 export function useWebSocket(path, onMessageReceived) {
   const [isConnected, setIsConnected] = useState(false);
   const ws = useRef(null);
-  
-  // Guardamos la función en un ref para que no active reconexiones
   const onMessageRef = useRef(onMessageReceived);
 
   useEffect(() => {
@@ -21,7 +19,18 @@ export function useWebSocket(path, onMessageReceived) {
       return;
     }
 
-    const socket = new WebSocket(`${WS_URL}/mensajes/ws/${path}`);
+    // NUEVA LÓGICA: Detectar si es canal o directo para armar la URL
+    let fullUrl = "";
+    if (path.startsWith("canal/")) {
+      fullUrl = `${WS_URL}/mensajes/ws/${path}`;
+    } else if (path.startsWith("directo/")) {
+      fullUrl = `${WS_URL}/mensajes-directos/ws/${path}`;
+    } else {
+      console.error("Ruta de WebSocket no válida:", path);
+      return;
+    }
+
+    const socket = new WebSocket(fullUrl);
     ws.current = socket;
 
     socket.onopen = () => setIsConnected(true);
@@ -29,9 +38,7 @@ export function useWebSocket(path, onMessageReceived) {
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (onMessageRef.current) {
-          onMessageRef.current(data);
-        }
+        if (onMessageRef.current) onMessageRef.current(data);
       } catch (err) {
         console.error("Error en WebSocket:", err);
       }
@@ -42,7 +49,7 @@ export function useWebSocket(path, onMessageReceived) {
     return () => {
       socket.close();
     };
-  }, [path]); // SOLO depende de path. No de la función.
+  }, [path]);
 
   const sendMessage = (data) => {
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
