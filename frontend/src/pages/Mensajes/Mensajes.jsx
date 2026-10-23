@@ -444,7 +444,7 @@ export default function Mensajes() {
                 <p className="mensajes__section-title">Mensajes Directos</p>
                 {usuariosFiltrados.map((u) => (
                   <button key={`u-${u.id_usuario}`} className={`mensajes__item ${chatActivo?.tipo === "directo" && chatActivo?.id === u.id_usuario ? "mensajes__item--active" : ""}`} onClick={() => setChatActivo({ tipo: "directo", id: u.id_usuario, nombre: getNombre(u.id_usuario) })}>
-                    <div className="mensajes__avatar">{getNombre(u.id_usuario).charAt(0)}</div>
+                    <div className="mensajes__avatar">{u.perfil?.foto_perfil ? <img src={u.perfil.foto_perfil} alt={`Foto de ${getNombre(u.id_usuario)}`} /> : getNombre(u.id_usuario).charAt(0).toUpperCase()}</div>
                     <div className="mensajes__item-content">
                       <div className="mensajes__item-top">
                         <span className="mensajes__item-name">{getNombre(u.id_usuario)}</span>

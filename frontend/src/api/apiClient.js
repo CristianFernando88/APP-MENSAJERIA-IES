@@ -116,3 +116,20 @@ export async function apiDelete(ruta) {
   });
   return manejarRespuesta(response);
 }
+
+
+export async function apiUpload(ruta, archivo) {
+  const token = localStorage.getItem("access_token");
+  const formData = new FormData();
+  formData.append("archivo", archivo);
+
+  const response = await fetch(`${API_URL}${ruta}`, {
+    method: "POST",
+    headers: {
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
+    body: formData,
+  });
+
+  return manejarRespuesta(response);
+}
