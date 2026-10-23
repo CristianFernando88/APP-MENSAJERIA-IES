@@ -1,11 +1,23 @@
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { User, LogOut } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { obtenerPerfil } from "../../api/perfiles";
 import "./UserMenu.css";
 
 export default function UserMenu({ onClose }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+
+  const [fotoPerfil, setFotoPerfil] = useState("");
+
+  useEffect(() => {
+    if (!user?.id_usuario) return;
+
+    obtenerPerfil(user.id_usuario)
+      .then((perfil) => setFotoPerfil(perfil?.foto_perfil || ""))
+      .catch(() => setFotoPerfil(""));
+  }, [user?.id_usuario]);
 
   const handleLogout = () => {
     logout();
@@ -16,7 +28,7 @@ export default function UserMenu({ onClose }) {
   return (
     <div className="user-menu">
       <div className="user-menu__header">
-        <div className="user-menu__avatar">{user?.nombre_usuario?.charAt(0).toUpperCase()}</div>
+        <div className="user-menu__avatar">{fotoPerfil ? <img src={fotoPerfil} alt="Foto de perfil" /> : user?.nombre_usuario?.charAt(0).toUpperCase()}</div>
         <p className="user-menu__name">{user?.nombre_usuario}</p>
         <p className="user-menu__email">{user?.rol}</p>
       </div>
