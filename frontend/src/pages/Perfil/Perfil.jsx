@@ -5,6 +5,7 @@ import Input from "../../components/ui/Input/Input";
 import Button from "../../components/ui/Button/Button";
 import Badge from "../../components/ui/Badge/Badge";
 import "./Perfil.css";
+import { obtenerPerfil, subirFotoPerfil } from "../../api/perfiles";
 
 export default function Perfil() {
   const { user } = useAuth();
@@ -15,6 +16,11 @@ export default function Perfil() {
   const [mensaje, setMensaje] = useState("");
   const [editando, setEditando] = useState(false);
   const [guardando, setGuardando] = useState(false);
+
+  const [datosPerfil, setDatosPerfil] = useState(null);
+  const [archivoFoto, setArchivoFoto] = useState(null);
+  const [fotoPreview, setFotoPreview] = useState("");
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
 
   const [form, setForm] = useState({
     nombre_usuario: "",
@@ -34,9 +40,11 @@ export default function Perfil() {
       setError("");
       try {
         const data = await obtenerUsuario(user.id_usuario);
+        const dataPerfil = await obtenerPerfil(user.id_usuario);
         if (cancelado) return;
 
         setPerfil(data);
+        setDatosPerfil(dataPerfil);
         setForm({
           nombre_usuario: data.nombre_usuario || "",
           email: data.email || "",
@@ -60,6 +68,58 @@ export default function Perfil() {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
+
+  
+  const handleSeleccionarFoto = (e) => {
+    const archivo = e.target.files?.[0];
+
+    if (!archivo) return;
+
+    setMensaje("");
+    setError("");
+
+    const formatosPermitidos = ["image/jpeg", "image/png", "image/webp"];
+
+    if (!formatosPermitidos.includes(archivo.type)) {
+      setError("Elegí una imagen JPG, PNG o WEBP.");
+      e.target.value = "";
+      return;
+    }
+
+    if (archivo.size > 5 * 1024 * 1024) {
+      setError("La imagen no puede superar los 5 MB.");
+      e.target.value = "";
+      return;
+    }
+
+    setArchivoFoto(archivo);
+    setFotoPreview(URL.createObjectURL(archivo));
+  };
+
+  const handleSubirFoto = async () => {
+    if (!user?.id_usuario || !archivoFoto) return;
+
+    setSubiendoFoto(true);
+    setMensaje("");
+    setError("");
+
+    try {
+      const actualizado = await subirFotoPerfil(
+        user.id_usuario,
+        archivoFoto
+      );
+
+      setDatosPerfil(actualizado);
+      setFotoPreview(actualizado.foto_perfil || "");
+      setArchivoFoto(null);
+      setMensaje("Foto de perfil actualizada correctamente.");
+    } catch (err) {
+      setError(err?.message || "No se pudo subir la foto.");
+    } finally {
+      setSubiendoFoto(false);
+    }
+  };
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -115,7 +175,14 @@ export default function Perfil() {
     <section className="perfil">
       <div className="perfil__header">
         <div className="perfil__avatar">
-          <span>{iniciales}</span>
+          {fotoPreview || datosPerfil?.foto_perfil ? (
+            <img
+              src={fotoPreview || datosPerfil.foto_perfil}
+              alt="Foto de perfil"
+            />
+          ) : (
+            <span>{iniciales}</span>
+          )}
         </div>
 
         <div>
@@ -126,6 +193,31 @@ export default function Perfil() {
             {perfil?.activo ? "Activo" : "Inactivo"}
           </Badge>
         </div>
+      </div>
+
+      <div className="perfil__foto-acciones">
+        <label htmlFor="foto-perfil" className="perfil__foto-boton">
+          Elegir foto
+        </label>
+
+        <input
+          id="foto-perfil"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={handleSeleccionarFoto}
+          hidden
+        />
+
+        {archivoFoto && (
+          <button
+            type="button"
+            className="perfil__foto-boton"
+            onClick={handleSubirFoto}
+            disabled={subiendoFoto}
+          >
+            {subiendoFoto ? "Subiendo..." : "Guardar foto"}
+          </button>
+        )}
       </div>
 
       {mensaje && <p className="perfil__mensaje-exito">{mensaje}</p>}
