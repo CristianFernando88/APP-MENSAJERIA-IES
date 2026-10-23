@@ -343,6 +343,14 @@ export default function Mensajes() {
     return u?.perfil ? `${u.perfil.nombres} ${u.perfil.apellidos}` : u?.nombre_usuario || "Desconocido";
   };
 
+  const getFotoPerfil = (id) => {
+    const usuario = usuarios.find(
+      (u) => Number(u.id_usuario) === Number(id)
+    );
+    
+    return usuario?.perfil?.foto_perfil || "";
+  };
+
   const canalesFiltrados = canales.filter(c => c.nombre.toLowerCase().includes(busqueda.toLowerCase()));
   
   const usuariosFiltrados = useMemo(() => {
@@ -471,7 +479,7 @@ export default function Mensajes() {
               <div className="mensajes__chat-header">
                 <button className="mensajes__back" onClick={() => setChatActivo(null)}><ChevronLeft size={20} /></button>
                 <div className={`mensajes__avatar mensajes__avatar--sm ${chatActivo.tipo === "canal" ? "mensajes__avatar--canal" : ""}`}>
-                  {chatActivo.tipo === "canal" ? <Hash size={16} /> : chatActivo.nombre.charAt(0)}
+                  {chatActivo.tipo === "canal" ? <Hash size={16} /> : getFotoPerfil(chatActivo.id) ? <img src={getFotoPerfil(chatActivo.id)} alt={`Foto de ${chatActivo.nombre}`} /> : chatActivo.nombre.charAt(0).toUpperCase()}
                 </div>
                 <div>
                   <p className="mensajes__chat-name">{chatActivo.nombre}</p>
@@ -524,7 +532,7 @@ export default function Mensajes() {
             {contactosParaNuevoChat.length === 0 && <p className="mensajes__list-empty">No se encontraron usuarios.</p>}
             {contactosParaNuevoChat.map((u) => (
               <button key={u.id_usuario} className="mensajes__contact-item" onClick={() => { setChatActivo({ tipo: "directo", id: u.id_usuario, nombre: getNombre(u.id_usuario) }); setModalNuevoChat(false); }}>
-                <div className="mensajes__avatar">{getNombre(u.id_usuario).charAt(0)}</div>
+                <div className="mensajes__avatar">{u.perfil?.foto_perfil ? <img src={u.perfil.foto_perfil} alt={`Foto de ${getNombre(u.id_usuario)}`} /> : getNombre(u.id_usuario).charAt(0).toUpperCase()}</div>
                 <div>
                   <p className="mensajes__contact-name">{getNombre(u.id_usuario)}</p>
                   <p className="mensajes__contact-cargo">@{u.nombre_usuario}</p>

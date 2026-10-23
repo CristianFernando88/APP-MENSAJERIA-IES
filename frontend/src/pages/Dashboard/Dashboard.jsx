@@ -10,6 +10,7 @@ import { listarServidores } from "../../api/servidores";
 import useComunicadosNoLeidos from "../../hooks/useComunicadosNoLeidos";
 import { useAuth } from "../../context/AuthContext";
 import { useNotificaciones } from "../../context/NotificacionesContext";
+import { obtenerPerfil } from "../../api/perfiles";
 import "./Dashboard.css";
 
 const accesos = [
@@ -27,6 +28,15 @@ const iniciales = (nombre = "") => nombre.slice(0, 2).toUpperCase();
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [fotoPerfil, setFotoPerfil] = useState("");
+
+  useEffect(() => {
+    if (!user?.id_usuario) return;
+    obtenerPerfil(user.id_usuario)
+      .then((perfil) => setFotoPerfil(perfil?.foto_perfil || ""))
+      .catch(() => setFotoPerfil(""));
+  }, [user?.id_usuario]);
+
   const { totalNoLeidos, setTotalNoLeidos } = useNotificaciones();
 
   const noLeidos = useComunicadosNoLeidos();
@@ -153,7 +163,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="dash-hero__avatar">{iniciales(user?.nombre_usuario)}</div>
+        <div className="dash-hero__avatar">{fotoPerfil ? <img src={fotoPerfil} alt="Foto de perfil" /> : iniciales(user?.nombre_usuario)}</div>
       </header>
 
       {error && <div className="dash-alert">{error}</div>}
