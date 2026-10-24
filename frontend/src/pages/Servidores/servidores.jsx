@@ -1,579 +1,1107 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import {
-  Search, Server, FolderTree, Hash, Megaphone, ChevronRight,
-  AlertCircle, Loader2, Tags, Pencil, Trash2, Users, UserPlus
-} from "lucide-react";
-import Button from "../../components/ui/Button/Button";
-import Input from "../../components/ui/Input/Input";
-import Select from "../../components/ui/Select/Select";
-import Modal from "../../components/ui/Modal/Modal";
-import UsuarioForm from "../../components/forms/UsuarioForm";
+import React, { useState, useMemo } from "react";
 import "./servidores.css";
-import { listarServidores, obtenerJerarquiaServidor } from "../../api/servidores";
-import { listarCategoriasPorServidor, crearCategoria, actualizarCategoria, eliminarCategoria } from "../../api/categorias";
-import { crearCanal, actualizarCanal, eliminarCanal } from "../../api/canales";
-import { listarUsuarios, crearUsuario } from "../../api/usuarios";
-import { crearPerfil } from "../../api/perfiles";
-import { crearMiembroServidor, eliminarMiembroServidor, listarMiembrosServidor } from "../../api/miembrosServidor";
-import { listarUsuarioRol, crearUsuarioRol, eliminarUsuarioRol } from "../../api/usuarioRol";
-import { listarRoles } from "../../api/roles";
-import { useAuth } from "../../context/AuthContext";
+
+const IconSearch = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+  </svg>
+);
+const IconChevronRight = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+  </svg>
+);
+const IconChevronDown = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+  </svg>
+);
+const IconChevronUp = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+  </svg>
+);
+const IconPlus = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+  </svg>
+);
+const IconHash = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+  </svg>
+);
+const IconUsers = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+  </svg>
+);
+const IconTag = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+  </svg>
+);
+const IconServer = ({ size = 18, className = "" }) => (
+  <svg width={size} height={size} className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+  </svg>
+);
+const IconClose = ({ size = 18, className = "" }) => (
+  <svg width={size} height={size} className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+  </svg>
+);
+const IconTrash = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+  </svg>
+);
+const IconArrowLeft = ({ size = 16, className = "" }) => (
+  <svg width={size} height={size} className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+  </svg>
+);
+
+const INITIAL_SERVIDORES = [
+  { id: 1, nombre: "Secundaria", descripcion: "Nivel secundario" },
+  { id: 2, nombre: "Primaria", descripcion: "Nivel primario" },
+  { id: 3, nombre: "Nivel Inicial", descripcion: "Servidor para nivel inicial" },
+  { id: 4, nombre: "Servidor de prueba 1", descripcion: "este es mi servidor" },
+  { id: 5, nombre: "Escuela Nocturna", descripcion: "Turno noche - Aulas 201 a 208" },
+];
+
+const INITIAL_MIEMBROS = [
+  {
+    id: 1,
+    servidorId: 1,
+    nombres: "Roberto",
+    apellidos: "Gómez",
+    rol: "Director",
+    email: "director@colegio.edu",
+    dni: "20345678",
+    usuario: "rgomez",
+    activo: true,
+    fechaRegistro: "12/03/2025",
+    canales: [
+      { id: 101, nombre: "1° año A", rolInCanal: "admin" },
+      { id: 102, nombre: "5° Año - Anuncios", rolInCanal: "admin" }
+    ],
+    roles: [{ id: 201, nombre: "Director", contexto: "Secundaria · asignado el 12/03/2025" }],
+    vinculosFamiliares: []
+  },
+  {
+    id: 2,
+    servidorId: 2,
+    nombres: "Juan",
+    apellidos: "Pérez",
+    rol: "Profesor",
+    email: "juan@colegio.edu",
+    dni: "30123456",
+    usuario: "jperez",
+    activo: true,
+    fechaRegistro: "15/04/2024",
+    canales: [
+      { id: 103, nombre: "4° Grado - General", rolInCanal: "miembro" }
+    ],
+    roles: [{ id: 202, nombre: "Profesor", contexto: "Primaria · asignado el 15/04/2024" }],
+    vinculosFamiliares: []
+  }
+];
+
+const INITIAL_CANALES = [
+  { id: 1, servidorId: 1, nombre: "1° año A", tipo: "General / Chat", categoria: "Ciclo Básico", descripcion: "Canal oficial de notificaciones 1° año" },
+  { id: 2, servidorId: 1, nombre: "5° Año - Anuncios", tipo: "Anuncios / Avisos", categoria: "Ciclo Orientado", descripcion: "Avisos importantes de egresos" },
+  { id: 5, servidorId: 2, nombre: "4° Grado - General", tipo: "General / Chat", categoria: "Segundo Ciclo", descripcion: "Canal general de cuarto grado" },
+  { id: 7, servidorId: 3, nombre: "Sala de 5 - Novedades", tipo: "Informativo", categoria: "Salas", descripcion: "Información diaria para los papás" }
+];
+
+const INITIAL_CATEGORIAS = [
+  { id: 1, servidorId: 1, nombre: "Ciclo Básico (1° a 3° Año)", descripcion: "Canales del ciclo básico", orden: 1 },
+  { id: 2, servidorId: 1, nombre: "Ciclo Orientado (4° a 6° Año)", descripcion: "Canales del ciclo orientado", orden: 2 },
+  { id: 3, servidorId: 2, nombre: "Segundo Ciclo", descripcion: "Canales de 4°, 5° y 6° grado", orden: 1 },
+  { id: 5, servidorId: 3, nombre: "Salas", descripcion: "Salas de 3, 4 y 5 años", orden: 1 }
+];
 
 export default function Servidores() {
-  const navigate = useNavigate();
-  const { user, hasRole } = useAuth();
-
-  const [todosLosServidores, setTodosLosServidores] = useState([]);
-  const [todosLosRoles, setTodosLosRoles] = useState([]);
-  const [rolesDefinidos, setRolesDefinidos] = useState([]);
-  const [misMembresias, setMisMembresias] = useState([]);
-  const [todosLosUsuarios, setTodosLosUsuarios] = useState([]);
-  
-  const [loadingServidores, setLoadingServidores] = useState(true);
-  const [errorServidores, setErrorServidores] = useState("");
-
+  const [servidores] = useState(INITIAL_SERVIDORES);
+  const [servidorActivo, setServidorActivo] = useState(INITIAL_SERVIDORES[0]);
   const [busquedaServidor, setBusquedaServidor] = useState("");
-  const [servidorSeleccionado, setServidorSeleccionado] = useState(null);
-  const [activeTab, setActiveTab] = useState("canales");
+  const [tabActiva, setTabActiva] = useState("canales"); 
   
-  const [jerarquia, setJerarquia] = useState(null);
-  const [loadingJerarquia, setLoadingJerarquia] = useState(false);
-  const [canalActivoId, setCanalActivoId] = useState(null);
+  const [busquedaCanal, setBusquedaCanal] = useState("");
+  const [filtroTipoCanal, setFiltroTipoCanal] = useState("todos");
 
-  const [categoriasGestion, setCategoriasGestion] = useState([]);
-  const [modalCategoria, setModalCategoria] = useState(false);
-  const [categoriaEditando, setCategoriaEditando] = useState(null);
-  const [guardandoCategoria, setGuardandoCategoria] = useState(false);
-  const [formCategoria, setFormCategoria] = useState({ nombre: "", descripcion: "" });
+  const [busquedaCategoria, setBusquedaCategoria] = useState("");
 
-  const [modalCanal, setModalCanal] = useState(false);
-  const [canalEditando, setCanalEditando] = useState(null);
-  const [guardandoCanal, setGuardandoCanal] = useState(false);
-  const [formCanal, setFormCanal] = useState({ nombre: "", tipo: "chat", categoria_id: "" });
+  const [busquedaMiembro, setBusquedaMiembro] = useState("");
+  const [filtroRolMiembro, setFiltroRolMiembro] = useState("todos");
 
-  const [modalMiembro, setModalMiembro] = useState(false);
-  const [busquedaUsuario, setBusquedaUsuario] = useState("");
-  const [usuarioSeleccionado, setUsuarioSeleccionado] = useState("");
-  const [creandoUsuarioNuevo, setCreandoUsuarioNuevo] = useState(false);
-  const [guardandoUsuario, setGuardandoUsuario] = useState(false);
+  const [canales, setCanales] = useState(INITIAL_CANALES);
+  const [categorias, setCategorias] = useState(INITIAL_CATEGORIAS);
+  const [miembros, setMiembros] = useState(INITIAL_MIEMBROS);
 
-  const [modalEditarRoles, setModalEditarRoles] = useState(false);
-  const [usuarioEditandoRoles, setUsuarioEditandoRoles] = useState(null);
-  const [rolesSeleccionadosEdicion, setRolesSeleccionadosEdicion] = useState([]);
+  const [itemSeleccionado, setItemSeleccionado] = useState(null); // { tipo: 'canal'|'categoria'|'miembro'|'nuevo_canal'|'nueva_categoria'|'nuevo_miembro', data: ... }
+  const [formData, setFormData] = useState({});
 
-  useEffect(() => {
-    let cancelado = false;
-    async function cargarDatos() {
-      setLoadingServidores(true);
-      try {
-        const [servidores, asignaciones, membresias, roles, usuarios] = await Promise.all([
-          listarServidores(), listarUsuarioRol(), listarMiembrosServidor(), listarRoles(), listarUsuarios(),
-        ]);
-        if (cancelado) return;
-        setTodosLosServidores(servidores || []);
-        setTodosLosRoles(asignaciones || []);
-        setMisMembresias(membresias || []);
-        setRolesDefinidos(roles || []);
-        setTodosLosUsuarios(usuarios || []);
-      } catch (err) {
-        if (!cancelado) setErrorServidores(err?.message || "Error al cargar datos");
-      } finally {
-        if (!cancelado) setLoadingServidores(false);
-      }
-    }
-    cargarDatos();
-    return () => { cancelado = true; };
-  }, []);
+  const [accordionOpen, setAccordionOpen] = useState({
+    canales: true,
+    roles: false,
+    vinculos: false,
+    servidor: false
+  });
 
-  const misServidores = useMemo(() => {
-    if (!user) return [];
-    if (hasRole(["super_admin", "admin"])) return todosLosServidores;
-    const misIds = misMembresias
-      .filter((m) => Number(m.usuario_id) === Number(user.id_usuario) && m.activo !== false)
-      .map((m) => Number(m.servidor_id));
-    return todosLosServidores.filter((s) => misIds.includes(Number(s.id_servidor)));
-  }, [todosLosServidores, misMembresias, user, hasRole]);
+  const [nuevoCanalSelec, setNuevoCanalSelec] = useState("");
+  const [nuevoRolCanal, setNuevoRolCanal] = useState("miembro");
+  const [reemplazarCanal, setReemplazarCanal] = useState("no");
 
-  useEffect(() => {
-    if (misServidores.length > 0 && !misServidores.some(s => s.id_servidor === servidorSeleccionado)) {
-      setServidorSeleccionado(misServidores[0].id_servidor);
-    } else if (misServidores.length === 0) {
-      setServidorSeleccionado(null);
-    }
-  }, [misServidores, servidorSeleccionado]);
+  const [nuevoRolSelec, setNuevoRolSelec] = useState("");
+  const [tipoVinculo, setTipoVinculo] = useState("padre");
+  const [usuarioVinculo, setUsuarioVinculo] = useState("");
 
-  const servidoresFiltrados = misServidores.filter((s) =>
-    (s.nombre || "").toLowerCase().includes(busquedaServidor.toLowerCase())
-  );
+  const toggleAccordion = (sec) => {
+    setAccordionOpen(prev => ({ ...prev, [sec]: !prev[sec] }));
+  };
 
-  const servidorActivo = misServidores.find((s) => s.id_servidor === servidorSeleccionado);
+  const handleSelect = (tipo, data) => {
+    setItemSeleccionado({ tipo, data });
+    setFormData({ ...data });
+  };
 
-  const puedeGestionar = useMemo(() => {
-    if (!user || !servidorActivo) return false;
-    if (hasRole(["super_admin", "admin"])) return true;
-    if (Number(servidorActivo.creador_id) === Number(user.id_usuario)) return true;
-    return todosLosRoles.some((ur) => {
-      if (Number(ur.usuario_id) !== Number(user.id_usuario)) return false;
-      if (Number(ur.servidor_id) !== Number(servidorActivo.id_servidor)) return false;
-      const rol = rolesDefinidos.find(r => r.id_rol === ur.rol_id);
-      return rol?.nombre?.toLowerCase() === "director";
+  const handleAbrirNuevoCanal = () => {
+    setItemSeleccionado({
+      tipo: "nuevo_canal",
+      data: { servidorId: servidorActivo.id, nombre: "", tipo: "General / Chat", categoria: "", descripcion: "" }
     });
-  }, [user, servidorActivo, hasRole, todosLosRoles, rolesDefinidos]);
-
-  const miembrosActuales = useMemo(() => {
-    if (!servidorSeleccionado) return [];
-    const idsMiembros = misMembresias
-      .filter(m => Number(m.servidor_id) === Number(servidorSeleccionado) && m.activo !== false)
-      .map(m => Number(m.usuario_id));
-    return todosLosUsuarios.filter(u => idsMiembros.includes(Number(u.id_usuario)));
-  }, [misMembresias, servidorSeleccionado, todosLosUsuarios]);
-
-  useEffect(() => {
-    if (!servidorSeleccionado) { setJerarquia(null); return; }
-    let cancelado = false;
-    async function cargarJerarquia() {
-      setLoadingJerarquia(true);
-      setCanalActivoId(null);
-      try {
-        const data = await obtenerJerarquiaServidor(servidorSeleccionado);
-        if (!cancelado) setJerarquia(data);
-      } catch (err) { console.error(err); }
-      finally { if (!cancelado) setLoadingJerarquia(false); }
-    }
-    cargarJerarquia();
-    return () => { cancelado = true; };
-  }, [servidorSeleccionado]);
-
-  useEffect(() => {
-    if (!servidorSeleccionado || !puedeGestionar) { setCategoriasGestion([]); return; }
-    let cancelado = false;
-    async function cargarCat() {
-      try {
-        const data = await listarCategoriasPorServidor(servidorSeleccionado);
-        if (!cancelado) setCategoriasGestion(Array.isArray(data) ? data : []);
-      } catch (err) { console.error(err); }
-    }
-    cargarCat();
-    return () => { cancelado = true; };
-  }, [servidorSeleccionado, puedeGestionar, jerarquia]);
-
-  const canalActivo = jerarquia?.categorias?.flatMap((c) => c.canales || []).concat(jerarquia?.sinCategoria || []).find((c) => c.id_canal === canalActivoId) || null;
-  const abrirCanal = () => { if (canalActivo) navigate("/mensajes", { state: { canal: canalActivo } }); };
-  const recargarJerarquia = async () => {
-    if (!servidorSeleccionado) return;
-    setJerarquia(await obtenerJerarquiaServidor(servidorSeleccionado));
+    setFormData({ servidorId: servidorActivo.id, nombre: "", tipo: "General / Chat", categoria: "", descripcion: "" });
   };
 
-  const guardarCategoria = async (e) => {
+  const handleAbrirNuevaCategoria = () => {
+    setItemSeleccionado({
+      tipo: "nueva_categoria",
+      data: { servidorId: servidorActivo.id, nombre: "", descripcion: "", orden: 1 }
+    });
+    setFormData({ servidorId: servidorActivo.id, nombre: "", descripcion: "", orden: 1 });
+  };
+
+  const handleAbrirNuevoMiembro = () => {
+    setItemSeleccionado({
+      tipo: "nuevo_miembro",
+      data: { servidorId: servidorActivo.id, nombres: "", apellidos: "", rol: "Alumno", email: "", dni: "", usuario: "", activo: true, fechaRegistro: new Date().toLocaleDateString(), canales: [], roles: [], vinculosFamiliares: [] }
+    });
+    setFormData({ servidorId: servidorActivo.id, nombres: "", apellidos: "", rol: "Alumno", email: "", dni: "", usuario: "", activo: true, fechaRegistro: new Date().toLocaleDateString(), canales: [], roles: [], vinculosFamiliares: [] });
+  };
+
+  const handleInputChange = (field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleGuardarCambios = (e) => {
     e.preventDefault();
-    if (!servidorSeleccionado) return;
-    setGuardandoCategoria(true);
-    try {
-      const payload = { nombre: formCategoria.nombre.trim(), descripcion: formCategoria.descripcion.trim() || null, padre_id: null, orden: 0 };
-      if (categoriaEditando) await actualizarCategoria(categoriaEditando.id_categoria, payload);
-      else await crearCategoria({ ...payload, servidor_id: Number(servidorSeleccionado) });
-      await recargarJerarquia();
-      setCategoriasGestion(await listarCategoriasPorServidor(servidorSeleccionado));
-      setModalCategoria(false);
-    } catch (err) { alert(err.message); } finally { setGuardandoCategoria(false); }
+    if (!itemSeleccionado) return;
+
+    if (itemSeleccionado.tipo === "miembro") {
+      setMiembros(miembros.map(m => m.id === itemSeleccionado.data.id ? { ...m, ...formData } : m));
+      alert("¡Miembro actualizado con éxito!");
+    } else if (itemSeleccionado.tipo === "canal") {
+      setCanales(canales.map(c => c.id === itemSeleccionado.data.id ? { ...c, ...formData } : c));
+      alert("¡Canal actualizado con éxito!");
+    } else if (itemSeleccionado.tipo === "categoria") {
+      setCategorias(categorias.map(cat => cat.id === itemSeleccionado.data.id ? { ...cat, ...formData } : cat));
+      alert("¡Categoría actualizada con éxito!");
+    } else if (itemSeleccionado.tipo === "nuevo_canal") {
+      const nuevo = { ...formData, id: Date.now() };
+      setCanales([...canales, nuevo]);
+      alert("¡Nuevo canal creado con éxito!");
+      setItemSeleccionado(null);
+    } else if (itemSeleccionado.tipo === "nueva_categoria") {
+      const nueva = { ...formData, id: Date.now() };
+      setCategorias([...categorias, nueva]);
+      alert("¡Nueva categoría creada con éxito!");
+      setItemSeleccionado(null);
+    } else if (itemSeleccionado.tipo === "nuevo_miembro") {
+      const nuevoM = { ...formData, id: Date.now() };
+      setMiembros([...miembros, nuevoM]);
+      alert("¡Nuevo miembro agregado con éxito!");
+      setItemSeleccionado(null);
+    }
   };
 
-  const borrarCategoria = async (id) => {
-    if (!window.confirm("¿Eliminar categoría?")) return;
-    try {
-      await eliminarCategoria(id);
-      await recargarJerarquia();
-      setCategoriasGestion(await listarCategoriasPorServidor(servidorSeleccionado));
-    } catch (err) { alert(err.message); }
+  const handleEliminarCanalMiembro = (canalId) => {
+    const nuevosCanales = (formData.canales || []).filter(c => c.id !== canalId);
+    const updated = { ...formData, canales: nuevosCanales };
+    setFormData(updated);
+    setMiembros(miembros.map(m => m.id === updated.id ? updated : m));
   };
 
-  const guardarCanal = async (e) => {
-    e.preventDefault();
-    if (!servidorSeleccionado) return;
-    setGuardandoCanal(true);
-    try {
-      const payload = { nombre: formCanal.nombre.trim(), tipo: formCanal.tipo, categoria_id: formCanal.categoria_id ? Number(formCanal.categoria_id) : null };
-      if (canalEditando) await actualizarCanal(canalEditando.id_canal, payload);
-      else await crearCanal({ ...payload, servidor_id: Number(servidorSeleccionado), creador_id: user?.id_usuario });
-      await recargarJerarquia();
-      setModalCanal(false);
-    } catch (err) { alert(err.message); } finally { setGuardandoCanal(false); }
+  const handleAgregarCanalMiembro = () => {
+    if (!nuevoCanalSelec) return;
+    const nuevo = { id: Date.now(), nombre: nuevoCanalSelec, rolInCanal: nuevoRolCanal };
+    let canalesActuales = [...(formData.canales || [])];
+    if (reemplazarCanal !== "no") {
+      canalesActuales = canalesActuales.filter(c => c.nombre !== reemplazarCanal);
+    }
+    canalesActuales.push(nuevo);
+    const updated = { ...formData, canales: canalesActuales };
+    setFormData(updated);
+    setMiembros(miembros.map(m => m.id === updated.id ? updated : m));
+    setNuevoCanalSelec("");
   };
 
-  const borrarCanal = async (id) => {
-    if (!window.confirm("¿Eliminar canal?")) return;
-    try {
-      await eliminarCanal(id);
-      await recargarJerarquia();
-    } catch (err) { alert(err.message); }
+  const handleEliminarRolMiembro = (rolId) => {
+    const nuevosRoles = (formData.roles || []).filter(r => r.id !== rolId);
+    const updated = { ...formData, roles: nuevosRoles };
+    setFormData(updated);
+    setMiembros(miembros.map(m => m.id === updated.id ? updated : m));
   };
 
-  const agregarMiembroExistente = async () => {
-    if (!usuarioSeleccionado || !servidorSeleccionado) return;
-    setGuardandoUsuario(true);
-    try {
-      await crearMiembroServidor({ usuario_id: Number(usuarioSeleccionado), servidor_id: Number(servidorSeleccionado), activo: true });
-      setMisMembresias(await listarMiembrosServidor());
-      setModalMiembro(false);
-      setUsuarioSeleccionado("");
-      setBusquedaUsuario("");
-    } catch (e) { alert(e.message); } finally { setGuardandoUsuario(false); }
+  const handleAgregarRolMiembro = () => {
+    if (!nuevoRolSelec) return;
+    const nuevo = { id: Date.now(), nombre: nuevoRolSelec, contexto: `${servidorActivo.nombre} · asignado hoy por Administrador` };
+    const nuevosRoles = [...(formData.roles || []), nuevo];
+    const updated = { ...formData, roles: nuevosRoles };
+    setFormData(updated);
+    setMiembros(miembros.map(m => m.id === updated.id ? updated : m));
+    setNuevoRolSelec("");
   };
 
-  const crearEInscribirUsuario = async (datos) => {
-    if (!servidorSeleccionado) return;
-    setGuardandoUsuario(true);
-    try {
-      const nuevo = await crearUsuario({ 
-        nombre_usuario: datos.nombre_usuario, email: datos.email, password: datos.password, activo: datos.activo === "true" 
-      });
-      
-      await crearPerfil({ usuario_id: nuevo.id_usuario, nombres: datos.nombres, apellidos: datos.apellidos });
-      await crearMiembroServidor({ usuario_id: nuevo.id_usuario, servidor_id: Number(servidorSeleccionado), activo: true });
-
-      for (const rolId of datos.roles_ids) {
-        await crearUsuarioRol({ usuario_id: nuevo.id_usuario, rol_id: Number(rolId), servidor_id: Number(servidorSeleccionado), asignado_por: user?.id_usuario });
-      }
-      
-      setMisMembresias(await listarMiembrosServidor());
-      setTodosLosUsuarios(await listarUsuarios());
-      setTodosLosRoles(await listarUsuarioRol());
-
-      setModalMiembro(false);
-      setCreandoUsuarioNuevo(false);
-    } catch (e) { alert(e.message); } finally { setGuardandoUsuario(false); }
+  const handleVincularFamiliar = () => {
+    if (!usuarioVinculo) return;
+    const nuevo = `${usuarioVinculo} (${tipoVinculo.toUpperCase()})`;
+    const nuevosVinculos = [...(formData.vinculosFamiliares || []), nuevo];
+    const updated = { ...formData, vinculosFamiliares: nuevosVinculos };
+    setFormData(updated);
+    setMiembros(miembros.map(m => m.id === updated.id ? updated : m));
+    setUsuarioVinculo("");
   };
 
-  const quitarMiembro = async (usuarioId) => {
-    if (!window.confirm("¿Quitar a este usuario del servidor? Se le quitarán todos sus roles en este servidor.")) return;
-    try {
-      await eliminarMiembroServidor(usuarioId, servidorSeleccionado);
-      const rolesAEliminar = todosLosRoles.filter(ur => Number(ur.usuario_id) === Number(usuarioId) && Number(ur.servidor_id) === Number(servidorSeleccionado));
-      for (const ur of rolesAEliminar) await eliminarUsuarioRol(usuarioId, ur.rol_id, servidorSeleccionado);
-      setMisMembresias(await listarMiembrosServidor());
-      setTodosLosRoles(await listarUsuarioRol());
-    } catch (e) { alert(e.message); }
+  const handleQuitarDelServidor = () => {
+    if (window.confirm(`¿Quitar a ${formData.nombres} ${formData.apellidos} del servidor ${servidorActivo.nombre}?`)) {
+      setMiembros(miembros.filter(m => m.id !== formData.id));
+      setItemSeleccionado(null);
+    }
   };
 
-  const abrirEditarRoles = (u) => {
-    setUsuarioEditandoRoles(u);
-    const rolesActuales = todosLosRoles.filter(ur => Number(ur.usuario_id) === Number(u.id_usuario) && Number(ur.servidor_id) === Number(servidorSeleccionado)).map(ur => Number(ur.rol_id));
-    setRolesSeleccionadosEdicion(rolesActuales);
-    setModalEditarRoles(true);
+  const handleEliminarCanal = () => {
+    if (window.confirm(`¿Deseas eliminar el canal #${formData.nombre}?`)) {
+      setCanales(canales.filter(c => c.id !== formData.id));
+      setItemSeleccionado(null);
+    }
   };
 
-  const toggleRolEdicion = (rolId) => {
-    setRolesSeleccionadosEdicion(prev => prev.includes(rolId) ? prev.filter(id => id !== rolId) : [...prev, rolId]);
+  const handleEliminarCategoria = () => {
+    if (window.confirm(`¿Deseas eliminar la categoría ${formData.nombre}?`)) {
+      setCategorias(categorias.filter(cat => cat.id !== formData.id));
+      setItemSeleccionado(null);
+    }
   };
 
-  const guardarEdicionRoles = async () => {
-    if (!usuarioEditandoRoles || !servidorSeleccionado) return;
-    setGuardandoUsuario(true);
-    try {
-      const rolesActuales = todosLosRoles.filter(ur => Number(ur.usuario_id) === Number(usuarioEditandoRoles.id_usuario) && Number(ur.servidor_id) === Number(servidorSeleccionado)).map(ur => Number(ur.rol_id));
-      for (const rolId of rolesActuales) {
-        if (!rolesSeleccionadosEdicion.includes(rolId)) await eliminarUsuarioRol(usuarioEditandoRoles.id_usuario, rolId, servidorSeleccionado);
-      }
-      for (const rolId of rolesSeleccionadosEdicion) {
-        if (!rolesActuales.includes(rolId)) await crearUsuarioRol({ usuario_id: usuarioEditandoRoles.id_usuario, rol_id: rolId, servidor_id: Number(servidorSeleccionado), asignado_por: user?.id_usuario });
-      }
-      setTodosLosRoles(await listarUsuarioRol());
-      setModalEditarRoles(false);
-    } catch (e) { alert(e.message); } finally { setGuardandoUsuario(false); }
-  };
+  // Listas filtradas asociadas al SERVIDOR ACTIVO
+  const servidoresFiltrados = useMemo(() => {
+    return servidores.filter((s) => s.nombre.toLowerCase().includes(busquedaServidor.toLowerCase()));
+  }, [servidores, busquedaServidor]);
 
-  const obtenerRolesDeUsuario = (usuarioId) => {
-    return todosLosRoles.filter(ur => Number(ur.usuario_id) === Number(usuarioId) && Number(ur.servidor_id) === Number(servidorSeleccionado))
-      .map(ur => rolesDefinidos.find(r => r.id_rol === ur.rol_id)?.nombre).filter(Boolean);
-  };
+  const canalesFiltrados = useMemo(() => {
+    return canales.filter((c) => {
+      const perteneceServidor = c.servidorId === servidorActivo.id;
+      const matchTexto = c.nombre.toLowerCase().includes(busquedaCanal.toLowerCase());
+      const matchTipo = filtroTipoCanal === "todos" || c.tipo === filtroTipoCanal;
+      return perteneceServidor && matchTexto && matchTipo;
+    });
+  }, [canales, servidorActivo, busquedaCanal, filtroTipoCanal]);
 
-  const nombreCompleto = (u) => {
-    if (u.perfil?.apellidos && u.perfil?.nombres) return `${u.perfil.apellidos}, ${u.perfil.nombres}`;
-    return u.nombre_usuario;
-  };
+  const categoriasFiltradas = useMemo(() => {
+    return categorias.filter((cat) => {
+      const perteneceServidor = cat.servidorId === servidorActivo.id;
+      const matchTexto = cat.nombre.toLowerCase().includes(busquedaCategoria.toLowerCase());
+      return perteneceServidor && matchTexto;
+    });
+  }, [categorias, servidorActivo, busquedaCategoria]);
+
+  const miembrosFiltrados = useMemo(() => {
+    return miembros.filter((m) => {
+      const perteneceServidor = m.servidorId === servidorActivo.id;
+      const matchTexto = `${m.nombres} ${m.apellidos} ${m.email}`.toLowerCase().includes(busquedaMiembro.toLowerCase());
+      const matchRol = filtroRolMiembro === "todos" || m.rol.toLowerCase() === filtroRolMiembro.toLowerCase();
+      return perteneceServidor && matchTexto && matchRol;
+    });
+  }, [miembros, servidorActivo, busquedaMiembro, filtroRolMiembro]);
 
   return (
-    <section className="servidores">
-      <div className="servidores__header">
-        <h1 className="servidores__title">Mis Servidores</h1>
-      </div>
+    <div style={{ padding: "24px", height: "100vh", display: "flex", flexDirection: "column", boxSizing: "border-box", backgroundColor: "#f0f4f8" }}>
+      
+      {/* HEADER SUPERIOR */}
+      <header style={{ marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+        <div>
+          <h1 style={{ fontSize: "1.5rem", color: "#0f766e", fontWeight: "700", margin: 0 }}>Mis Servidores</h1>
+          <p style={{ fontSize: "13px", color: "#64748b", margin: "2px 0 0 0" }}>Gestión institucional de espacios de comunicación</p>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", background: "#ffffff", padding: "6px 14px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
+          <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "#0f766e", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", fontSize: "13px" }}>
+            RG
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: "12px", fontWeight: "bold", color: "#1e293b" }}>Gómez, Roberto</div>
+            <div style={{ fontSize: "11px", color: "#64748b" }}>director@colegio.edu</div>
+          </div>
+        </div>
+      </header>
 
-      <div className="servidores__explorer">
-        <aside className="servidores__panel servidores__panel--servers">
-          <div className="servidores__search">
-            <Search size={18} />
-            <input type="text" placeholder="Buscar servidor..." value={busquedaServidor} onChange={(e) => setBusquedaServidor(e.target.value)} />
+      {/* CONTENEDOR PRINCIPAL */}
+      <div style={{ display: "flex", gap: "20px", flex: 1, minHeight: 0, overflow: "hidden" }}>
+        
+        {/* COLUMNA 1: LISTADO DE SERVIDORES */}
+        <div style={{ width: "300px", background: "#ffffff", borderRadius: "16px", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", flexShrink: 0 }}>
+          <div style={{ padding: "16px", borderBottom: "1px solid #f1f5f9" }}>
+            <div style={{ display: "flex", alignItems: "center", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "8px 12px", gap: "8px" }}>
+              <IconSearch size={16} className="text-slate-400" />
+              <input
+                type="text"
+                placeholder="Buscar servidor..."
+                value={busquedaServidor}
+                onChange={(e) => setBusquedaServidor(e.target.value)}
+                style={{ border: "none", outline: "none", background: "transparent", fontSize: "13px", width: "100%", color: "#1e293b" }}
+              />
+            </div>
           </div>
 
-          {loadingServidores && <p className="servidores__empty">Cargando...</p>}
-          {!loadingServidores && servidoresFiltrados.length === 0 && <p className="servidores__empty">No perteneces a ningún servidor.</p>}
+          <div style={{ flex: 1, overflowY: "auto", padding: "12px" }}>
+            <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
+              {servidoresFiltrados.map((srv) => {
+                const isActive = servidorActivo?.id === srv.id;
+                return (
+                  <li key={srv.id}>
+                    <button
+                      onClick={() => { setServidorActivo(srv); setItemSeleccionado(null); }}
+                      style={{
+                        width: "100%", display: "flex", alignItems: "center", gap: "12px", padding: "12px", borderRadius: "12px", textAlign: "left", cursor: "pointer", border: "1px solid transparent",
+                        backgroundColor: isActive ? "#0f766e" : "#f8fafc",
+                        color: isActive ? "#ffffff" : "#1e293b",
+                        transition: "all 0.15s ease"
+                      }}
+                    >
+                      <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: isActive ? "rgba(255,255,255,0.2)" : "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", color: isActive ? "#fff" : "#0f766e", flexShrink: 0 }}>
+                        <IconServer size={16} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontWeight: "600", fontSize: "13px", display: "block" }}>{srv.nombre}</span>
+                        <span style={{ fontSize: "11px", color: isActive ? "rgba(255,255,255,0.8)" : "#64748b", display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{srv.descripcion}</span>
+                      </div>
+                      <IconChevronRight size={14} style={{ color: isActive ? "#fff" : "#94a3b8" }} />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
 
-          <ul className="servidores__server-list">
-            {servidoresFiltrados.map((s) => (
-              <li key={s.id_servidor}>
-                <button className={`servidores__server-item ${s.id_servidor === servidorSeleccionado ? "servidores__server-item--active" : ""}`} onClick={() => setServidorSeleccionado(s.id_servidor)}>
-                  <Server size={18} />
-                  <div className="servidores__server-text">
-                    <span className="servidores__server-name">{s.nombre}</span>
-                    {s.descripcion && <span className="servidores__server-desc">{s.descripcion}</span>}
-                  </div>
-                  <ChevronRight size={16} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </aside>
-
-        <main className="servidores__panel servidores__panel--detail">
-          {servidorSeleccionado === null ? (
-            <div className="servidores__empty-state">
-              <Server size={32} />
-              <p>Seleccioná un servidor para ver sus canales.</p>
+        {/* COLUMNA 2: CONTENIDO CENTRAL */}
+        <div style={{ flex: 1, background: "#ffffff", borderRadius: "16px", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+          <div style={{ padding: "20px 24px", borderBottom: "1px solid #f1f5f9", flexShrink: 0 }}>
+            
+            {/* BOTÓN DE VOLVER Y CABECERA */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <div>
+                <h2 style={{ fontSize: "1.2rem", fontWeight: "700", color: "#0f766e", margin: 0 }}>{servidorActivo?.nombre}</h2>
+                <p style={{ fontSize: "12px", color: "#64748b", margin: "2px 0 0 0" }}>{servidorActivo?.descripcion}</p>
+              </div>
+              <button
+                onClick={() => setItemSeleccionado(null)}
+                style={{ background: "#f1f5f9", border: "1px solid #cbd5e1", color: "#334155", padding: "6px 12px", borderRadius: "8px", fontSize: "11px", fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}
+              >
+                <IconArrowLeft size={14} /> Volver
+              </button>
             </div>
-          ) : (
-            <>
-              <header className="servidores__detail-header" style={{ marginBottom: "1rem", borderBottom: "1px solid #ddd", paddingBottom: "1rem" }}>
-                <div>
-                  <h2 className="servidores__detail-title">{servidorActivo?.nombre}</h2>
-                  {servidorActivo?.descripcion && <p className="servidores__detail-desc">{servidorActivo.descripcion}</p>}
+
+            {/* PESTAÑAS DE NAVEGACIÓN */}
+            <div style={{ display: "flex", gap: "8px", background: "#f1f5f9", padding: "4px", borderRadius: "12px", width: "fit-content" }}>
+              <button
+                onClick={() => { setTabActiva("canales"); setItemSeleccionado(null); }}
+                style={{ padding: "6px 16px", borderRadius: "8px", fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "6px", border: "none", cursor: "pointer", backgroundColor: tabActiva === "canales" ? "#0f766e" : "transparent", color: tabActiva === "canales" ? "#ffffff" : "#475569" }}
+              >
+                <IconHash size={14} /> Canales
+              </button>
+              <button
+                onClick={() => { setTabActiva("categorias"); setItemSeleccionado(null); }}
+                style={{ padding: "6px 16px", borderRadius: "8px", fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "6px", border: "none", cursor: "pointer", backgroundColor: tabActiva === "categorias" ? "#0f766e" : "transparent", color: tabActiva === "categorias" ? "#ffffff" : "#475569" }}
+              >
+                <IconTag size={14} /> Categorías
+              </button>
+              <button
+                onClick={() => { setTabActiva("miembros"); setItemSeleccionado(null); }}
+                style={{ padding: "6px 16px", borderRadius: "8px", fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "6px", border: "none", cursor: "pointer", backgroundColor: tabActiva === "miembros" ? "#0f766e" : "transparent", color: tabActiva === "miembros" ? "#ffffff" : "#475569" }}
+              >
+                <IconUsers size={14} /> Miembros
+              </button>
+            </div>
+          </div>
+
+          {/* CONTENIDO CENTRAL CON SCROLL INDEPENDIENTE */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+            
+            {/* VISTA CANALES */}
+            {tabActiva === "canales" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontWeight: "700", fontSize: "13px", color: "#1e293b" }}>Canales de {servidorActivo.nombre} · {canalesFiltrados.length}</span>
+                  <button onClick={handleAbrirNuevoCanal} style={{ background: "#ccfbf1", color: "#0f766e", border: "none", padding: "6px 12px", borderRadius: "8px", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
+                    <IconPlus size={14} /> Nuevo canal
+                  </button>
                 </div>
-              </header>
 
-              <div style={{ display: "flex", gap: "2rem", alignItems: "flex-start", flexWrap: "wrap" }}>
-                {puedeGestionar && (
-                  <div style={{ width: "200px", flexShrink: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
-                    <button onClick={() => setActiveTab("canales")} style={{ padding: "10px 12px", textAlign: "left", borderRadius: "8px", border: "none", cursor: "pointer", background: activeTab === "canales" ? "var(--color-azul-petroleo)" : "transparent", color: activeTab === "canales" ? "white" : "var(--texto-oscuro)", fontWeight: 600 }}>
-                      <Hash size={16} style={{ marginRight: "6px", verticalAlign: "middle" }} /> Canales
-                    </button>
-                    <button onClick={() => setActiveTab("categorias")} style={{ padding: "10px 12px", textAlign: "left", borderRadius: "8px", border: "none", cursor: "pointer", background: activeTab === "categorias" ? "var(--color-azul-petroleo)" : "transparent", color: activeTab === "categorias" ? "white" : "var(--texto-oscuro)", fontWeight: 600 }}>
-                      <Tags size={16} style={{ marginRight: "6px", verticalAlign: "middle" }} /> Categorías
-                    </button>
-                    <button onClick={() => setActiveTab("miembros")} style={{ padding: "10px 12px", textAlign: "left", borderRadius: "8px", border: "none", cursor: "pointer", background: activeTab === "miembros" ? "var(--color-azul-petroleo)" : "transparent", color: activeTab === "miembros" ? "white" : "var(--texto-oscuro)", fontWeight: 600 }}>
-                      <Users size={16} style={{ marginRight: "6px", verticalAlign: "middle" }} /> Miembros
-                    </button>
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", padding: "6px 10px", gap: "6px" }}>
+                    <IconSearch size={14} className="text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Filtrar canales por nombre..."
+                      value={busquedaCanal}
+                      onChange={(e) => setBusquedaCanal(e.target.value)}
+                      style={{ border: "none", outline: "none", background: "transparent", fontSize: "12px", width: "100%" }}
+                    />
                   </div>
-                )}
+                  <select
+                    value={filtroTipoCanal}
+                    onChange={(e) => setFiltroTipoCanal(e.target.value)}
+                    style={{ padding: "6px 10px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", color: "#334155" }}
+                  >
+                    <option value="todos">Todos los tipos</option>
+                    <option value="General / Chat">General / Chat</option>
+                    <option value="Anuncios / Avisos">Anuncios / Avisos</option>
+                    <option value="Informativo">Informativo</option>
+                  </select>
+                </div>
 
-                <div style={{ flex: 1, minWidth: "300px" }}>
-                  {(!puedeGestionar || activeTab === "canales") && (
-                    <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-                        <h3 style={{ margin: 0 }}>Canales del servidor</h3>
-                        {puedeGestionar && <Button size="sm" onClick={() => { setCanalEditando(null); setFormCanal({ nombre: "", tipo: "chat", categoria_id: "" }); setModalCanal(true); }}>+ Nuevo canal</Button>}
-                      </div>
-
-                      {loadingJerarquia ? <p>Cargando canales...</p> : jerarquia && (
-                        <div className="servidores__tree">
-                          {(jerarquia.categorias || []).map((cat) => (
-                            <section key={cat.id_categoria} className="servidores__categoria">
-                              <h4 className="servidores__categoria-nombre">{cat.nombre}</h4>
-                              <ul className="servidores__canal-list">
-                                {(cat.canales || []).map((canal) => (
-                                  <li key={canal.id_canal} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                    <button className={`servidores__canal ${canal.id_canal === canalActivoId ? "servidores__canal--active" : ""}`} onClick={() => setCanalActivoId(canal.id_canal)} style={{ flex: 1 }}>
-                                      {canal.tipo === "informativo" ? <Megaphone size={16} /> : <Hash size={16} />}
-                                      <span>{canal.nombre}</span>
-                                    </button>
-                                    {puedeGestionar && (
-                                      <div style={{ display: "flex", gap: "4px", marginLeft: "8px" }}>
-                                        <button onClick={() => { setCanalEditando(canal); setFormCanal({ nombre: canal.nombre, tipo: canal.tipo, categoria_id: canal.categoria_id || "" }); setModalCanal(true); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#666" }}><Pencil size={14} /></button>
-                                        <button onClick={() => borrarCanal(canal.id_canal)} style={{ background: "none", border: "none", cursor: "pointer", color: "#c00" }}><Trash2 size={14} /></button>
-                                      </div>
-                                    )}
-                                  </li>
-                                ))}
-                                {cat.canales.length === 0 && <p style={{ opacity: 0.6, fontSize: "14px" }}>Sin canales.</p>}
-                              </ul>
-                            </section>
-                          ))}
-                          {(jerarquia.sinCategoria || []).length > 0 && (
-                            <section className="servidores__categoria servidores__categoria--uncategorized">
-                              <h4 className="servidores__categoria-nombre">Sin categoría</h4>
-                              <ul className="servidores__canal-list">
-                                {jerarquia.sinCategoria.map((canal) => (
-                                  <li key={canal.id_canal} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                    <button className={`servidores__canal ${canal.id_canal === canalActivoId ? "servidores__canal--active" : ""}`} onClick={() => setCanalActivoId(canal.id_canal)} style={{ flex: 1 }}>
-                                      {canal.tipo === "informativo" ? <Megaphone size={16} /> : <Hash size={16} />}
-                                      <span>{canal.nombre}</span>
-                                    </button>
-                                    {puedeGestionar && (
-                                      <div style={{ display: "flex", gap: "4px", marginLeft: "8px" }}>
-                                        <button onClick={() => { setCanalEditando(canal); setFormCanal({ nombre: canal.nombre, tipo: canal.tipo, categoria_id: "" }); setModalCanal(true); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#666" }}><Pencil size={14} /></button>
-                                        <button onClick={() => borrarCanal(canal.id_canal)} style={{ background: "none", border: "none", cursor: "pointer", color: "#c00" }}><Trash2 size={14} /></button>
-                                      </div>
-                                    )}
-                                  </li>
-                                ))}
-                              </ul>
-                            </section>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {puedeGestionar && activeTab === "categorias" && (
-                    <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-                        <h3 style={{ margin: 0 }}>Categorías</h3>
-                        <Button size="sm" onClick={() => { setCategoriaEditando(null); setFormCategoria({ nombre: "", descripcion: "" }); setModalCategoria(true); }}>+ Nueva categoría</Button>
-                      </div>
-                      <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                        {categoriasGestion.map((cat) => (
-                          <li key={cat.id_categoria} style={{ display: "flex", justifyContent: "space-between", padding: "12px", background: "var(--color-gris-azulado)", marginBottom: "8px", borderRadius: "8px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {canalesFiltrados.length === 0 ? (
+                    <span style={{ fontSize: "12px", color: "#94a3b8", textAlign: "center", padding: "20px" }}>No hay canales registrados en este servidor.</span>
+                  ) : (
+                    canalesFiltrados.map((c) => {
+                      const isSelected = itemSeleccionado?.tipo === "canal" && itemSeleccionado?.data.id === c.id;
+                      return (
+                        <div key={c.id} onClick={() => handleSelect("canal", c)} style={{ padding: "12px 16px", borderRadius: "12px", border: isSelected ? "2px solid #0d9488" : "1px solid #e2e8f0", backgroundColor: isSelected ? "#f0fdfa" : "#f8fafc", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            <IconHash size={16} style={{ color: "#0f766e" }} />
                             <div>
-                              <strong style={{ display: "block" }}>{cat.nombre}</strong>
-                              {cat.descripcion && <span style={{ fontSize: "12px", color: "#666" }}>{cat.descripcion}</span>}
+                              <span style={{ fontWeight: "600", fontSize: "13px", color: "#1e293b", display: "block" }}>{c.nombre}</span>
+                              <span style={{ fontSize: "11px", color: "#64748b" }}>{c.descripcion}</span>
                             </div>
-                            <div style={{ display: "flex", gap: "6px" }}>
-                              <Button size="sm" variant="outline" onClick={() => { setCategoriaEditando(cat); setFormCategoria({ nombre: cat.nombre, descripcion: cat.descripcion || "" }); setModalCategoria(true); }}><Pencil size={14} /></Button>
-                              <Button size="sm" onClick={() => borrarCategoria(cat.id_categoria)}><Trash2 size={14} /></Button>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            <span style={{ fontSize: "10px", background: "#ccfbf1", color: "#0f766e", padding: "2px 6px", borderRadius: "6px", fontWeight: "bold" }}>{c.tipo}</span>
+                            <div style={{ width: "22px", height: "22px", borderRadius: "50%", border: "2px solid #0d9488", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: isSelected ? "#0d9488" : "transparent" }}>
+                              {isSelected && <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: "#ffffff" }} />}
                             </div>
-                          </li>
-                        ))}
-                        {categoriasGestion.length === 0 && <p>No hay categorías creadas.</p>}
-                      </ul>
-                    </div>
-                  )}
-
-                  {puedeGestionar && activeTab === "miembros" && (
-                    <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-                        <h3 style={{ margin: 0 }}>Miembros del Servidor</h3>
-                        <Button size="sm" onClick={() => { setCreandoUsuarioNuevo(false); setModalMiembro(true); }}>+ Agregar miembro</Button>
-                      </div>
-
-                      {miembrosActuales.length === 0 ? (
-                        <p>No hay miembros en este servidor.</p>
-                      ) : (
-                        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                          {miembrosActuales.map((u) => (
-                            <li key={u.id_usuario} style={{ display: "flex", justifyContent: "space-between", padding: "12px", background: "var(--color-gris-azulado)", marginBottom: "8px", borderRadius: "8px", alignItems: "center" }}>
-                              <div>
-                                <strong style={{ display: "block" }}>{nombreCompleto(u)} <span style={{ fontSize: "11px", fontWeight: "normal", color: "var(--color-teal-medio)", marginLeft: "6px" }}>{obtenerRolesDeUsuario(u.id_usuario).join(", ")}</span></strong>
-                                <span style={{ fontSize: "12px", color: "#666" }}>{u.email}</span>
-                              </div>
-                              <div style={{ display: "flex", gap: "6px" }}>
-                                <Button size="sm" variant="outline" onClick={() => abrirEditarRoles(u)}><Pencil size={14} /></Button>
-                                <Button size="sm" onClick={() => quitarMiembro(u.id_usuario)}><Trash2 size={14} /></Button>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  )}
-
-                  {canalActivo && activeTab === "canales" && (
-                    <div style={{ marginTop: "2rem", padding: "1rem", background: "#EDF2F7", display: "flex", justifyContent: "space-between", borderRadius: "8px" }}>
-                      <span>Canal seleccionado: <strong>{canalActivo.nombre}</strong></span>
-                      <Button size="sm" onClick={abrirCanal}>Entrar al canal <ChevronRight size={16} /></Button>
-                    </div>
+                          </div>
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               </div>
-            </>
-          )}
-        </main>
-      </div>
+            )}
 
-      {modalCategoria && (
-        <Modal title={categoriaEditando ? "Editar categoría" : "Nueva categoría"} onClose={() => setModalCategoria(false)}>
-          <form className="categorias__form" onSubmit={guardarCategoria} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <Input label="Nombre" value={formCategoria.nombre} onChange={(e) => setFormCategoria({...formCategoria, nombre: e.target.value})} />
-            <Input label="Descripción" value={formCategoria.descripcion} onChange={(e) => setFormCategoria({...formCategoria, descripcion: e.target.value})} />
-            <div style={{ display: "flex", gap: "1rem", justifyContent: "flex-end" }}>
-              <Button type="button" variant="outline" onClick={() => setModalCategoria(false)}>Cancelar</Button>
-              <Button type="submit" disabled={guardandoCategoria}>{guardandoCategoria ? "Guardando..." : "Guardar"}</Button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {modalCanal && (
-        <Modal title={canalEditando ? "Editar canal" : "Nuevo canal"} onClose={() => setModalCanal(false)}>
-          <form className="categorias__form" onSubmit={guardarCanal} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <Input label="Nombre" value={formCanal.nombre} onChange={(e) => setFormCanal({...formCanal, nombre: e.target.value})} />
-            <Select label="Categoría (opcional)" value={formCanal.categoria_id} onChange={(e) => setFormCanal({...formCanal, categoria_id: e.target.value})} options={[{ value: "", label: "Sin categoría" }, ...categoriasGestion.map(c => ({ value: c.id_categoria, label: c.nombre }))]} />
-            <Select label="Tipo de canal" value={formCanal.tipo} onChange={(e) => setFormCanal({...formCanal, tipo: e.target.value})} options={[{ value: "chat", label: "Chat" }, { value: "informativo", label: "Informativo" }]} />
-            <div style={{ display: "flex", gap: "1rem", justifyContent: "flex-end", marginTop: "1rem" }}>
-              <Button type="button" variant="outline" onClick={() => setModalCanal(false)}>Cancelar</Button>
-              <Button type="submit" disabled={guardandoCanal}>{guardandoCanal ? "Guardando..." : "Guardar"}</Button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {modalMiembro && (
-        <Modal title="Agregar miembro al servidor" onClose={() => setModalMiembro(false)}>
-          {/* width: 100% y overflow para evitar que el form se bloquee */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem", width: "100%", overflowY: "auto", maxHeight: "70vh", paddingRight: "4px" }}>
-            {!creandoUsuarioNuevo ? (
-              <>
-                <Input label="Buscar usuario por nombre o email" value={busquedaUsuario} onChange={(e) => setBusquedaUsuario(e.target.value)} placeholder="Ej: juan" />
-                <Select
-                  label="Seleccionar usuario"
-                  value={usuarioSeleccionado}
-                  onChange={(e) => setUsuarioSeleccionado(e.target.value)}
-                  options={todosLosUsuarios
-                    .filter(u => 
-                      (u.nombre_usuario.toLowerCase().includes(busquedaUsuario.toLowerCase()) || 
-                       u.email.toLowerCase().includes(busquedaUsuario.toLowerCase()) || 
-                       u.perfil?.apellidos?.toLowerCase().includes(busquedaUsuario.toLowerCase())) && 
-                      !miembrosActuales.some(m => m.id_usuario === u.id_usuario)
-                    )
-                    .map(u => ({ value: u.id_usuario, label: `${nombreCompleto(u)} (${u.email})` }))}
-                  placeholder="Elegir usuario..."
-                />
-                
-                {/* BOTONES CORREGIDOS: flex-direction column en mobile, fila en desktop */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "1rem", width: "100%" }}>
-                  <Button type="button" variant="outline" onClick={() => setCreandoUsuarioNuevo(true)} style={{ width: "100%", padding: "10px" }}>
-                    ¿No existe? Crear nuevo
-                  </Button>
-                  <Button disabled={!usuarioSeleccionado || guardandoUsuario} onClick={agregarMiembroExistente} style={{ width: "100%", padding: "10px" }}>
-                    {guardandoUsuario ? "Agregando..." : "Agregar al servidor"}
-                  </Button>
+            {/* VISTA CATEGORÍAS */}
+            {tabActiva === "categorias" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontWeight: "700", fontSize: "13px", color: "#1e293b" }}>Categorías de {servidorActivo.nombre} · {categoriasFiltradas.length}</span>
+                  <button onClick={handleAbrirNuevaCategoria} style={{ background: "#ccfbf1", color: "#0f766e", border: "none", padding: "6px 12px", borderRadius: "8px", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
+                    <IconPlus size={14} /> Agregar categoría
+                  </button>
                 </div>
-              </>
-            ) : (
-              <div style={{ width: "100%" }}>
-                <UsuarioForm 
-                  rolesDisponibles={rolesDefinidos}
-                  mostrarServidores={false} 
-                  mostrarRolesGlobales={false} 
-                  guardando={guardandoUsuario}
-                  onCancel={() => setCreandoUsuarioNuevo(false)}
-                  onSubmit={crearEInscribirUsuario}
-                />
+
+                <div style={{ display: "flex", alignItems: "center", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", padding: "6px 10px", gap: "6px" }}>
+                  <IconSearch size={14} className="text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar categoría por nombre..."
+                    value={busquedaCategoria}
+                    onChange={(e) => setBusquedaCategoria(e.target.value)}
+                    style={{ border: "none", outline: "none", background: "transparent", fontSize: "12px", width: "100%" }}
+                  />
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {categoriasFiltradas.length === 0 ? (
+                    <span style={{ fontSize: "12px", color: "#94a3b8", textAlign: "center", padding: "20px" }}>No hay categorías registradas en este servidor.</span>
+                  ) : (
+                    categoriasFiltradas.map((cat) => {
+                      const isSelected = itemSeleccionado?.tipo === "categoria" && itemSeleccionado?.data.id === cat.id;
+                      return (
+                        <div key={cat.id} onClick={() => handleSelect("categoria", cat)} style={{ padding: "14px 16px", borderRadius: "12px", border: isSelected ? "2px solid #0d9488" : "1px solid #e2e8f0", backgroundColor: isSelected ? "#f0fdfa" : "#f8fafc", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div>
+                            <div style={{ fontWeight: "700", fontSize: "13px", color: "#0f766e" }}>{cat.nombre}</div>
+                            <div style={{ fontSize: "12px", color: "#64748b" }}>{cat.descripcion}</div>
+                          </div>
+                          <div style={{ width: "22px", height: "22px", borderRadius: "50%", border: "2px solid #0d9488", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: isSelected ? "#0d9488" : "transparent" }}>
+                            {isSelected && <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: "#ffffff" }} />}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* VISTA MIEMBROS */}
+            {tabActiva === "miembros" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontWeight: "700", fontSize: "13px", color: "#1e293b" }}>Miembros de {servidorActivo.nombre} · {miembrosFiltrados.length}</span>
+                  <button onClick={handleAbrirNuevoMiembro} style={{ background: "#ccfbf1", color: "#0f766e", border: "none", padding: "6px 12px", borderRadius: "8px", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
+                    <IconPlus size={14} /> Agregar miembro
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", padding: "6px 10px", gap: "6px" }}>
+                    <IconSearch size={14} className="text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por nombre, apellido o email..."
+                      value={busquedaMiembro}
+                      onChange={(e) => setBusquedaMiembro(e.target.value)}
+                      style={{ border: "none", outline: "none", background: "transparent", fontSize: "12px", width: "100%" }}
+                    />
+                  </div>
+                  <select
+                    value={filtroRolMiembro}
+                    onChange={(e) => setFiltroRolMiembro(e.target.value)}
+                    style={{ padding: "6px 10px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", color: "#334155" }}
+                  >
+                    <option value="todos">Todos los roles</option>
+                    <option value="Director">Director</option>
+                    <option value="Profesor">Profesor</option>
+                    <option value="Alumno">Alumno</option>
+                  </select>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {miembrosFiltrados.length === 0 ? (
+                    <span style={{ fontSize: "12px", color: "#94a3b8", textAlign: "center", padding: "20px" }}>No hay miembros registrados en este servidor.</span>
+                  ) : (
+                    miembrosFiltrados.map((m) => {
+                      const isSelected = itemSeleccionado?.tipo === "miembro" && itemSeleccionado?.data.id === m.id;
+                      return (
+                        <div key={m.id} onClick={() => handleSelect("miembro", m)} style={{ padding: "14px 16px", borderRadius: "12px", border: isSelected ? "2px solid #0d9488" : "1px solid #e2e8f0", backgroundColor: isSelected ? "#f0fdfa" : "#f8fafc", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <span style={{ fontWeight: "700", fontSize: "13px", color: "#0f766e" }}>{m.apellidos}, {m.nombres}</span>
+                              <span style={{ fontSize: "10px", fontWeight: "600", background: "#ccfbf1", color: "#0f766e", padding: "2px 8px", borderRadius: "6px" }}>{m.rol}</span>
+                            </div>
+                            <span style={{ fontSize: "12px", color: "#64748b" }}>{m.email}</span>
+                          </div>
+                          <div style={{ width: "22px", height: "22px", borderRadius: "50%", border: "2px solid #0d9488", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: isSelected ? "#0d9488" : "transparent" }}>
+                            {isSelected && <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: "#ffffff" }} />}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             )}
           </div>
-        </Modal>
-      )}
+        </div>
 
-      {modalEditarRoles && usuarioEditandoRoles && (
-        <Modal title={`Roles de ${nombreCompleto(usuarioEditandoRoles)}`} onClose={() => setModalEditarRoles(false)}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <p style={{ fontSize: "14px", color: "#666" }}>Modificá los roles de este usuario <strong>solo en este servidor</strong>.</p>
-            <div className="admin-grupo">
-              <div className="admin-checks" style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                {rolesDefinidos.filter(r => r.tipo === "servidor").map(r => (
-                  <label key={r.id_rol} className="admin-check" style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 10px", background: "var(--color-gris-azulado)", borderRadius: "6px", cursor: "pointer" }}>
-                    <input type="checkbox" checked={rolesSeleccionadosEdicion.includes(r.id_rol)} onChange={() => toggleRolEdicion(r.id_rol)} />
-                    <span style={{ fontSize: "13px" }}>{r.nombre}</span>
-                  </label>
-                ))}
-              </div>
+        {/* COLUMNA 3: PANEL LATERAL DINÁMICO (EDICIÓN Y CREACIÓN) */}
+        {itemSeleccionado && (
+          <div style={{ width: "400px", background: "#ffffff", borderRadius: "16px", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)", flexShrink: 0 }}>
+            
+            {/* ENCABEZADO */}
+            <div style={{ background: "#0f766e", color: "#ffffff", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+              <span style={{ fontWeight: "700", fontSize: "13px", textTransform: "capitalize" }}>
+                {itemSeleccionado.tipo === "miembro" && "Detalle del miembro"}
+                {itemSeleccionado.tipo === "canal" && "Detalle del canal"}
+                {itemSeleccionado.tipo === "categoria" && "Detalle de la categoría"}
+                {itemSeleccionado.tipo === "nuevo_canal" && "Crear nuevo canal"}
+                {itemSeleccionado.tipo === "nueva_categoria" && "Crear nueva categoría"}
+                {itemSeleccionado.tipo === "nuevo_miembro" && "Agregar nuevo miembro"}
+              </span>
+              <button onClick={() => setItemSeleccionado(null)} style={{ background: "transparent", border: "none", color: "#cbd5e1", cursor: "pointer" }}>
+                <IconClose size={18} />
+              </button>
             </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "1rem" }}>
-              <Button type="button" variant="outline" onClick={() => setModalEditarRoles(false)} style={{ marginRight: "8px" }}>Cancelar</Button>
-              <Button disabled={guardandoUsuario} onClick={guardarEdicionRoles}>{guardandoUsuario ? "Guardando..." : "Guardar roles"}</Button>
+
+            {/* CONTENIDO CON SCROLL */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "16px" }}>
+              
+              {/* 1. DETALLE / EDICIÓN DE MIEMBRO */}
+              {itemSeleccionado.tipo === "miembro" && (
+                <>
+                  <form onSubmit={handleGuardarCambios} style={{ display: "flex", flexDirection: "column", gap: "12px", borderBottom: "1px solid #e2e8f0", paddingBottom: "16px" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                      <div>
+                        <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>DNI</label>
+                        <input
+                          type="text"
+                          value={formData.dni || ""}
+                          onChange={(e) => handleInputChange("dni", e.target.value)}
+                          style={{ width: "100%", padding: "8px 10px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Usuario</label>
+                        <input
+                          type="text"
+                          value={formData.usuario || ""}
+                          onChange={(e) => handleInputChange("usuario", e.target.value)}
+                          style={{ width: "100%", padding: "8px 10px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Correo electrónico</label>
+                      <input
+                        type="email"
+                        value={formData.email || ""}
+                        onChange={(e) => handleInputChange("email", e.target.value)}
+                        style={{ width: "100%", padding: "8px 10px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }}
+                      />
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f8fafc", padding: "10px 12px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                      <span style={{ fontSize: "11px", color: "#64748b" }}>Registrado el {formData.fechaRegistro || "12/03/2025"}</span>
+                      <label style={{ fontSize: "11px", fontWeight: "600", color: "#1e293b", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={formData.activo ?? true}
+                          onChange={(e) => handleInputChange("activo", e.target.checked)}
+                        />
+                        Cuenta activa
+                      </label>
+                    </div>
+
+                    <button type="submit" style={{ width: "100%", padding: "10px", background: "#0d9488", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", fontSize: "12px", cursor: "pointer" }}>
+                      Guardar cambios
+                    </button>
+                  </form>
+
+                  {/* ACORDEONES MIEMBRO */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                    
+                    {/* Canales */}
+                    <div style={{ border: "1px solid #cbd5e1", borderRadius: "12px", overflow: "hidden" }}>
+                      <div onClick={() => toggleAccordion("canales")} style={{ background: "#0f766e", color: "#fff", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", fontWeight: "bold", fontSize: "12px" }}>
+                        <span>Canales · {formData.canales?.length || 0}</span>
+                        {accordionOpen.canales ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
+                      </div>
+                      {accordionOpen.canales && (
+                        <div style={{ padding: "14px", background: "#ffffff", display: "flex", flexDirection: "column", gap: "12px" }}>
+                          {formData.canales?.map((c) => (
+                            <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                              <div>
+                                <div style={{ fontSize: "12px", fontWeight: "700", color: "#1e293b" }}># {c.nombre}</div>
+                                <div style={{ fontSize: "11px", color: "#64748b" }}>Rol en canal: {c.rolInCanal}</div>
+                              </div>
+                              <button onClick={() => handleEliminarCanalMiembro(c.id)} style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer" }}>
+                                <IconTrash size={16} />
+                              </button>
+                            </div>
+                          ))}
+                          <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "12px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                              <div>
+                                <label style={{ fontSize: "11px", fontWeight: "700", color: "#64748b", display: "block", marginBottom: "4px" }}>Nuevo canal</label>
+                                <select value={nuevoCanalSelec} onChange={(e) => setNuevoCanalSelec(e.target.value)} style={{ width: "100%", padding: "7px", fontSize: "11px", borderRadius: "6px", border: "1px solid #cbd5e1" }}>
+                                  <option value="">Seleccionar canal...</option>
+                                  {canalesFiltrados.map(c => (
+                                    <option key={c.id} value={c.nombre}>{c.nombre}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <label style={{ fontSize: "11px", fontWeight: "700", color: "#64748b", display: "block", marginBottom: "4px" }}>Rol en canal</label>
+                                <select value={nuevoRolCanal} onChange={(e) => setNuevoRolCanal(e.target.value)} style={{ width: "100%", padding: "7px", fontSize: "11px", borderRadius: "6px", border: "1px solid #cbd5e1" }}>
+                                  <option value="miembro">miembro</option>
+                                  <option value="admin">admin</option>
+                                  <option value="tutor">tutor</option>
+                                </select>
+                              </div>
+                            </div>
+                            <button onClick={handleAgregarCanalMiembro} style={{ padding: "9px", background: "#e0f2fe", color: "#0284c7", border: "none", borderRadius: "8px", fontWeight: "bold", fontSize: "11px", cursor: "pointer" }}>
+                              Agregar canal
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Roles */}
+                    <div style={{ border: "1px solid #cbd5e1", borderRadius: "12px", overflow: "hidden" }}>
+                      <div onClick={() => toggleAccordion("roles")} style={{ background: "#0f766e", color: "#fff", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", fontWeight: "bold", fontSize: "12px" }}>
+                        <span>Roles · {formData.roles?.length || 0}</span>
+                        {accordionOpen.roles ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
+                      </div>
+                      {accordionOpen.roles && (
+                        <div style={{ padding: "14px", background: "#ffffff", display: "flex", flexDirection: "column", gap: "12px" }}>
+                          {formData.roles?.map((r) => (
+                            <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                              <div>
+                                <div style={{ fontSize: "12px", fontWeight: "700", color: "#0f766e" }}>{r.nombre}</div>
+                                <div style={{ fontSize: "11px", color: "#64748b" }}>{r.contexto}</div>
+                              </div>
+                              <button onClick={() => handleEliminarRolMiembro(r.id)} style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer" }}>
+                                <IconTrash size={16} />
+                              </button>
+                            </div>
+                          ))}
+                          <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                            <label style={{ fontSize: "11px", fontWeight: "700", color: "#64748b" }}>Asignar rol</label>
+                            <select value={nuevoRolSelec} onChange={(e) => setNuevoRolSelec(e.target.value)} style={{ width: "100%", padding: "7px", fontSize: "11px", borderRadius: "6px", border: "1px solid #cbd5e1" }}>
+                              <option value="">Elegir rol...</option>
+                              <option value="Director (servidor)">Director (servidor)</option>
+                              <option value="Profesor (servidor)">Profesor (servidor)</option>
+                              <option value="Alumno (servidor)">Alumno (servidor)</option>
+                              <option value="Administrador (global)">Administrador (global)</option>
+                            </select>
+                            <button onClick={handleAgregarRolMiembro} style={{ padding: "9px", background: "#e0f2fe", color: "#0284c7", border: "none", borderRadius: "8px", fontWeight: "bold", fontSize: "11px", cursor: "pointer" }}>
+                              Asignar
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Vínculos familiares */}
+                    <div style={{ border: "1px solid #cbd5e1", borderRadius: "12px", overflow: "hidden" }}>
+                      <div onClick={() => toggleAccordion("vinculos")} style={{ background: "#0f766e", color: "#fff", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", fontWeight: "bold", fontSize: "12px" }}>
+                        <span>Vínculos familiares</span>
+                        {accordionOpen.vinculos ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
+                      </div>
+                      {accordionOpen.vinculos && (
+                        <div style={{ padding: "14px", background: "#ffffff", display: "flex", flexDirection: "column", gap: "12px" }}>
+                          {formData.vinculosFamiliares?.length === 0 ? (
+                            <span style={{ fontSize: "11px", color: "#64748b" }}>Sin vínculos familiares registrados.</span>
+                          ) : (
+                            formData.vinculosFamiliares?.map((v, i) => (
+                              <div key={i} style={{ fontSize: "11px", padding: "8px 12px", background: "#f8fafc", borderRadius: "6px", color: "#1e293b", border: "1px solid #e2e8f0" }}>
+                                🛡️ {v}
+                              </div>
+                            ))
+                          )}
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "4px" }}>
+                            <div>
+                              <label style={{ fontSize: "11px", fontWeight: "700", color: "#64748b", display: "block", marginBottom: "4px" }}>Tipo</label>
+                              <select value={tipoVinculo} onChange={(e) => setTipoVinculo(e.target.value)} style={{ width: "100%", padding: "7px", fontSize: "11px", borderRadius: "6px", border: "1px solid #cbd5e1" }}>
+                                <option value="padre">padre</option>
+                                <option value="madre">madre</option>
+                                <option value="tutor">tutor</option>
+                                <option value="hermano">hermano</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label style={{ fontSize: "11px", fontWeight: "700", color: "#64748b", display: "block", marginBottom: "4px" }}>Usuario relacionado</label>
+                              <input type="text" value={usuarioVinculo} onChange={(e) => setUsuarioVinculo(e.target.value)} placeholder="Nombre o correo" style={{ width: "100%", padding: "7px", fontSize: "11px", borderRadius: "6px", border: "1px solid #cbd5e1", boxSizing: "border-box" }} />
+                            </div>
+                          </div>
+                          <button onClick={handleVincularFamiliar} style={{ padding: "9px", background: "#e0f2fe", color: "#0284c7", border: "none", borderRadius: "8px", fontWeight: "bold", fontSize: "11px", cursor: "pointer" }}>
+                            Vincular
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Servidor */}
+                    <div style={{ border: "1px solid #cbd5e1", borderRadius: "12px", overflow: "hidden" }}>
+                      <div onClick={() => toggleAccordion("servidor")} style={{ background: "#0f766e", color: "#fff", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", fontWeight: "bold", fontSize: "12px" }}>
+                        <span>Servidor</span>
+                        {accordionOpen.servidor ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
+                      </div>
+                      {accordionOpen.servidor && (
+                        <div style={{ padding: "14px", background: "#ffffff", display: "flex", flexDirection: "column", gap: "12px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div>
+                              <div style={{ fontWeight: "bold", fontSize: "13px", color: "#1e293b" }}>{servidorActivo.nombre}</div>
+                              <div style={{ fontSize: "11px", color: "#64748b" }}>Miembro desde {formData.fechaRegistro || "12/03/2025"}</div>
+                            </div>
+                            <span style={{ fontSize: "10px", background: "#dcfce7", color: "#166534", padding: "3px 8px", borderRadius: "6px", fontWeight: "bold" }}>Activo</span>
+                          </div>
+                          <button onClick={handleQuitarDelServidor} style={{ padding: "9px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: "8px", fontWeight: "bold", fontSize: "11px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
+                            <IconTrash size={14} /> Quitar del servidor
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
+                </>
+              )}
+
+              {/* 2. DETALLE DE CANAL */}
+              {itemSeleccionado.tipo === "canal" && (
+                <form onSubmit={handleGuardarCambios} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <div>
+                    <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Nombre del Canal</label>
+                    <input
+                      type="text"
+                      value={formData.nombre || ""}
+                      onChange={(e) => handleInputChange("nombre", e.target.value)}
+                      style={{ width: "100%", padding: "8px 12px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Tipo de Canal (`tipo`)</label>
+                    <select
+                      value={formData.tipo || "General / Chat"}
+                      onChange={(e) => handleInputChange("tipo", e.target.value)}
+                      style={{ width: "100%", padding: "8px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px" }}
+                    >
+                      <option value="General / Chat">General / Chat</option>
+                      <option value="Anuncios / Avisos">Anuncios / Avisos</option>
+                      <option value="Informativo">Informativo</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Categoría Organizadora (`categoria_id`)</label>
+                    <select
+                      value={formData.categoria || ""}
+                      onChange={(e) => handleInputChange("categoria", e.target.value)}
+                      style={{ width: "100%", padding: "8px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px" }}
+                    >
+                      {categoriasFiltradas.map(cat => (
+                        <option key={cat.id} value={cat.nombre}>{cat.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Descripción</label>
+                    <textarea
+                      value={formData.descripcion || ""}
+                      onChange={(e) => handleInputChange("descripcion", e.target.value)}
+                      style={{ width: "100%", padding: "8px 12px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", height: "70px", resize: "none", boxSizing: "border-box" }}
+                    />
+                  </div>
+
+                  <button type="submit" style={{ width: "100%", padding: "10px", background: "#0d9488", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", fontSize: "12px", cursor: "pointer" }}>
+                    Guardar cambios de canal
+                  </button>
+
+                  <button type="button" onClick={handleEliminarCanal} style={{ width: "100%", padding: "9px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: "10px", fontWeight: "bold", fontSize: "11px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
+                    <IconTrash size={14} /> Eliminar canal
+                  </button>
+                </form>
+              )}
+
+              {/* 3. DETALLE DE CATEGORÍA */}
+              {itemSeleccionado.tipo === "categoria" && (
+                <form onSubmit={handleGuardarCambios} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <div>
+                    <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Nombre de Categoría</label>
+                    <input
+                      type="text"
+                      value={formData.nombre || ""}
+                      onChange={(e) => handleInputChange("nombre", e.target.value)}
+                      style={{ width: "100%", padding: "8px 12px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Descripción</label>
+                    <textarea
+                      value={formData.descripcion || ""}
+                      onChange={(e) => handleInputChange("descripcion", e.target.value)}
+                      style={{ width: "100%", padding: "8px 12px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", height: "80px", resize: "none", boxSizing: "border-box" }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Orden jerárquico (`orden`)</label>
+                    <input
+                      type="number"
+                      value={formData.orden || 0}
+                      onChange={(e) => handleInputChange("orden", parseInt(e.target.value))}
+                      style={{ width: "100%", padding: "8px 10px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }}
+                    />
+                  </div>
+
+                  <button type="submit" style={{ width: "100%", padding: "10px", background: "#0d9488", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", fontSize: "12px", cursor: "pointer" }}>
+                    Guardar cambios de categoría
+                  </button>
+
+                  <button type="button" onClick={handleEliminarCategoria} style={{ width: "100%", padding: "9px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: "10px", fontWeight: "bold", fontSize: "11px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
+                    <IconTrash size={14} /> Eliminar categoría
+                  </button>
+                </form>
+              )}
+
+              {/* 4. CREAR NUEVO CANAL */}
+              {itemSeleccionado.tipo === "nuevo_canal" && (
+                <form onSubmit={handleGuardarCambios} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <div style={{ background: "#f0fdfa", padding: "10px", borderRadius: "8px", border: "1px solid #ccfbf1", fontSize: "11px", color: "#0f766e" }}>
+                    Creando canal para el servidor: <strong>{servidorActivo.nombre}</strong>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Nombre del Canal</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ej. 2° año B"
+                      value={formData.nombre || ""}
+                      onChange={(e) => handleInputChange("nombre", e.target.value)}
+                      style={{ width: "100%", padding: "8px 12px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Tipo de Canal</label>
+                    <select
+                      value={formData.tipo || "General / Chat"}
+                      onChange={(e) => handleInputChange("tipo", e.target.value)}
+                      style={{ width: "100%", padding: "8px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px" }}
+                    >
+                      <option value="General / Chat">General / Chat</option>
+                      <option value="Anuncios / Avisos">Anuncios / Avisos</option>
+                      <option value="Informativo">Informativo</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Categoría</label>
+                    <select
+                      value={formData.categoria || ""}
+                      onChange={(e) => handleInputChange("categoria", e.target.value)}
+                      style={{ width: "100%", padding: "8px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px" }}
+                    >
+                      <option value="">Seleccionar categoría...</option>
+                      {categoriasFiltradas.map(cat => (
+                        <option key={cat.id} value={cat.nombre}>{cat.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Descripción</label>
+                    <textarea
+                      placeholder="Breve descripción del canal..."
+                      value={formData.descripcion || ""}
+                      onChange={(e) => handleInputChange("descripcion", e.target.value)}
+                      style={{ width: "100%", padding: "8px 12px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", height: "70px", resize: "none", boxSizing: "border-box" }}
+                    />
+                  </div>
+                  <button type="submit" style={{ width: "100%", padding: "10px", background: "#0d9488", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", fontSize: "12px", cursor: "pointer" }}>
+                    Registrar nuevo canal
+                  </button>
+                </form>
+              )}
+
+              {/* 5. CREAR NUEVA CATEGORÍA */}
+              {itemSeleccionado.tipo === "nueva_categoria" && (
+                <form onSubmit={handleGuardarCambios} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <div style={{ background: "#f0fdfa", padding: "10px", borderRadius: "8px", border: "1px solid #ccfbf1", fontSize: "11px", color: "#0f766e" }}>
+                    Creando categoría para el servidor: <strong>{servidorActivo.nombre}</strong>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Nombre de Categoría</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ej. Talleres y Extensión"
+                      value={formData.nombre || ""}
+                      onChange={(e) => handleInputChange("nombre", e.target.value)}
+                      style={{ width: "100%", padding: "8px 12px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Descripción</label>
+                    <textarea
+                      placeholder="Descripción de la categoría..."
+                      value={formData.descripcion || ""}
+                      onChange={(e) => handleInputChange("descripcion", e.target.value)}
+                      style={{ width: "100%", padding: "8px 12px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", height: "80px", resize: "none", boxSizing: "border-box" }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Orden jerárquico</label>
+                    <input
+                      type="number"
+                      value={formData.orden || 1}
+                      onChange={(e) => handleInputChange("orden", parseInt(e.target.value))}
+                      style={{ width: "100%", padding: "8px 10px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }}
+                    />
+                  </div>
+                  <button type="submit" style={{ width: "100%", padding: "10px", background: "#0d9488", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", fontSize: "12px", cursor: "pointer" }}>
+                    Registrar nueva categoría
+                  </button>
+                </form>
+              )}
+
+              {/* 6. AGREGAR NUEVO MIEMBRO */}
+              {itemSeleccionado.tipo === "nuevo_miembro" && (
+                <form onSubmit={handleGuardarCambios} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <div style={{ background: "#f0fdfa", padding: "10px", borderRadius: "8px", border: "1px solid #ccfbf1", fontSize: "11px", color: "#0f766e" }}>
+                    Inscribiendo miembro en: <strong>{servidorActivo.nombre}</strong>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                    <div>
+                      <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Nombres</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.nombres || ""}
+                        onChange={(e) => handleInputChange("nombres", e.target.value)}
+                        style={{ width: "100%", padding: "8px 10px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Apellidos</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.apellidos || ""}
+                        onChange={(e) => handleInputChange("apellidos", e.target.value)}
+                        style={{ width: "100%", padding: "8px 10px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Correo electrónico</label>
+                    <input
+                      type="email"
+                      required
+                      value={formData.email || ""}
+                      onChange={(e) => handleInputChange("email", e.target.value)}
+                      style={{ width: "100%", padding: "8px 12px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }}
+                    />
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                    <div>
+                      <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>DNI</label>
+                      <input
+                        type="text"
+                        value={formData.dni || ""}
+                        onChange={(e) => handleInputChange("dni", e.target.value)}
+                        style={{ width: "100%", padding: "8px 10px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Rol institucional</label>
+                      <select
+                        value={formData.rol || "Alumno"}
+                        onChange={(e) => handleInputChange("rol", e.target.value)}
+                        style={{ width: "100%", padding: "8px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px" }}
+                      >
+                        <option value="Alumno">Alumno</option>
+                        <option value="Profesor">Profesor</option>
+                        <option value="Director">Director</option>
+                        <option value="Tutor">Tutor</option>
+                      </select>
+                    </div>
+                  </div>
+                  <button type="submit" style={{ width: "100%", padding: "10px", background: "#0d9488", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", fontSize: "12px", cursor: "pointer" }}>
+                    Guardar y agregar miembro
+                  </button>
+                </form>
+              )}
+
             </div>
           </div>
-        </Modal>
-      )}
-    </section>
+        )}
+
+      </div>
+    </div>
   );
 }
