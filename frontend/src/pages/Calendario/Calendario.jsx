@@ -1,120 +1,197 @@
 import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { listarRecordatorios, crearRecordatorio, actualizarRecordatorio, eliminarRecordatorio } from "../../api/calendario";
-import { esDiaNoLaborable, clasificarDia, formatearFechaISO, obtenerEventoInstitucional } from "../../api/calendarioinstitucional";
-import Card from "../../components/ui/Card/Card";
+import {
+    listarRecordatorios,
+    crearRecordatorio,
+    actualizarRecordatorio,
+    eliminarRecordatorio,
+} from "../../api/calendario";
+import { listarComunicados } from "../../api/comunicados";
+import { listarDestinatarios } from "../../api/comunicadosDestinatarios";
+import { listarMiembrosCanal } from "../../api/miembrosCanal";
+import { listarMiembrosServidor } from "../../api/miembrosServidor";
+import {
+    esDiaNoLaborable,
+    clasificarDia,
+    formatearFechaISO,
+    obtenerEventoInstitucional,
+} from "../../api/calendarioinstitucional";
 import Button from "../../components/ui/Button/Button";
 import Input from "../../components/ui/Input/Input";
 import Modal from "../../components/ui/Modal/Modal";
+import BotonVolver from "../../components/ui/BotonVolver/BotonVolver";
 import "./Calendario.css";
 
 const MESES = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
-
 const DIAS_SEMANA = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
+const REGEX_SIN_CLASES =
+    /sin clases|no hay clases|clases suspendidas|no se cursa|suspensi[oó]n|no habra clases/i;
+
 export default function Calendario() {
-    const { user } = useAuth();
+    const { user, hasRole } = useAuth();
 
     const hoy = new Date();
     const [mesActual, setMesActual] = useState(hoy.getMonth());
     const [anioActual, setAnioActual] = useState(hoy.getFullYear());
+    const [diaSeleccionado, setDiaSeleccionado] = useState(formatearFechaISO(hoy));
 
     const [recordatorios, setRecordatorios] = useState([]);
+    const [comunicados, setComunicados] = useState([]);
+    const [destinatarios, setDestinatarios] = useState([]);
+    const [miembrosCanal, setMiembrosCanal] = useState([]);
+    const [miembrosServidor, setMiembrosServidor] = useState([]);
+
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
     const [modalOpen, setModalOpen] = useState(false);
     const [guardando, setGuardando] = useState(false);
-    const [form, setForm] = useState({
-    titulo: "",
-    descripcion: "",
-    fecha_limite: "",
-    });
-
-    const cargarRecordatorios = async () => {
-    if (!user?.id_usuario) return;
-    setLoading(true);
-    setError("");
-    try {
-        const data = await listarRecordatorios();
-        if (Array.isArray(data)) {
-        setRecordatorios(data.filter((r) => Number(r.usuario_id) === Number(user.id_usuario)));
-        }
-    } catch (err) {
-        setError(err?.message || "No se pudieron cargar los recordatorios");
-    } finally {
-        setLoading(false);
-    }
-    };
+    const [form, setForm] = useState({ titulo: "", descripcion: "", fecha_limite: "" });
 
     useEffect(() => {
-    cargarRecordatorios();
-    }, [user]);
+    let cancelado = false;
 
-    const cambiarMes = (delta) => {
-    let nuevoMes = mesActual + delta;
-    let nuevoAnio = anioActual;
+    async function cargar() {
+        setLoading(true);
+        setError("");
+        try {
+        const [resRec, resCom, resDest, resMc, resMs] = await Promise.all([
+            listarRecordatorios(),
+            listarComunicados(),
+            listarDestinatarios(),
+            listarMiembrosCanal(),
+            listarMiembrosServidor(),
+        ]);
+        if (cancelado) return;
 
-    if (nuevoMes < 0) {
-        nuevoMes = 11;
-        nuevoAnio -= 1;
-    } else if (nuevoMes > 11) {
-        nuevoMes = 0;
-        nuevoAnio += 1;
+        setRecordatorios(resRec || []);
+        setComunicados(resCom || []);
+        setDestinatarios(resDest || []);
+        setMiembrosCanal(resMc || []);
+        setMiembrosServidor(resMs || []);
+        } catch (err) {
+        if (!cancelado) setError(err?.message || "No se pudieron cargar los datos");
+        } finally {
+        if (!cancelado) setLoading(false);
+        }
     }
 
-    setMesActual(nuevoMes);
-    setAnioActual(nuevoAnio);
+    cargar();
+    return () => { cancelado = true; };
+    }, []);
+
+    const comunicadosRelevantes = useMemo(() => {
+    if (!user) return [];
+    if (hasRole(["super_admin", "admin"])) return comunicados;
+
+    const misCanales = miembrosCanal
+        .filter((m) => Number(m.usuario_id) === Number(user.id_usuario))
+        .map((m) => Number(m.canal_id));
+
+    const misServidores = miembrosServidor
+        .filter((m) => Number(m.usuario_id) === Number(user.id_usuario) && m.activo !== false)
+        .map((m) => Number(m.servidor_id));
+
+    return comunicados.filter((c) => {
+        const destinos = destinatarios.filter(
+        (d) => Number(d.comunicado_id) === Number(c.id_comunicado)
+        );
+        if (destinos.length === 0) return true;
+        return destinos.some(
+        (d) =>
+            (d.usuario_id && Number(d.usuario_id) === Number(user.id_usuario)) ||
+            (d.canal_id && misCanales.includes(Number(d.canal_id))) ||
+            (d.servidor_id && misServidores.includes(Number(d.servidor_id)))
+        );
+    });
+    }, [comunicados, destinatarios, miembrosCanal, miembrosServidor, user, hasRole]);
+
+    const eventosPorFecha = useMemo(() => {
+    const mapa = {};
+
+    const agregar = (fecha, evento) => {
+        if (!fecha) return;
+        const key = String(fecha).slice(0, 10);
+        if (!mapa[key]) mapa[key] = [];
+        mapa[key].push(evento);
     };
+
+    recordatorios
+        .filter((r) => Number(r.usuario_id) === Number(user?.id_usuario))
+        .forEach((r) =>
+        agregar(r.fecha_limite, {
+            id: r.id_recordatorio,
+            tipo: "recordatorio",
+            titulo: r.titulo,
+            descripcion: r.descripcion,
+            completado: r.completado,
+        })
+        );
+
+    comunicadosRelevantes.forEach((c) => {
+        const texto = `${c.titulo || ""} ${c.contenido || ""}`;
+        agregar(c.fecha_evento || c.fecha_publicacion, {
+        id: c.id_comunicado,
+        tipo: "comunicado",
+        titulo: c.titulo,
+        descripcion: c.contenido,
+        esEvento: !!c.fecha_evento,
+        sinClases: REGEX_SIN_CLASES.test(texto),
+        });
+    });
+
+    return mapa;
+    }, [recordatorios, comunicadosRelevantes, user]);
+
+    const diasSinClases = useMemo(() => {
+    const set = new Set();
+    comunicadosRelevantes.forEach((c) => {
+        if (!c.fecha_evento) return;
+        const texto = `${c.titulo || ""} ${c.contenido || ""}`;
+        if (!REGEX_SIN_CLASES.test(texto)) return;
+        set.add(String(c.fecha_evento).slice(0, 10));
+    });
+    return set;
+    }, [comunicadosRelevantes]);
 
     const diasDelMes = useMemo(() => {
     const primerDia = new Date(anioActual, mesActual, 1);
     const ultimoDia = new Date(anioActual, mesActual + 1, 0);
     const dias = [];
 
-    for (let i = 0; i < primerDia.getDay(); i++) {
-        dias.push(null);
-    }
-
-    for (let dia = 1; dia <= ultimoDia.getDate(); dia++) {
-        dias.push(new Date(anioActual, mesActual, dia));
-    }
-
+    for (let i = 0; i < primerDia.getDay(); i++) dias.push(null);
+    for (let d = 1; d <= ultimoDia.getDate(); d++) dias.push(new Date(anioActual, mesActual, d));
     return dias;
     }, [mesActual, anioActual]);
 
-    const recordatoriosPorFecha = useMemo(() => {
-    const mapa = {};
-    recordatorios.forEach((r) => {
-        if (!r.fecha_limite) return;
-        const fecha = r.fecha_limite.slice(0, 10);
-        if (!mapa[fecha]) mapa[fecha] = [];
-        mapa[fecha].push(r);
-    });
-    return mapa;
-    }, [recordatorios]);
+    const cambiarMes = (delta) => {
+    let m = mesActual + delta;
+    let a = anioActual;
+    if (m < 0) { m = 11; a -= 1; }
+    if (m > 11) { m = 0; a += 1; }
+    setMesActual(m);
+    setAnioActual(a);
+    };
 
     const guardarRecordatorio = async (e) => {
     e.preventDefault();
     if (!user?.id_usuario) return;
-
     setGuardando(true);
     setError("");
-
     try {
         await crearRecordatorio({
         titulo: form.titulo.trim(),
         descripcion: form.descripcion.trim() || null,
-        fecha_limite: form.fecha_limite ? `${form.fecha_limite}T00:00:00` : null,
+        fecha_limite: form.fecha_limite ? `${form.fecha_limite}T09:00:00` : null,
         usuario_id: user.id_usuario,
         });
-
         setForm({ titulo: "", descripcion: "", fecha_limite: "" });
         setModalOpen(false);
-        await cargarRecordatorios();
+        setRecordatorios(await listarRecordatorios());
     } catch (err) {
         setError(err?.message || "No se pudo crear el recordatorio");
     } finally {
@@ -122,133 +199,164 @@ export default function Calendario() {
     }
     };
 
-    const toggleCompletado = async (recordatorio) => {
+    const toggleCompletado = async (rec) => {
     try {
-        await actualizarRecordatorio(recordatorio.id_recordatorio, {
-        completado: !recordatorio.completado,
-        });
-        await cargarRecordatorios();
+        await actualizarRecordatorio(rec.id, { completado: !rec.completado });
+        setRecordatorios(await listarRecordatorios());
     } catch (err) {
         setError(err?.message || "No se pudo actualizar el recordatorio");
     }
     };
 
-    const handleEliminar = async (id) => {
+    const eliminar = async (id) => {
     if (!window.confirm("¿Eliminar este recordatorio?")) return;
-
     try {
         await eliminarRecordatorio(id);
-        await cargarRecordatorios();
+        setRecordatorios(await listarRecordatorios());
     } catch (err) {
         setError(err?.message || "No se pudo eliminar el recordatorio");
     }
     };
 
+    const eventosDelDia = eventosPorFecha[diaSeleccionado] || [];
+
     return (
     <section className="calendario">
+        <div className="calendario__wrap">
         <div className="calendario__header">
-        <h1 className="calendario__title">Calendario académico</h1>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            <BotonVolver to="/" label="Volver" />
+            <div>
+                <h1 className="calendario__title">Calendario académico</h1>
+                <p className="calendario__subtitle">
+                Feriados, eventos institucionales, recordatorios y comunicados
+                </p>
+            </div>
+            </div>
 
-        <div className="calendario__controls">
-            <Button variant="outline" size="sm" onClick={() => cambiarMes(-1)}>
-            ◀
-            </Button>
-            <span className="calendario__mes">
-            {MESES[mesActual]} {anioActual}
-            </span>
-            <Button variant="outline" size="sm" onClick={() => cambiarMes(1)}>
-            ▶
-            </Button>
-            <Button size="sm" onClick={() => setModalOpen(true)}>
-            + Recordatorio
-            </Button>
-        </div>
+            <div className="calendario__controls">
+            <Button variant="outline" size="sm" onClick={() => cambiarMes(-1)} aria-label="Mes anterior">◀</Button>
+            <span className="calendario__mes">{MESES[mesActual]} {anioActual}</span>
+            <Button variant="outline" size="sm" onClick={() => cambiarMes(1)} aria-label="Mes siguiente">▶</Button>
+            <Button size="sm" onClick={() => setModalOpen(true)}>+ Recordatorio</Button>
+            </div>
         </div>
 
-        {error && (
-        <div className="calendario__error">
-            <span>{error}</span>
-        </div>
-        )}
+        {error && <div className="calendario__error"><span>{error}</span></div>}
 
         <div className="calendario__leyenda">
-        <span className="leyenda-item leyenda-laborable">Laborable</span>
-        <span className="leyenda-item leyenda-no-laborable">No laborable</span>
-        <span className="leyenda-item leyenda-academico">Evento académico</span>
-        <span className="leyenda-item leyenda-feriado">Feriado</span>
+            <span className="leyenda-item leyenda-laborable">Laborable</span>
+            <span className="leyenda-item leyenda-no-laborable">No laborable</span>
+            <span className="leyenda-item leyenda-sinclases">Sin clases</span>
+            <span className="leyenda-item leyenda-institucional">Evento institucional</span>
+            <span className="leyenda-item leyenda-comunicado">Comunicado</span>
+            <span className="leyenda-item leyenda-recordatorio">Recordatorio</span>
         </div>
 
-        <div className="calendario__grid">
-        {DIAS_SEMANA.map((dia) => (
-            <div key={dia} className="calendario__dia-nombre">
-            {dia}
-            </div>
-        ))}
+        <div className="calendario__layout">
+            <div className="calendario__grid">
+            {DIAS_SEMANA.map((d) => (
+                <div key={d} className="calendario__dia-nombre">{d}</div>
+            ))}
 
-        {diasDelMes.map((fecha, index) => {
-            if (!fecha) {
-            return <div key={`empty-${index}`} className="calendario__dia calendario__dia--vacio" />;
-            }
+            {diasDelMes.map((fecha, index) => {
+                if (!fecha) {
+                return <div key={`vacio-${index}`} className="calendario__dia calendario__dia--vacio" />;
+                }
 
-            const iso = formatearFechaISO(fecha);
-            const tipo = clasificarDia(fecha);
-            const eventoInstitucional = obtenerEventoInstitucional(fecha);
-            const recordatoriosDia = recordatoriosPorFecha[iso] || [];
+                const iso = formatearFechaISO(fecha);
+                const institucional = obtenerEventoInstitucional(fecha);
+                const sinClases = diasSinClases.has(iso);
+                const noLaborable = esDiaNoLaborable(fecha) || sinClases;
+                const tipo = sinClases ? "sinclases" : clasificarDia(fecha);
+                const eventos = eventosPorFecha[iso] || [];
+                const esHoy = iso === formatearFechaISO(hoy);
 
-            return (
-            <div
-                key={iso}
-                className={`calendario__dia calendario__dia--${tipo} ${
-                esDiaNoLaborable(fecha) ? "calendario__dia--no-laborable" : ""
-                }`}
-            >
-                <div className="calendario__dia-numero">
-                {fecha.getDate()}
-                </div>
-
-                {eventoInstitucional && (
-                <div className="calendario__evento-institucional">
-                    {eventoInstitucional.titulo}
-                </div>
-                )}
-
-                {recordatoriosDia.map((r) => (
-                <div
-                    key={r.id_recordatorio}
-                    className={`calendario__recordatorio ${
-                    r.completado ? "calendario__recordatorio--completado" : ""
-                    }`}
-                    title={r.descripcion || r.titulo}
+                return (
+                <button
+                    key={iso}
+                    type="button"
+                    onClick={() => setDiaSeleccionado(iso)}
+                    className={[
+                    "calendario__dia",
+                    `calendario__dia--${tipo}`,
+                    noLaborable ? "calendario__dia--nolaborable" : "",
+                    esHoy ? "calendario__dia--hoy" : "",
+                    iso === diaSeleccionado ? "calendario__dia--seleccionado" : "",
+                    ].join(" ").trim()}
                 >
-                    <button
-                    type="button"
-                    className="calendario__recordatorio-toggle"
-                    onClick={() => toggleCompletado(r)}
-                    >
-                    {r.completado ? "✓" : "○"}
-                    </button>
-                    <span>{r.titulo}</span>
-                    <button
-                    type="button"
-                    className="calendario__recordatorio-delete"
-                    onClick={() => handleEliminar(r.id_recordatorio)}
-                    >
-                    ✕
-                    </button>
-                </div>
-                ))}
+                    <span className="calendario__dia-numero">{fecha.getDate()}</span>
+
+                    {institucional && (
+                    <span className="calendario__tag calendario__tag--institucional">
+                        {institucional.titulo}
+                    </span>
+                    )}
+
+                    {sinClases && (
+                    <span className="calendario__tag calendario__tag--sinclases">Sin clases</span>
+                    )}
+
+                    {eventos.slice(0, 2).map((ev) => (
+                    <span key={`${ev.tipo}-${ev.id}`} className={`calendario__tag calendario__tag--${ev.tipo}`}>
+                        {ev.titulo}
+                    </span>
+                    ))}
+
+                    {eventos.length > 2 && (
+                    <span className="calendario__mas">+{eventos.length - 2} más</span>
+                    )}
+                </button>
+                );
+            })}
             </div>
-            );
-        })}
+
+            <aside className="calendario__agenda">
+            <h3 className="calendario__agenda-title">
+                {new Date(`${diaSeleccionado}T00:00:00`).toLocaleDateString("es-AR", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+                })}
+            </h3>
+
+            {loading && <p className="calendario__empty">Cargando…</p>}
+
+            {!loading && eventosDelDia.length === 0 && (
+                <p className="calendario__empty">No hay eventos para este día.</p>
+            )}
+
+            <ul className="calendario__agenda-list">
+                {eventosDelDia.map((ev) => (
+                <li key={`${ev.tipo}-${ev.id}`} className="calendario__agenda-item">
+                    <span className={`calendario__punto calendario__punto--${ev.tipo}`} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <strong>{ev.titulo}</strong>
+                    {ev.descripcion && <p className="calendario__agenda-desc">{ev.descripcion}</p>}
+                    <span className="calendario__agenda-tipo">
+                        {ev.tipo === "comunicado"
+                        ? (ev.esEvento ? "Comunicado con fecha de evento" : "Comunicado")
+                        : "Recordatorio personal"}
+                    </span>
+                    {ev.tipo === "comunicado" && ev.sinClases && (
+                        <span className="calendario__tag calendario__tag--sinclases">Sin clases</span>
+                    )}
+                    </div>
+
+                    {ev.tipo === "recordatorio" && (
+                    <div style={{ display: "flex", gap: "4px" }}>
+                        <Button size="sm" variant="outline" onClick={() => toggleCompletado(ev)}>
+                        {ev.completado ? "✓" : "○"}
+                        </Button>
+                        <Button size="sm" onClick={() => eliminar(ev.id)}>✕</Button>
+                    </div>
+                    )}
+                </li>
+                ))}
+            </ul>
+            </aside>
         </div>
-
-        {loading && <p>Cargando recordatorios…</p>}
-
-        {!loading && recordatorios.length === 0 && (
-        <p className="calendario__empty">
-            No tenés recordatorios. Creá uno con “+ Recordatorio”.
-        </p>
-        )}
+        </div>
 
         {modalOpen && (
         <Modal title="Nuevo recordatorio" onClose={() => setModalOpen(false)}>
@@ -268,17 +376,15 @@ export default function Calendario() {
                 placeholder="Detalle opcional"
             />
             <Input
-                label="Fecha límite"
+                label="Fecha"
                 name="fecha_limite"
                 type="date"
                 value={form.fecha_limite}
                 onChange={(e) => setForm({ ...form, fecha_limite: e.target.value })}
             />
 
-            <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
-                <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
-                Cancelar
-                </Button>
+            <div className="calendario__form-actions">
+                <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
                 <Button type="submit" disabled={guardando}>
                 {guardando ? "Guardando..." : "Crear"}
                 </Button>
