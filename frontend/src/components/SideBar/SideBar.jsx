@@ -29,12 +29,6 @@ const NAV_LINKS = [
     roles: ["admin", "super_admin", "director", "profesor"],
   },
   {
-    to: "/miembros",
-    label: "Miembros",
-    icon: Users,
-    roles: ["admin", "super_admin", "director", "profesor"],
-  },
-  {
     to: "/admin",
     label: "Panel Administrador",
     icon: ShieldCheck,
@@ -80,7 +74,7 @@ export default function SideBar({ isOpen, onClose }) {
                 <span style={{
                   backgroundColor: "#ef4444", 
                   color: "white",
-                  borderRadius: "50%",
+                  borderRadius: "50%", 
                   padding: "2px 6px",
                   fontSize: "0.65rem",
                   fontWeight: "bold",
