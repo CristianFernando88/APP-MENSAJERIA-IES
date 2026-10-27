@@ -29,3 +29,10 @@ class Comunicado(Base):
         back_populates="comunicado",
         cascade="all, delete-orphan"
     )
+
+    adjuntos = relationship(
+        "ComunicadoAdjunto",
+        back_populates="comunicado",
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )

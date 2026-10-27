@@ -28,16 +28,28 @@ def restaurar(comunicado_id: int, db: Session = Depends(get_db)):
     return comunicado
 
 
-@router.delete("/{comunicado_id}/definitivo", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{comunicado_id}/definitivo",
+    status_code=status.HTTP_204_NO_CONTENT
+)
 def eliminar_definitivamente(
     comunicado_id: int,
     db: Session = Depends(get_db)
 ):
-    if not repo.delete_permanently(db, comunicado_id):
+    try:
+        eliminado = repo.delete_permanently(db, comunicado_id)
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail="No se pudo completar la eliminación de los adjuntos"
+        ) from error
+
+    if not eliminado:
         raise HTTPException(
             status_code=404,
             detail="Comunicado eliminado no encontrado en la papelera"
         )
+
     return None
 
 
