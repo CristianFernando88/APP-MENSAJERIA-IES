@@ -21,3 +21,9 @@ export function actualizarRelacion(relacionId, data) {
 export function eliminarRelacion(relacionId) {
   return apiDelete(`${RUTA}${relacionId}`);
 }
+
+export const listarRelacionesUsuario = listarRelaciones;
+export const obtenerRelacionUsuario = obtenerRelacion;
+export const crearRelacionUsuario = crearRelacion;
+export const actualizarRelacionUsuario = actualizarRelacion;
+export const eliminarRelacionUsuario = eliminarRelacion;
