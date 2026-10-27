@@ -1,8 +1,14 @@
 # Diagrama entidad-relación
 
+**Última actualización:** 26/10/2026
+
 Este documento describe las 18 entidades registradas en `backend/app/models`, de acuerdo con sus modelos SQLAlchemy actuales. Los nombres de tablas, columnas, tipos, claves foráneas, restricciones explícitas y valores predeterminados se han tomado de esos modelos.
 
 > Los valores predeterminados de fecha se generan en la aplicación mediante `datetime.utcnow`. Las referencias a valores como `chat`, `global` o `tutor` describen convenciones del código: los modelos no declaran restricciones `CHECK` que limiten esos valores.
+>
+> Las tablas de campos indican si la columna es obligatoria (`nullable=False`) y documentan las restricciones y valores predeterminados declarados por el modelo. Los valores `default` de SQLAlchemy se aplican desde la aplicación; `server_default` se aplica en la base de datos.
+
+**Índices:** los modelos no declaran índices explícitos (`index=True` o `Index`). Las claves primarias y restricciones `unique=True` sí están indicadas en sus entidades.
 
 ## Diagrama entidad-relación
 
@@ -50,6 +56,9 @@ En las tablas siguientes, **Obligatorio** indica `nullable=False`; las claves pr
 
 ### Usuario — `usuario`
 
+Descripción: cuenta e identidad básica de una persona usuaria.
+Índices explícitos: ninguno; `nombre_usuario` y `email` son únicos.
+
 | Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
 |---|---|---:|---|
 | `id_usuario` | Integer | Sí | PK, autoincremental |
@@ -60,6 +69,9 @@ En las tablas siguientes, **Obligatorio** indica `nullable=False`; las claves pr
 | `activo` | Boolean | No | `True` |
 
 ### Perfil — `perfil`
+
+Descripción: información personal opcional asociada a una cuenta.
+Índices explícitos: ninguno; `usuario_id` y `dni` son únicos.
 
 | Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
 |---|---|---:|---|
@@ -75,6 +87,9 @@ En las tablas siguientes, **Obligatorio** indica `nullable=False`; las claves pr
 
 ### Rol — `rol`
 
+Descripción: catálogo de roles globales o de servidor.
+Índices explícitos: ninguno; `nombre` es único.
+
 | Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
 |---|---|---:|---|
 | `id_rol` | Integer | Sí | PK, autoincremental |
@@ -83,6 +98,9 @@ En las tablas siguientes, **Obligatorio** indica `nullable=False`; las claves pr
 | `tipo` | String(20) | Sí | Se documentan `global` y `servidor`; sin restricción de valores en el modelo |
 
 ### UsuarioRol — `usuario_rol`
+
+Descripción: asignación de un rol a un usuario, opcionalmente dentro de un servidor y con un asignador.
+Índices explícitos: ninguno.
 
 | Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
 |---|---|---:|---|
@@ -95,6 +113,9 @@ En las tablas siguientes, **Obligatorio** indica `nullable=False`; las claves pr
 
 ### Servidor — `servidor`
 
+Descripción: espacio que contiene categorías, canales y miembros.
+Índices explícitos: ninguno.
+
 | Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
 |---|---|---:|---|
 | `id_servidor` | Integer | Sí | PK, autoincremental |
@@ -105,6 +126,9 @@ En las tablas siguientes, **Obligatorio** indica `nullable=False`; las claves pr
 
 ### MiembroServidor — `miembro_servidor`
 
+Descripción: asociación de pertenencia entre un usuario y un servidor; su clave primaria es compuesta.
+Índices explícitos: ninguno adicional a la clave primaria.
+
 | Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
 |---|---|---:|---|
 | `usuario_id` | Integer | Sí | PK compuesta, FK → `usuario.id_usuario` |
@@ -113,6 +137,9 @@ En las tablas siguientes, **Obligatorio** indica `nullable=False`; las claves pr
 | `activo` | Boolean | No | `True` |
 
 ### Categoria — `categoria`
+
+Descripción: categoría jerárquica perteneciente a un servidor.
+Índices explícitos: ninguno.
 
 | Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
 |---|---|---:|---|
@@ -124,6 +151,9 @@ En las tablas siguientes, **Obligatorio** indica `nullable=False`; las claves pr
 | `orden` | Integer | No | `0` |
 
 ### Canal — `canal`
+
+Descripción: canal de un servidor, con creador y categoría opcional.
+Índices explícitos: ninguno.
 
 | Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
 |---|---|---:|---|
@@ -138,6 +168,9 @@ En las tablas siguientes, **Obligatorio** indica `nullable=False`; las claves pr
 
 ### MiembroCanal — `miembro_canal`
 
+Descripción: asociación de un usuario a un canal, con un rol dentro de ese canal.
+Índices explícitos: ninguno.
+
 | Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
 |---|---|---:|---|
 | `id_miembro_canal` | Integer | Sí | PK, autoincremental |
@@ -150,6 +183,9 @@ El modelo no declara una restricción única sobre el par `usuario_id` y `canal_
 
 ### Mensaje — `mensaje`
 
+Descripción: mensaje publicado por un usuario en un canal.
+Índices explícitos: ninguno.
+
 | Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
 |---|---|---:|---|
 | `id_mensaje` | Integer | Sí | PK, autoincremental |
@@ -160,6 +196,9 @@ El modelo no declara una restricción única sobre el par `usuario_id` y `canal_
 | `canal_id` | Integer | Sí | FK → `canal.id_canal` |
 
 ### MensajeDirecto — `mensaje_directo`
+
+Descripción: mensaje privado enviado de un usuario a otro.
+Índices explícitos: ninguno.
 
 | Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
 |---|---|---:|---|
@@ -172,6 +211,9 @@ El modelo no declara una restricción única sobre el par `usuario_id` y `canal_
 | `receptor_id` | Integer | Sí | FK → `usuario.id_usuario` |
 
 ### Comunicado — `comunicado`
+
+Descripción: comunicado publicado por un usuario, con borrado lógico y fecha de evento opcional.
+Índices explícitos: ninguno.
 
 | Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
 |---|---|---:|---|
@@ -186,6 +228,9 @@ El modelo no declara una restricción única sobre el par `usuario_id` y `canal_
 
 ### ComunicadoDestinatario — `comunicado_destinatario`
 
+Descripción: destinos opcionales asociados a un comunicado.
+Índices explícitos: ninguno.
+
 | Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
 |---|---|---:|---|
 | `id_comunicado_destinatario` | Integer | Sí | PK, autoincremental |
@@ -198,6 +243,9 @@ Los modelos permiten que las tres columnas de destinatario sean nulas; no declar
 
 ### ComunicadoVisto — `comunicado_visto`
 
+Descripción: registro de visualización de un comunicado por un usuario.
+Índices explícitos: ninguno.
+
 | Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
 |---|---|---:|---|
 | `id_comunicado_visto` | Integer | Sí | PK, autoincremental |
@@ -207,6 +255,9 @@ Los modelos permiten que las tres columnas de destinatario sean nulas; no declar
 
 ### MensajeVisto — `mensaje_visto`
 
+Descripción: registro de visualización de un mensaje por un usuario.
+Índices explícitos: ninguno.
+
 | Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
 |---|---|---:|---|
 | `id_mensaje_visto` | Integer | Sí | PK, autoincremental |
@@ -215,6 +266,9 @@ Los modelos permiten que las tres columnas de destinatario sean nulas; no declar
 | `fecha_visto` | DateTime | No | `datetime.utcnow` |
 
 ### Notificacion — `notificacion`
+
+Descripción: notificación asociada a un usuario.
+Índices explícitos: ninguno.
 
 | Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
 |---|---|---:|---|
@@ -228,6 +282,9 @@ Los modelos permiten que las tres columnas de destinatario sean nulas; no declar
 
 ### Recordatorio — `recordatorio`
 
+Descripción: recordatorio asociado a un usuario, con fecha límite opcional.
+Índices explícitos: ninguno.
+
 | Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
 |---|---|---:|---|
 | `id_recordatorio` | Integer | Sí | PK, autoincremental |
@@ -239,6 +296,9 @@ Los modelos permiten que las tres columnas de destinatario sean nulas; no declar
 | `usuario_id` | Integer | Sí | FK → `usuario.id_usuario` |
 
 ### RelacionUsuario — `relacion_usuario`
+
+Descripción: relación tipada entre dos usuarios.
+Índices explícitos: ninguno.
 
 | Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
 |---|---|---:|---|
@@ -299,6 +359,10 @@ Los modelos permiten que las tres columnas de destinatario sean nulas; no declar
 - `mensaje_visto` registra un mensaje y un usuario; `comunicado_visto` registra un comunicado y un usuario.
 - Un usuario puede tener notificaciones, recordatorios y relaciones con otros usuarios.
 
+## Enums y tipos personalizados
+
+Los modelos SQLAlchemy no declaran tipos `Enum` ni tipos SQL personalizados. Los campos `tipo` y `rol_en_canal` son columnas `String`; algunos schemas Pydantic limitan sus valores de entrada mediante `Literal`, lo cual no convierte las columnas del modelo en enums de base de datos.
+
 ## Resumen
 
 | # | Entidad | Propósito |
@@ -323,3 +387,10 @@ Los modelos permiten que las tres columnas de destinatario sean nulas; no declar
 | 18 | `relacion_usuario` | Relación tipada entre dos usuarios |
 
 **Total: 18 entidades.**
+
+## Notas de actualización
+
+- Se añadió la fecha de actualización y una descripción para cada entidad.
+- Se explicitó que los modelos no declaran índices adicionales ni tipos `Enum` de base de datos; las restricciones únicas existentes siguen documentadas en los campos.
+- Se verificó el inventario contra `backend/app/models`: siguen siendo 18 entidades y no se detectaron tablas añadidas o eliminadas respecto de este documento.
+- Las relaciones de borrado `ON DELETE CASCADE` en `comunicado_destinatario.comunicado_id` y `comunicado_visto.comunicado_id` se mantienen reflejadas en las tablas de campos.

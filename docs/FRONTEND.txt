@@ -1,6 +1,11 @@
 FRONTEND - APP MENSAJERIA IES
 =============================
 
+Proyecto: IES Connect
+Versión de package.json: 0.0.0
+Última actualización: 26/10/2026
+Stack: React 19, JavaScript/JSX, Vite 8 y React Router 7.
+
 Informe del frontend implementado en frontend/src. Resume la arquitectura, las
 pantallas y los flujos existentes para servir de referencia al continuar el
 desarrollo. El inventario describe el código actual; no implica que cada flujo
@@ -19,6 +24,12 @@ este completo o validado en todos los roles y escenarios.
 - Fetch API: comunicación HTTP con el backend.
 - WebSocket nativo del navegador: recepción y envío de mensajes en tiempo real.
 - ESLint: análisis estático; scripts disponibles para lint y build.
+
+Dependencias declaradas en frontend/package.json:
+  react y react-dom ^19.2.8; react-router-dom ^7.18.4;
+  lucide-react ^1.47.0; vite ^8.3.0; @vitejs/plugin-react ^6.1.1;
+  eslint ^10.10.0.
+El resto de dependencias de desarrollo también está listado en package.json.
 
 No se observa un framework de estilos adicional ni una biblioteca de estado
 global externa. El estado compartido se gestiona con React Context.
@@ -55,11 +66,21 @@ frontend/
     |   useFetch.js, useWebSocket.js, useConfirmacion.jsx y
     |   useComunicadosNoLeidos.js.
     |-- pages/
-    |   Pantallas agrupadas por funcionalidad.
+    |   Calendario/, Canales/, Categorias/, Comunicados/, Dashboard/, Login/,
+    |   Miembros/, NoAutorizado/, NotFound/, PanelAdmin/, Perfil/,
+    |   Servidores/, mensajes/ y usuarios/.
     |-- services/
     |   Servicios complementarios; incluye servidoresService.js.
     |-- styles/
         reset.css, variables.css y globals.css.
+
+Archivos de entorno:
+  frontend/.env.example define VITE_API_URL=http://localhost:8000/api/v1.
+  frontend/.env.example es la referencia versionada para el endpoint del API;
+  no se documentan valores de frontend/.env.
+
+Componentes UI adicionales existentes: BotonVolver. apiClient.js también
+implementa apiUpload para cargar formularios multipart/form-data.
 
 
 3. RUTAS DE NAVEGACION Y ACCESO
@@ -127,9 +148,9 @@ Comunicados
 
 Calendario
   Muestra una cuadrícula mensual y recordatorios asociados a fechas. Permite
-  crear, actualizar o eliminar recordatorios. calendarioinstitucional.js
-  proporciona utilidades para clasificar días y consultar eventos/fechas
-  institucionales.
+  crear, actualizar o eliminar recordatorios obtenidos del backend.
+  calendarioinstitucional.js contiene feriados y eventos institucionales
+  estáticos codificados para 2026; no se consultan como eventos en el backend.
 
 Perfil
   Consulta los datos de cuenta del usuario autenticado y permite actualizar
@@ -146,8 +167,8 @@ Panel de administración
 
 Miembros
   La pantalla Miembros contiene actualmente datos de ejemplo y administra su
-  lista en estado local. No está conectada a los endpoints de membresía; debe
-  integrarse con las API de servidor/canal antes de considerarla persistente.
+  lista en estado local. No está conectada a los endpoints de membresía y no
+  persiste cambios. 🚧 PENDIENTE: integrar con la API real.
 
 Experiencia común
   La aplicación usa un layout con cabecera, barra lateral y pie de página;
@@ -158,9 +179,10 @@ Experiencia común
 5. CLIENTE DE API Y MODULOS DE DATOS
 ------------------------------------
 
-apiClient.js proporciona apiGet, apiPost, apiPut, apiPatch y apiDelete. Lee
-VITE_API_URL, agrega el token de acceso cuando existe, maneja respuestas JSON,
-respuestas 204 y errores HTTP.
+apiClient.js proporciona apiGet, apiPost, apiPut, apiPatch, apiDelete y
+apiUpload. Lee VITE_API_URL, agrega el token de acceso cuando existe, maneja
+respuestas JSON, respuestas 204 y errores HTTP. apiUpload envía el archivo en
+multipart/form-data bajo el campo "archivo".
 
 Hay módulos por dominio para:
 
@@ -174,6 +196,57 @@ Hay módulos por dominio para:
 
 La URL del backend se configura con la variable de entorno VITE_API_URL. La
 aplicación convierte el prefijo HTTP en WS para formar conexiones WebSocket.
+
+Módulos y rutas de backend usados por el cliente API:
+
+  usuarios.js                    /usuarios/
+  perfiles.js                    /perfiles/usuario/{id}, /perfiles/ y
+                                 /perfiles/usuario/{id}/foto
+  roles.js                       /roles/
+  usuarioRol.js                  /usuario-rol/
+  servidores.js                  /servidores/
+  categorias.js                  /categorias/
+  canales.js                     /canales/
+  miembrosServidor.js            /miembros-servidor/
+  miembrosCanal.js               /miembros-canal/
+  mensajes.js                    /mensajes/
+  mensajesDirectos.js            /mensajes-directos/
+  mensajesVistos.js              /mensajes-vistos/
+  comunicados.js                 /comunicados/ y /comunicados/papelera
+  comunicadosDestinatarios.js    /comunicados-destinatarios/
+  comunicadosVistos.js           /comunicados-vistos/
+  notificaciones.js              /notificaciones/
+  recordatorios.js               /recordatorios/
+  calendario.js                 usa /recordatorios/; no define endpoints
+                                 propios de calendario.
+  calendarioinstitucional.js    datos y funciones locales, sin llamadas HTTP.
+  queryParams.js                 utilidades locales para query strings.
+
+Los wrappers cubren solo algunas operaciones en ciertos módulos; la lista de
+rutas completa está en docs/BACKEND.txt y backend/app/api/v1/.
+servidoresService.js reutiliza apiClient para servidores, categorías y canales,
+y construye algunas jerarquías/filtrados en el cliente.
+
+La pantalla Perfil y UserMenu consumen datos del perfil/cuenta. Existe el
+wrapper subirFotoPerfil, pero no se encontró una interfaz de carga de foto
+conectada en las páginas actuales. 🚧 PENDIENTE: integrar y probar ese flujo.
+
+5.1 ESTADO Y FLUJOS
+-------------------
+
+- Estado global de autenticación: AuthContext (usuario, login/logout, carga de
+  sesión y comprobación de roles).
+- Estado de mensajes no leídos y WebSockets: NotificacionesContext; conecta a
+  canales y al WebSocket directo, y pausa el contador al entrar a Mensajes.
+- El resto del estado de datos y modales es local a las páginas/componentes.
+- Header obtiene comunicados sin leer consultando comunicados, destinatarios,
+  vistos y membresías; no usa el CRUD /notificaciones para ese contador.
+- El frontend guarda el JWT en localStorage y lo envía en peticiones HTTP que
+  pasan por apiClient. Esto no implica que todos esos endpoints exijan o
+  verifiquen autenticación en el backend.
+- Login, consulta de sesión, gestión de usuarios/servidores/roles, creación de
+  recordatorios, gestión de comunicados, registro de lecturas y chat WebSocket
+  tienen código de interfaz/cliente. La pantalla Miembros sigue siendo local.
 
 
 6. SCRIPTS Y EJECUCION
@@ -204,3 +277,17 @@ Desde la carpeta frontend:
 6. Mantener sincronizados los módulos de frontend con las rutas y schemas
    vigentes del backend, y añadir pruebas de los flujos principales.
 
+
+8. NOTAS DE ACTUALIZACION
+-------------------------
+
+- Se completó el inventario con BotonVolver y apiUpload, que existían en el
+  código y no estaban en el documento anterior.
+- Se documentó que las fechas/eventos de calendario son datos estáticos para
+  2026, no un servicio de calendario del backend.
+- Se precisó que la pantalla Miembros usa datos locales, y que el wrapper de
+  carga de foto existe sin una interfaz de carga conectada.
+- Se añadió el mapa de módulos API a recursos del backend y el estado de
+  autenticación global; los permisos del frontend no sustituyen autorización
+  del backend.
+- No se encontraron archivos de pruebas automatizadas bajo frontend/src.

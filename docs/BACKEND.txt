@@ -4,6 +4,12 @@ BACKEND - APP MENSAJERIA IES
 Documento de referencia basado en las rutas y archivos que están implementados
 actualmente en la carpeta backend.
 
+Proyecto: APP MENSAJERÍA API
+Versión declarada por FastAPI: 1.0.0
+Última actualización: 26/10/2026
+Lenguaje: Python. No existe backend/package.json ni versión de paquete Python
+declarada en el repositorio.
+
 
 1. TECNOLOGIAS
 --------------
@@ -19,6 +25,7 @@ actualmente en la carpeta backend.
   configura DATABASE_URL.
 - PyJWT y bcrypt: creación y validación de tokens JWT y hash de contraseñas.
 - python-dotenv: carga de variables desde un archivo .env.
+- Cloudinary: almacenamiento externo de fotos de perfil.
 - WebSockets: comunicación en tiempo real para mensajes en canales y mensajes
   directos.
 
@@ -43,14 +50,20 @@ backend/
 |       Revisiones de esquema de base de datos.
 |-- app/
     |-- api/v1/
-    |   Un paquete por recurso o funcionalidad. Los paquetes suelen separar:
-    |   router.py (rutas HTTP/WebSocket), schemas.py (contratos de datos) y
-    |   repository.py (operaciones de persistencia).
+    |   Un paquete por recurso/funcionalidad, con router.py, schemas.py y
+    |   repository.py: auth, usuarios, perfiles, servidores, categorias,
+    |   canales, mensajes, mensaje_directo, roles, usuario_rol,
+    |   miembro_servidor, miembro_canal, comunicados,
+    |   comunicado_destinatario, comunicado_visto, mensaje_visto,
+    |   notificaciones, recordatorios y relacion_usuario.
     |-- core/
     |   db.py: conexión, sesiones y dependencia get_db.
     |   deps.py: dependencias de autenticación y comprobación de roles.
     |   security.py: hash de contraseñas y tokens JWT.
     |   ws_manager.py: gestión de conexiones WebSocket.
+    |   test_db.py: utilidad de prueba de conexión.
+    |-- cloudinary_config.py
+    |   Configuración del cliente Cloudinary para las fotos de perfil.
     |-- models/
         Modelos SQLAlchemy que representan las entidades de la base de datos.
 
@@ -67,13 +80,61 @@ backend/
   http://localhost:5173.
 - La conexión se configura mediante DATABASE_URL. Si no está definida, el
   código usa sqlite:///./mensajeria_ies.db.
-- La autenticación utiliza tokens Bearer JWT. La configuración contempla
-  SECRET_KEY y ACCESS_TOKEN_MINUTES (60 minutos por defecto).
+- La autenticación utiliza tokens Bearer JWT. El código lee SECRET_KEY y
+  ACCESS_TOKEN_MINUTES (60 minutos por defecto).
 - Los routers REST usan schemas Pydantic y respuestas JSON. Las operaciones de
   creación devuelven normalmente HTTP 201; las eliminaciones exitosas devuelven
   HTTP 204.
 - Las migraciones de producción se gestionan con Alembic. La creación directa
   de tablas con Base.metadata.create_all está comentada en main.py.
+- FastAPI declara la versión 1.0.0 y expone /docs y /openapi.json.
+- backend/.env.example contiene DATABASE_URL con el nombre tp_biblioteca, que
+  no coincide con la base mensajeria_ies.db usada por defecto en app/core/db.py.
+
+
+3.1 VARIABLES DE ENTORNO
+------------------------
+
+DATABASE_URL            URL SQLAlchemy. Ejemplo PostgreSQL:
+                        postgresql://usuario:clave@localhost:5432/mensajeria_ies
+                        Valor SQLite por defecto:
+                        sqlite:///./mensajeria_ies.db
+SECRET_KEY              Firma y valida tokens JWT. 🚧 PENDIENTE: no aparece en
+                        .env.example; definir un secreto seguro.
+ACCESS_TOKEN_MINUTES    Duración del JWT en minutos. Valor por defecto: 60.
+CLOUDINARY_CLOUD_NAME   Nombre de cuenta Cloudinary. 🚧 PENDIENTE: configurar
+                        si se usa la carga de fotos.
+CLOUDINARY_API_KEY      Clave API Cloudinary. 🚧 PENDIENTE: configurar como
+                        secreto.
+CLOUDINARY_API_SECRET   Secreto API Cloudinary. 🚧 PENDIENTE: configurar como
+                        secreto.
+
+La única variable presente en backend/.env.example es DATABASE_URL. No copiar
+credenciales reales a la documentación. SECRET_KEY y CLOUDINARY_* se leen en
+el código, pero no están incluidos en el ejemplo de entorno.
+
+
+3.2 SCRIPTS Y PRUEBAS
+---------------------
+
+- No hay package.json ni scripts npm para el backend.
+- requirements.txt instala las dependencias Python con versiones fijadas.
+- backend/seed.py carga datos de demostración y evita insertar registros que
+  ya existen.
+- Alembic se utiliza desde su CLI para gestionar migraciones.
+- No se encontró una suite automatizada de pruebas. app/core/test_db.py es una
+  utilidad para comprobar la conexión a la base de datos.
+
+3.3 MODELOS / ENTIDADES
+-----------------------
+
+Los 18 modelos actuales son: Usuario, Perfil, Rol, UsuarioRol, Servidor,
+MiembroServidor, Categoria, Canal, MiembroCanal, Mensaje, MensajeDirecto,
+Comunicado, ComunicadoDestinatario, ComunicadoVisto, MensajeVisto,
+Notificacion, Recordatorio y RelacionUsuario.
+
+El detalle de campos, claves, restricciones y relaciones se mantiene en
+docs/DER.md; ese documento se coteja directamente con backend/app/models/.
 
 
 4. RUTAS IMPLEMENTADAS
@@ -94,16 +155,17 @@ Autenticacion
   POST /auth/login
       Recibe el formulario OAuth2 (username y password); el identificador
       puede ser el correo electrónico o el nombre de usuario. Devuelve el
-      token Bearer y los datos del usuario.
+      token Bearer y los datos del usuario. No requiere token.
   GET /auth/me
-      Devuelve la información del usuario asociado al token válido.
+      Devuelve la información del usuario asociado al token válido. Requiere
+      token Bearer.
 
 Usuarios y permisos
   /usuarios/                 CRUD estándar; identificador {usuario_id}.
   /perfiles/                 POST / para crear un perfil.
-                             GET /usuario/{usuario_id} para consultar el perfil
-                             de un usuario.
-                             PUT /usuario/{usuario_id} para actualizarlo.
+                             GET y PUT /usuario/{usuario_id}.
+                             POST /usuario/{usuario_id}/foto carga una imagen
+                             multipart y actualiza la URL de Cloudinary.
   /roles/                    CRUD estándar; identificador {rol_id}.
   /usuario-rol/              CRUD estándar; identificador {usuario_rol_id}.
                              DELETE /usuario/{usuario_id}/rol/{rol_id} permite
@@ -113,14 +175,14 @@ Servidores, categorias y canales
   /servidores/               CRUD estándar; identificador {servidor_id}.
   /categorias/               CRUD estándar; identificador {categoria_id}.
   /canales/                  CRUD estándar; identificador {canal_id}.
-  /miembros-servidor/        GET / lista; POST / crea; las operaciones sobre
-                             un miembro usan
+  /miembros-servidor/        GET / lista; POST / crea; GET, PUT y DELETE
                              /{usuario_id}/{servidor_id}.
   /miembros-canal/           CRUD estándar; identificador {miembro_canal_id}.
 
 Mensajeria
   /mensajes/                 CRUD; identificador {mensaje_id}. El listado
-                             acepta el parámetro opcional canal_id.
+                             acepta canal_id; PUT y DELETE reciben además el
+                             query parameter usuario_id para comprobar autoría.
   /mensajes-directos/        CRUD; identificador {mensaje_directo_id}.
 
 Comunicados y lecturas
@@ -142,6 +204,89 @@ Otros recursos
   /recordatorios/            CRUD estándar; identificador {recordatorio_id}.
   /relaciones-usuario/       CRUD estándar; identificador {relacion_id}.
 
+4.1 METODOS, AUTENTICACION Y CONTRATOS POR RECURSO
+--------------------------------------------------
+
+En la tabla, "No" significa que el router no declara dependencia JWT ni un rol
+requerido; no significa que la ruta sea segura para producción. Solo /auth/me
+requiere usuario autenticado. GET/DELETE no reciben cuerpo. POST/PUT usan los
+schemas indicados; las respuestas usan el schema de salida o listas de este.
+
+Ruta base (prefijo /api/v1)             Métodos y parámetros               Auth   Body / respuesta
+/                                       GET                                No     JSON informativo de la aplicación.
+/health                                 GET                                No     JSON status/database.
+/auth/login                             POST                               No     Form URL-encoded; Token.
+/auth/me                                GET                                Sí     Sin body; UsuarioMeOut.
+/usuarios/                              GET ?query&activo, POST            No     UsuarioCreate/UsuarioResponse.
+/usuarios/{usuario_id}                  GET, PUT, DELETE                   No     UsuarioUpdate/UsuarioResponse.
+/perfiles/                              POST                               No     PerfilCreate/PerfilResponse.
+/perfiles/usuario/{usuario_id}          GET, PUT                           No     PerfilUpdate/PerfilResponse.
+/perfiles/usuario/{usuario_id}/foto     POST multipart "archivo"           No     Imagen; PerfilResponse.
+/roles/                                 GET, POST                          No     RolCreate/RolResponse.
+/roles/{rol_id}                         GET, PUT, DELETE                   No     RolUpdate/RolResponse.
+/usuario-rol/                           GET ?usuario_id&servidor_id, POST  No     UsuarioRolCreate/UsuarioRolResponse.
+/usuario-rol/{usuario_rol_id}           GET, PUT, DELETE                   No     UsuarioRolUpdate/UsuarioRolResponse.
+/usuario-rol/usuario/{usuario_id}/rol/{rol_id}
+                                        DELETE ?servidor_id opcional       No     Sin body; respuesta 204.
+/servidores/                            GET, POST                          No     ServidorCreate/ServidorResponse.
+/servidores/{servidor_id}               GET, PUT, DELETE                   No     ServidorUpdate/ServidorResponse.
+/categorias/                            GET, POST                          No     CategoriaCreate/CategoriaResponse.
+/categorias/{categoria_id}              GET, PUT, DELETE                   No     CategoriaUpdate/CategoriaResponse.
+/canales/                               GET ?query, POST                   No     CanalCreate/CanalResponse.
+/canales/{canal_id}                     GET, PUT, DELETE                   No     CanalUpdate/CanalResponse.
+/miembros-servidor/                     GET, POST                          No     MiembroServidorCreate/MiembroServidorResponse.
+/miembros-servidor/{usuario_id}/{servidor_id}
+                                        GET, PUT, DELETE                   No     MiembroServidorUpdate/MiembroServidorResponse.
+/miembros-canal/                        GET, POST                          No     MiembroCanalCreate/MiembroCanalResponse.
+/miembros-canal/{miembro_canal_id}      GET, PUT, DELETE                   No     MiembroCanalUpdate/MiembroCanalResponse.
+/mensajes/                              GET ?canal_id, POST                No     MensajeCreate/MensajeResponse.
+/mensajes/{mensaje_id}                  GET, PUT ?usuario_id, DELETE ?usuario_id
+                                                                          No     MensajeUpdate/MensajeResponse; DELETE 204.
+/mensajes-directos/                     GET, POST                          No     MensajeDirectoCreate/MensajeDirectoResponse.
+/mensajes-directos/{mensaje_directo_id} GET, PUT, DELETE                   No     MensajeDirectoUpdate/MensajeDirectoResponse.
+/comunicados/                           GET, POST                          No     ComunicadoCreate/ComunicadoResponse.
+/comunicados/papelera                   GET                                No     Sin body; lista de ComunicadoResponse.
+/comunicados/{comunicado_id}            GET, PUT, DELETE                   No     ComunicadoUpdate/ComunicadoResponse.
+/comunicados/{comunicado_id}/restaurar  PATCH                              No     Sin body; ComunicadoResponse.
+/comunicados/{comunicado_id}/definitivo DELETE                             No     Sin body; respuesta 204.
+/comunicados-destinatarios/             GET, POST                          No     ComunicadoDestinatarioCreate/ComunicadoDestinatarioResponse.
+/comunicados-destinatarios/{destinatario_id}
+                                        GET, PUT, DELETE                   No     ComunicadoDestinatarioUpdate/ComunicadoDestinatarioResponse.
+/comunicados-vistos/                    GET, POST                          No     ComunicadoVistoCreate/ComunicadoVistoResponse.
+/comunicados-vistos/{visto_id}          GET, PUT, DELETE                   No     ComunicadoVistoUpdate/ComunicadoVistoResponse.
+/mensajes-vistos/                       GET, POST                          No     MensajeVistoCreate/MensajeVistoResponse.
+/mensajes-vistos/{visto_id}             GET, PUT, DELETE                   No     MensajeVistoUpdate/MensajeVistoResponse.
+/notificaciones/                        GET, POST                          No     NotificacionCreate/NotificacionResponse.
+/notificaciones/{notificacion_id}       GET, PUT, DELETE                   No     NotificacionUpdate/NotificacionResponse.
+/recordatorios/                         GET, POST                          No     RecordatorioCreate/RecordatorioResponse.
+/recordatorios/{recordatorio_id}        GET, PUT, DELETE                   No     RecordatorioUpdate/RecordatorioResponse.
+/relaciones-usuario/                    GET, POST                          No     RelacionUsuarioCreate/RelacionUsuarioResponse.
+/relaciones-usuario/{relacion_id}       GET, PUT, DELETE                   No     RelacionUsuarioUpdate/RelacionUsuarioResponse.
+
+Métodos del CRUD estándar: GET / lista; GET /{id} consulta; POST / crea;
+PUT /{id} actualiza; DELETE /{id} elimina. Las rutas que no implementan el CRUD
+completo se detallan por separado arriba. Cuerpos y respuestas se validan con
+los schemas de backend/app/api/v1/<recurso>/schemas.py.
+
+Ejemplos de contratos definidos en los schemas:
+
+  POST /api/v1/auth/login (formulario URL-encoded)
+  username=alguien&password=********
+  Respuesta: {"access_token":"<JWT>","token_type":"bearer","usuario":{...}}
+
+  POST /api/v1/mensajes/ (JSON)
+  {"contenido":"Hola","usuario_id":1,"canal_id":2}
+  Respuesta: {"id_mensaje":1,"contenido":"Hola","fecha_envio":"...",
+              "editado":false,"usuario_id":1,"canal_id":2}
+
+  POST /api/v1/canales/ (JSON)
+  {"nombre":"General","servidor_id":1,"creador_id":1,"tipo":"chat"}
+  Respuesta: CanalResponse con id_canal y los campos del canal.
+
+  POST /api/v1/perfiles/usuario/1/foto
+  Formulario multipart con el campo "archivo"; admite image/jpeg, image/png o
+  image/webp y responde PerfilResponse cuando termina la carga.
+
 
 5. COMUNICACION EN TIEMPO REAL
 ------------------------------
@@ -157,14 +302,53 @@ Además de las rutas HTTP, hay dos WebSockets:
   al emisor y al receptor cuando tienen conexiones activas.
 
 
-6. NOTAS
---------
+6. AUTENTICACION, VALIDACION Y ERRORES
+--------------------------------------
+
+- El único endpoint REST que declara actualmente la dependencia JWT
+  get_usuario_actual es GET /api/v1/auth/me. El login no requiere token.
+- El resto de rutas REST y los dos WebSockets no declaran esa dependencia ni
+  una dependencia requiere_rol. Chequeos puntuales (por ejemplo, comparar el
+  usuario_id recibido con el autor al editar un mensaje) no autentican al
+  llamante.
+- 🚧 PENDIENTE: proteger los endpoints y WebSockets que requieran identidad o
+  permisos. Los roles del frontend no sustituyen autorización en el servidor.
+- FastAPI valida query parameters, formularios y JSON mediante tipos Python y
+  schemas Pydantic. Las entradas inválidas producen el error HTTP estándar 422.
+- Los routers usan HTTPException para errores como 400, 401, 403 y 404.
+  La carga de foto convierte fallos de Cloudinary en 502.
+- GET /health captura excepciones de conexión y devuelve JSON con status="error"
+  y database="disconnected"; no establece explícitamente un status HTTP de error.
+
+
+7. SERVICIOS EXTERNOS Y CONVENCIONES
+------------------------------------
+
+- Cloudinary es el único servicio externo observado: se usa para subir fotos
+  de perfil. No se encontraron integraciones de email, pagos ni otros servicios
+  de almacenamiento.
+- Cada recurso separa router.py (HTTP/WebSocket), schemas.py (validación y
+  contratos) y repository.py (persistencia).
+- La mayoría de endpoints CRUD trabaja con JSON. La carga de foto usa
+  multipart/form-data.
+- Los endpoints de creación suelen devolver 201; las eliminaciones exitosas,
+  204; los errores HTTP devuelven un objeto JSON con campo detail.
+- Los WebSockets no muestran autenticación ni control de permisos en el router.
+
+
+8. NOTAS DE ACTUALIZACION
+-------------------------
 
 - Los routers REST se implementan por recurso; las rutas exactas y los
   identificadores pueden consultarse en los archivos router.py de cada paquete
   bajo app/api/v1/.
-- La presencia de una ruta en este inventario describe que está definida en el
-  código. La autenticación y autorización efectiva dependen de las dependencias
-  que aplique cada router.
+- Se añadió POST /perfiles/usuario/{usuario_id}/foto y la integración con
+  Cloudinary, ausentes en el documento anterior.
+- Se detalló el estado de autenticación observado en código: solo /auth/me
+  declara la dependencia JWT; los demás endpoints REST y WebSocket carecen de
+  esa dependencia. 🚧 PENDIENTE: revisar su protección.
+- Se documentaron variables de entorno leídas por el código, la ausencia de
+  backend/package.json y la configuración de base de datos desalineada en
+  .env.example.
 - La comprobación /health informa de los errores de conexión a la base de datos
   en su respuesta cuando la comprobación falla.
