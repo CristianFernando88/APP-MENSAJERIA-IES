@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.models.comunicado import Comunicado
 from app.models.usuario import Usuario
 from .schemas import ComunicadoCreate, ComunicadoUpdate
+from cloudinary.uploader import destroy
 
 
 def list_comunicados(db: Session) -> list[Comunicado]:
@@ -98,6 +99,21 @@ def delete_permanently(db: Session, comunicado_id: int) -> bool:
 
     if comunicado is None:
         return False
+
+    for adjunto in comunicado.adjuntos:
+        resource_type = (
+            "image" if adjunto.tipo_mime.startswith("image/") else "raw"
+        )
+
+        resultado = destroy(
+            adjunto.public_id,
+            resource_type=resource_type
+        )
+
+        if resultado.get("result") not in ("ok", "not found"):
+            raise RuntimeError(
+                f"No se pudo eliminar el adjunto {adjunto.id} de Cloudinary"
+            )
 
     db.delete(comunicado)
     db.commit()

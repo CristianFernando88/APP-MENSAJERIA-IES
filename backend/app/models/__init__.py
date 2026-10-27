@@ -17,6 +17,7 @@ from app.models.comunicado_destinatario import ComunicadoDestinatario
 from app.models.comunicado_visto import ComunicadoVisto
 from app.models.mensaje_visto import MensajeVisto
 from app.models.relacion_usuario import RelacionUsuario
+from app.models.comunicado_adjunto import ComunicadoAdjunto
 
 __all__ = [
     "Usuario",
@@ -35,6 +36,7 @@ __all__ = [
     "MensajeDirecto",
     "ComunicadoDestinatario",
     "ComunicadoVisto",
+    "ComunicadoAdjunto",
     "MensajeVisto",
     "RelacionUsuario",
 ]
