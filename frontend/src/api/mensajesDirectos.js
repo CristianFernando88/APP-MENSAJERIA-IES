@@ -13,3 +13,8 @@ export function crearMensajeDirecto(data) {
 export function actualizarMensajeDirecto(id, data) {
   return apiPut(`/mensajes-directos/${id}`, data);
 }
+
+// TODO BACKEND: Implementar el filtro de contactos permitidos según permisos institucionales.
+export async function getContactosPermitidos() {
+  try { return await apiGet("/mensajes-directos/contactos"); } catch { return []; }
+}

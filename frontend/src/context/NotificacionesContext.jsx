@@ -52,7 +52,22 @@ export function NotificacionesProvider({ children }) {
     async function cargar() {
       try {
         const [resCanales, resMiembros] = await Promise.all([listarCanales(), listarMiembrosCanal()]);
-        const esAdmin = user.roles?.some(r => ["admin", "super_admin"].includes(r.nombre));
+        const nombreRolesLegacy = (user.roles || [])
+          .map((rol) => typeof rol === "string" ? rol : rol?.nombre)
+          .filter(Boolean);
+
+        const esAdminGlobalAsignaciones = (user.asignaciones || []).some((asignacion) => {
+          const nombre = asignacion?.rol?.nombre || asignacion?.nombre_rol;
+          const tipo = asignacion?.rol?.tipo;
+          return asignacion?.servidor_id == null &&
+            tipo === "global" &&
+            ["admin", "super_admin"].includes(nombre);
+        });
+
+        const esAdminGlobalLegacy = nombreRolesLegacy
+          .some((nombre) => ["admin", "super_admin"].includes(nombre));
+
+        const esAdmin = esAdminGlobalAsignaciones || esAdminGlobalLegacy;
         if (esAdmin) {
           setCanales(resCanales);
         } else {
@@ -62,7 +77,7 @@ export function NotificacionesProvider({ children }) {
       } catch (e) { console.error(e); }
     }
     cargar();
-  }, [user]);
+  }, [user?.id_usuario]);
 
   // WebSocket de Directos
   useWebSocket(`directo/${user?.id_usuario}`, (data) => {

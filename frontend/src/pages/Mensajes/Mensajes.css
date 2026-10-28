@@ -383,6 +383,99 @@
   margin-top: var(--space-sm);
 }
 
+/* NUEVO: gestión de miembros, roles y avisos */
+.mensajes__members-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--color-gris-azulado);
+  color: var(--color-azul-petroleo);
+  cursor: pointer;
+}
+
+.mensajes__rol-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-right: var(--space-xs);
+  margin-top: 2px;
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-sm);
+  background: var(--color-gris-azulado);
+  color: var(--texto-secundario);
+}
+
+.mensajes__rol-badge--admin { background: var(--color-turquesa-claro); color: var(--color-blanco); }
+.mensajes__rol-badge--miembro { background: var(--color-celeste-gris); color: var(--texto-oscuro); }
+.mensajes__rol-badge--observador { background: var(--color-gris-azulado); color: var(--texto-secundario); }
+
+.mensajes__contact-meta { font-size: var(--font-size-sm); color: var(--texto-secundario); }
+.mensajes__contact-username { font-weight: 600; }
+.mensajes__contact-roles { color: var(--texto-secundario); }
+
+.mensajes__add-member-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--color-turquesa-claro);
+  color: var(--color-blanco);
+  cursor: pointer;
+}
+
+.mensajes__remove-member-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--texto-secundario);
+  cursor: pointer;
+}
+
+.mensajes__rol-option {
+  border: 1px solid var(--color-celeste-gris);
+  background: var(--color-blanco);
+  color: var(--texto-secundario);
+  border-radius: var(--radius-md);
+  padding: var(--space-xs) var(--space-sm);
+  cursor: pointer;
+}
+
+.mensajes__rol-option--active {
+  border-color: var(--color-turquesa-claro);
+  background: var(--color-gris-azulado);
+  color: var(--color-azul-petroleo);
+}
+
+.mensajes__toast {
+  position: fixed;
+  right: var(--space-md);
+  bottom: var(--space-md);
+  z-index: 2000;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-blanco);
+  font-size: var(--font-size-sm);
+  animation: toastIn 0.2s ease-out;
+}
+
+.mensajes__toast--error { background: #b42318; }
+.mensajes__toast--success { background: var(--color-verde-esmeralda, #1f9d55); }
+
+@keyframes toastIn {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
 @media (min-width: 768px) {
   .mensajes__list-panel {
     width: 340px;
@@ -407,4 +500,190 @@
   margin: 1rem 0 0.5rem 1rem;
   padding-bottom: 4px;
   border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+
+/* Modal Nuevo mensaje */
+.mensajes__new-message-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  max-height: 70vh;
+}
+
+.mensajes__new-message-tabs {
+  display: flex;
+  gap: var(--space-xs);
+  padding: var(--space-xs);
+  background-color: var(--color-gris-azulado);
+  border-radius: var(--radius-md);
+}
+
+.mensajes__new-message-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--texto-secundario);
+  cursor: pointer;
+}
+
+.mensajes__new-message-tab--active {
+  background-color: var(--color-blanco);
+  color: var(--color-acento-calido);
+  box-shadow: var(--shadow-sm);
+}
+
+.mensajes__new-message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--color-gris-azulado);
+  border-radius: var(--radius-md);
+}
+
+.mensajes__new-message-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  border: none;
+  border-bottom: 1px solid var(--color-gris-azulado);
+  background-color: var(--color-blanco);
+  text-align: left;
+  cursor: pointer;
+}
+
+.mensajes__new-message-item:last-child {
+  border-bottom: none;
+}
+
+.mensajes__new-message-item:hover {
+  background-color: var(--color-gris-azulado);
+}
+
+.mensajes__new-message-item--selected {
+  box-shadow: inset 4px 0 0 var(--color-turquesa-claro);
+  background-color: var(--color-gris-azulado);
+}
+
+.mensajes__new-message-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-gris-azulado);
+}
+
+.mensajes__new-message-cancel,
+.mensajes__new-message-submit {
+  min-height: 38px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mensajes__new-message-cancel {
+  border: 1px solid var(--color-gris-azulado);
+  background-color: var(--color-blanco);
+  color: var(--texto-oscuro);
+}
+
+.mensajes__new-message-submit {
+  border: 1px solid var(--color-turquesa-claro);
+  background-color: var(--color-turquesa-claro);
+  color: var(--texto-claro);
+}
+
+.mensajes__new-message-submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.mensajes__new-message-hint {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--texto-secundario);
+  text-align: center;
+}
+
+/* Agrupación Alumno → Tutores en Nuevo mensaje */
+.mensajes__alumnos-seccion,
+.mensajes__otros-contactos-seccion {
+  display: flex;
+  flex-direction: column;
+}
+
+.mensajes__alumnos-seccion-titulo {
+  margin: var(--space-xs) 0;
+  padding: 0 var(--space-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--texto-secundario);
+}
+
+.mensajes__alumno-grupo {
+  border-bottom: 1px solid var(--color-gris-azulado);
+}
+
+.mensajes__alumno-grupo:last-child {
+  border-bottom: none;
+}
+
+.mensajes__alumno-fila {
+  border-bottom: none;
+}
+
+.mensajes__alumno-fila--open {
+  background-color: var(--color-gris-azulado);
+}
+
+.mensajes__alumno-tutores-btn {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-right: var(--space-md);
+  padding: 0 0 var(--space-sm);
+  border: none;
+  background: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--texto-secundario);
+  cursor: pointer;
+}
+
+.mensajes__chev {
+  transition: transform 0.2s ease;
+}
+
+.mensajes__chev--abierto {
+  transform: rotate(180deg);
+  transition: transform 0.2s ease;
+}
+
+.mensajes__tutor-sublista {
+  display: flex;
+  flex-direction: column;
+  padding-left: var(--space-lg);
+  padding-bottom: var(--space-sm);
+}
+
+.mensajes__tutor-fila {
+  border-bottom: 1px solid var(--color-gris-azulado);
+}
+
+.mensajes__tutor-fila:last-child {
+  border-bottom: none;
 }
