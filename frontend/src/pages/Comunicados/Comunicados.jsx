@@ -2,12 +2,14 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Plus, Search, Trash2, Eye, RotateCcw, Archive, Ban,
   Hash, Server, User, Globe, X, ChevronDown, Megaphone,
-  Users, GraduationCap, Briefcase,
+  Users, GraduationCap, Briefcase, Paperclip, FileText, File, Download,
+  Image as ImageIcon,
 } from "lucide-react";
 import Badge from "../../components/ui/Badge/Badge";
 import Button from "../../components/ui/Button/Button";
 import Input from "../../components/ui/Input/Input";
 import Modal from "../../components/ui/Modal/Modal";
+import Overlay from "../../components/ui/Overlay/Overlay";
 import Toast from "../../components/ui/Toast/Toast";
 import {
   listarComunicados, crearComunicado, eliminarComunicado,
@@ -23,16 +25,16 @@ import { listarMiembrosServidor } from "../../api/miembrosServidor";
 import { listarRoles } from "../../api/roles";
 import { listarUsuarioRol } from "../../api/usuarioRol";
 import { listarRelaciones } from "../../api/relacionesUsuario";
+import { listarAdjuntos, subirAdjuntos } from "../../api/comunicadosAdjuntos";
 import useConfirmacion from "../../hooks/useConfirmacion";
 import { useAuth } from "../../context/AuthContext";
 import "./Comunicados.css";
 
 const ROLES_PUEDEN_PUBLICAR = ["super_admin", "admin", "director", "profesor", "preceptor"];
 
-// Roles que van en la lista "Docentes y personal" del selector de destinatarios
+
 const ROLES_PERSONAL = ["profesor", "preceptor", "director"];
 
-// Variante de Badge por alcance (solo para el badge de la franja del detalle)
 const ALCANCE_VARIANT = {
   global: "warning",
   servidor: "default",
@@ -50,6 +52,33 @@ const ALCANCE_ETIQUETA = {
 const formVacio = { titulo: "", contenido: "" };
 const DESTINOS_VACIOS = { global: true, servidores: [], canales: [], usuarios: [] };
 const MS_TOAST = 8000;
+
+const EXTENSIONES_OK = [
+  "jpg", "jpeg", "png", "webp", "gif",
+  "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt",
+];
+const MAX_TAMANO_ADJ = 10 * 1024 * 1024; // 10 MB
+const MAX_ADJUNTOS = 5;
+
+const extensionDe = (nombre) =>
+  nombre.includes(".") ? nombre.split(".").pop().toLowerCase() : "";
+
+const esImagenAdjunto = (archivo) =>
+  archivo.type?.startsWith("image/") ||
+  EXTENSIONES_OK.slice(0, 5).includes(extensionDe(archivo.name));
+
+const tamanoDe = (bytes) => {
+  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
+  return `${Math.ceil(bytes / 1024)} KB`;
+};
+
+const iconoDeAdjunto = (tipoMime, nombre) => {
+  if (tipoMime?.startsWith("image/")) return ImageIcon;
+  const ext = extensionDe(nombre ?? "");
+  if (["jpg", "jpeg", "png", "webp", "gif"].includes(ext)) return ImageIcon;
+  if (["pdf", "doc", "docx", "txt"].includes(ext)) return FileText;
+  return File;
+};
 
 function tiempoRelativo(iso) {
   const minutos = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -111,6 +140,14 @@ export default function Comunicados() {
   const [guardando, setGuardando] = useState(false);
   const [toast, setToast] = useState(null);
 
+  const [adjuntosNuevos, setAdjuntosNuevos] = useState([]);
+  const [errorAdjuntos, setErrorAdjuntos] = useState("");
+  const [dropSobre, setDropSobre] = useState(false);
+  const [adjuntosPorComunicado, setAdjuntosPorComunicado] = useState({});
+  const [adjuntosDetalle, setAdjuntosDetalle] = useState([]);
+  const [imagenAmpliada, setImagenAmpliada] = useState(null);
+  const urlsAdjuntos = useRef(new Set());
+
   const idsConocidos = useRef(new Set());
   const primeraCarga = useRef(true);
   const temporizadorToast = useRef(null);
@@ -119,6 +156,17 @@ export default function Comunicados() {
     setToast(com);
     if (temporizadorToast.current) clearTimeout(temporizadorToast.current);
     temporizadorToast.current = setTimeout(() => setToast(null), MS_TOAST);
+  };
+
+  const cargarAdjuntosDe = async (ids) => {
+    const mapa = {};
+    const resultados = await Promise.all(
+      ids.map((id) => listarAdjuntos(id).catch(() => []))
+    );
+    for (let i = 0; i < ids.length; i += 1) {
+      mapa[ids[i]] = resultados[i];
+    }
+    return mapa;
   };
 
   const cargarTodo = async ({ silencioso = false } = {}) => {
@@ -152,6 +200,10 @@ export default function Comunicados() {
       setRelaciones(re);
       setMisCanales(mc.filter((m) => m.usuario_id === user?.id_usuario).map((m) => m.canal_id));
       setMisServidores(ms.filter((m) => m.usuario_id === user?.id_usuario).map((m) => m.servidor_id));
+
+      if (!silencioso) {
+        setAdjuntosPorComunicado(await cargarAdjuntosDe(c.map((x) => x.id_comunicado)));
+      }
 
       if (!primeraCarga.current) {
         const nuevos = c.filter((x) => !idsConocidos.current.has(x.id_comunicado));
@@ -194,11 +246,18 @@ export default function Comunicados() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id_usuario]);
 
+
+  useEffect(
+    () => () => {
+      for (const url of urlsAdjuntos.current) URL.revokeObjectURL(url);
+    },
+    []
+  );
+
   useEffect(() => {
     if (!puedePublicar && pestana !== "recibidos") setPestana("recibidos");
   }, [puedePublicar, pestana]);
 
-  // ---------- Nombres reales (perfil) ----------
   const nombreDeUsuario = (u) => {
     if (!u) return "Sistema";
     const perfil = u.perfil;
@@ -209,7 +268,7 @@ export default function Comunicados() {
   const nombreDe = (id) =>
     nombreDeUsuario(usuarios.find((u) => u.id_usuario === id));
 
-  // ---------- Personas (alumnos / personal) ----------
+
   const rolNombreDe = (rolId) => roles.find((r) => r.id_rol === rolId)?.nombre;
 
   const alumnos = useMemo(() => {
@@ -232,7 +291,6 @@ export default function Comunicados() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usuarios, usuarioRoles, roles]);
 
-  // Tutores de un alumno (la relación se guarda en cualquier dirección)
   const tutoresDe = (alumnoId) => {
     const otros = new Map();
     for (const r of relaciones) {
@@ -249,7 +307,6 @@ export default function Comunicados() {
     }));
   };
 
-  // ---------- Destinatarios de cada comunicado ----------
   const destinosPorComunicado = useMemo(() => {
     const mapa = {};
     for (const d of destinatarios) {
@@ -333,7 +390,7 @@ export default function Comunicados() {
     return c.titulo.toLowerCase().includes(busqueda.toLowerCase());
   });
 
-  // ---------- Selección y lectura ----------
+ 
   const comunicadoSeleccionado = useMemo(() => {
     if (seleccionadoId == null) return null;
     return (
@@ -342,6 +399,25 @@ export default function Comunicados() {
       null
     );
   }, [seleccionadoId, comunicados, papelera]);
+
+  useEffect(() => {
+    if (!comunicadoSeleccionado) {
+      setAdjuntosDetalle([]);
+      return;
+    }
+
+    let vigente = true;
+    listarAdjuntos(comunicadoSeleccionado.id_comunicado)
+      .then((data) => {
+        if (vigente) setAdjuntosDetalle(data ?? []);
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      vigente = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comunicadoSeleccionado?.id_comunicado]);
 
   const handleAbrir = (comunicado) => {
     setSeleccionadoId(comunicado.id_comunicado);
@@ -361,7 +437,7 @@ export default function Comunicados() {
     setSeleccionadoId(null);
   };
 
-  // ---------- Acciones sobre comunicados ----------
+
   const handleEliminar = async (comunicado) => {
     const ok = await pedir({
       titulo: "Mover a la papelera",
@@ -404,7 +480,7 @@ export default function Comunicados() {
   const handleEliminarDefinitivo = async (comunicado) => {
     const ok = await pedir({
       titulo: "Eliminar definitivamente",
-      mensaje: `Se va a borrar "${comunicado.titulo}" para siempre, junto con sus destinatarios y registros de lectura. Esta acción NO se puede deshacer.`,
+      mensaje: `Se va a borrar "${comunicado.titulo}" para siempre, junto con sus destinatarios, registros de lectura y adjuntos. Esta acción NO se puede deshacer.`,
       textoConfirmar: "Eliminar para siempre",
       peligro: true,
     });
@@ -421,7 +497,73 @@ export default function Comunicados() {
     }
   };
 
-  // ---------- Selector de destinatarios ----------
+  // ---------- Adjuntos: agregar / quitar ----------
+  const agregarAdjuntos = (lista) => {
+    setErrorAdjuntos("");
+    const entrada = Array.from(lista ?? []);
+    if (entrada.length === 0) return;
+
+    const cupo = MAX_ADJUNTOS - adjuntosNuevos.length;
+    if (cupo <= 0) {
+      setErrorAdjuntos(`Solo se permiten ${MAX_ADJUNTOS} archivos por comunicado.`);
+      return;
+    }
+
+    const aceptados = [];
+    let rechazo = "";
+
+    for (const archivo of entrada) {
+      const ext = extensionDe(archivo.name);
+
+      if (!EXTENSIONES_OK.includes(ext)) {
+        rechazo = `Formato no permitido: ${archivo.name}`;
+        continue;
+      }
+      if (archivo.size > MAX_TAMANO_ADJ) {
+        rechazo = `${archivo.name} supera los 10 MB`;
+        continue;
+      }
+      if (aceptados.length >= cupo) {
+        rechazo = `Solo se permiten ${MAX_ADJUNTOS} archivos por comunicado`;
+        break;
+      }
+
+      const esImagen = esImagenAdjunto(archivo);
+      const url = esImagen ? URL.createObjectURL(archivo) : null;
+      if (url) urlsAdjuntos.current.add(url);
+
+      aceptados.push({ archivo, url });
+    }
+
+    if (rechazo) setErrorAdjuntos(rechazo);
+
+    if (aceptados.length > 0) {
+      setAdjuntosNuevos((prev) => [...prev, ...aceptados]);
+    }
+  };
+
+  const quitarAdjuntoNuevo = (indice) => {
+    setAdjuntosNuevos((prev) => {
+      const copia = [...prev];
+      const [quitado] = copia.splice(indice, 1);
+      if (quitado?.url) {
+        URL.revokeObjectURL(quitado.url);
+        urlsAdjuntos.current.delete(quitado.url);
+      }
+      return copia;
+    });
+  };
+
+  const limpiarAdjuntos = () => {
+    for (const url of urlsAdjuntos.current) URL.revokeObjectURL(url);
+    urlsAdjuntos.current = new Set();
+    setAdjuntosNuevos([]);
+    setErrorAdjuntos("");
+  };
+
+  const adjuntosImagen = adjuntosNuevos.filter((a) => a.url);
+  const adjuntosArchivo = adjuntosNuevos.filter((a) => !a.url);
+
   const toggleEnLista = (lista, id) =>
     lista.includes(id) ? lista.filter((x) => x !== id) : [...lista, id];
 
@@ -469,7 +611,6 @@ export default function Comunicados() {
   const totalDestinos =
     destinos.servidores.length + destinos.canales.length + destinos.usuarios.length;
 
-  // ---------- Publicar ----------
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleSubmit = async (e) => {
@@ -521,11 +662,35 @@ export default function Comunicados() {
         await crearDestinatario({ comunicado_id: nuevo.id_comunicado, usuario_id: usuarioId });
       }
 
+      let subidos = [];
+      if (adjuntosNuevos.length > 0) {
+        try {
+          subidos = await subirAdjuntos(
+            nuevo.id_comunicado,
+            adjuntosNuevos.map((a) => a.archivo)
+          );
+        } catch (errAdj) {
+          setError(
+            `El comunicado se publicó, pero falló la subida de adjuntos: ${errAdj.message}`
+          );
+        }
+      }
+
       await cargarTodo();
+
+
+      if (subidos.length > 0) {
+        setAdjuntosPorComunicado((prev) => ({
+          ...prev,
+          [nuevo.id_comunicado]: subidos,
+        }));
+      }
+
       setForm(formVacio);
       setDestinos(DESTINOS_VACIOS);
       setServidorAbierto(null);
       setAlumnoAbierto(null);
+      limpiarAdjuntos();
       setCrearOpen(false);
     } catch (err) {
       setError(err.message);
@@ -603,7 +768,6 @@ export default function Comunicados() {
         )}
       </div>
 
-      {/* ============ BUSCADOR + CHIPS DE ALCANCE ============ */}
       <div className="comunicados__filtros">
         <div className="comunicados__search">
           <Search size={18} />
@@ -665,6 +829,7 @@ export default function Comunicados() {
             const sinLeer = !enPapeleraActual && !vistosIds.has(c.id_comunicado);
             const activo = comunicadoSeleccionado?.id_comunicado === c.id_comunicado;
             const lectores = (lectoresPorComunicado[c.id_comunicado] ?? []).length;
+            const conAdj = adjuntosPorComunicado[c.id_comunicado] ?? [];
 
             return (
               <article
@@ -698,11 +863,24 @@ export default function Comunicados() {
                   <p className="comunicados__card-extracto">{c.contenido}</p>
 
                   <div className="comunicados__card-pie">
-                    <span className={`comunicados__card-estado${lectores > 0 ? " comunicados__card-estado--visto" : ""}`}>
-                      <Eye size={13} />
-                      {lectores > 0 ? `Visto por ${lectores}` : "Sin lecturas"}
-                    </span>
-                    <time className="comunicados__card-fecha">{fechaCorta(c.fecha_publicacion)}</time>
+                    <div className="comunicados__card-pie-info">
+                      <span
+                        className={`comunicados__card-estado${lectores > 0 ? " comunicados__card-estado--visto" : ""}`}
+                      >
+                        <Eye size={13} />
+                        {lectores > 0 ? `Visto por ${lectores}` : "Sin lecturas"}
+                      </span>
+
+                      {conAdj.length > 0 && (
+                        <span className="comunicados__card-clips">
+                          <Paperclip size={12} /> {conAdj.length}
+                        </span>
+                      )}
+                    </div>
+
+                    <time className="comunicados__card-fecha">
+                      {fechaCorta(c.fecha_publicacion)}
+                    </time>
                   </div>
                 </div>
               </article>
@@ -719,6 +897,8 @@ export default function Comunicados() {
               const lectores = (lectoresPorComunicado[c.id_comunicado] ?? []).map(
                 (v) => nombreDe(v.usuario_id)
               );
+              const imagenes = adjuntosDetalle.filter((a) => a.tipo_mime.startsWith("image/"));
+              const archivos = adjuntosDetalle.filter((a) => !a.tipo_mime.startsWith("image/"));
 
               return (
                 <article className="comunicados__doc">
@@ -762,6 +942,69 @@ export default function Comunicados() {
                     </div>
 
                     <p className="comunicados__doc-texto">{c.contenido}</p>
+
+                    {adjuntosDetalle.length > 0 && (
+                      <div className="comunicados__doc-adjuntos">
+                        <span className="comunicados__doc-adjuntos-tit">
+                          <Paperclip size={14} /> Adjuntos ({adjuntosDetalle.length})
+                        </span>
+
+                        {imagenes.length > 0 && (
+                          <div className="comunicados__img-lista">
+                            {imagenes.map((adj) => (
+                              <button
+                                key={adj.id}
+                                type="button"
+                                className="comunicados__img-card"
+                                onClick={() => setImagenAmpliada(adj.url)}
+                                aria-label={`Ampliar ${adj.nombre_original}`}
+                              >
+                                <img
+                                  className="comunicados__img-mini"
+                                  src={adj.url}
+                                  alt={adj.nombre_original}
+                                />
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {archivos.length > 0 && (
+                          <div className="comunicados__archivo-lista">
+                            {archivos.map((adj) => {
+                              const Icono = iconoDeAdjunto(adj.tipo_mime, adj.nombre_original);
+
+                              return (
+                                <div className="comunicados__archivo-card" key={adj.id}>
+                                  <span className="comunicados__archivo-ico">
+                                    <Icono size={18} />
+                                  </span>
+
+                                  <span className="comunicados__archivo-info">
+                                    <span className="comunicados__archivo-nombre">
+                                      {adj.nombre_original}
+                                    </span>
+                                    <span className="comunicados__archivo-tamano">
+                                      {tamanoDe(adj.tamano_bytes)}
+                                    </span>
+                                  </span>
+
+                                  <a
+                                    className="comunicados__archivo-descargar"
+                                    href={adj.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    download={adj.nombre_original}
+                                  >
+                                    <Download size={14} /> Descargar
+                                  </a>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     <div className="comunicados__doc-vistos">
                       <span className="comunicados__doc-vistos-tit">
@@ -819,7 +1062,6 @@ export default function Comunicados() {
         </div>
       </div>
 
-      {/* ============ PUBLICAR ============ */}
       {crearOpen && puedePublicar && (
         <Modal title="Nuevo comunicado" onClose={() => setCrearOpen(false)}>
           <form className="comunicados__form" onSubmit={handleSubmit}>
@@ -841,6 +1083,98 @@ export default function Comunicados() {
               onChange={handleChange}
               placeholder="Escribí el cuerpo del comunicado..."
             />
+
+            {/* ---- Adjuntos ---- */}
+            <div className="comunicados__grupo">
+              <span className="comunicados__label">Adjuntos</span>
+
+              <div
+                className={`comunicados__dropzone${dropSobre ? " comunicados__dropzone--sobre" : ""}`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDropSobre(true);
+                }}
+                onDragLeave={() => setDropSobre(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDropSobre(false);
+                  agregarAdjuntos(e.dataTransfer.files);
+                }}
+              >
+                <Paperclip size={20} />
+                <p className="comunicados__dropzone-texto">
+                  Arrastrá imágenes o archivos acá, o apretá el botón
+                </p>
+
+                <label className="comunicados__dropzone-btn">
+                  Adjuntar
+                  <input
+                    type="file"
+                    multiple
+                    accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+                    onChange={(e) => {
+                      agregarAdjuntos(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+
+                <p className="comunicados__dropzone-hint">
+                  Hasta {MAX_ADJUNTOS} archivos de 10 MB. Imágenes, PDF, Word, Excel, PowerPoint o TXT.
+                </p>
+              </div>
+
+              {errorAdjuntos && <p className="comunicados__error-adj">{errorAdjuntos}</p>}
+
+              {adjuntosImagen.length > 0 && (
+                <div className="comunicados__img-lista">
+                  {adjuntosImagen.map((adj) => (
+                    <div className="comunicados__img-card" key={adj.url}>
+                      <img className="comunicados__img-mini" src={adj.url} alt={adj.archivo.name} />
+                      <button
+                        type="button"
+                        className="comunicados__img-quitar"
+                        onClick={() => quitarAdjuntoNuevo(adjuntosNuevos.indexOf(adj))}
+                        aria-label="Quitar imagen"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {adjuntosArchivo.length > 0 && (
+                <div className="comunicados__archivo-lista">
+                  {adjuntosArchivo.map((adj) => (
+                    <div
+                      className="comunicados__archivo-card"
+                      key={adj.archivo.name + adj.archivo.size}
+                    >
+                      <span className="comunicados__archivo-ico">
+                        <File size={18} />
+                      </span>
+
+                      <span className="comunicados__archivo-info">
+                        <span className="comunicados__archivo-nombre">{adj.archivo.name}</span>
+                        <span className="comunicados__archivo-tamano">
+                          {tamanoDe(adj.archivo.size)}
+                        </span>
+                      </span>
+
+                      <button
+                        type="button"
+                        className="comunicados__archivo-quitar"
+                        onClick={() => quitarAdjuntoNuevo(adjuntosNuevos.indexOf(adj))}
+                        aria-label="Quitar archivo"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* ---- Selector de destinatarios ---- */}
             <div className="comunicados__grupo">
@@ -1112,6 +1446,29 @@ export default function Comunicados() {
           }}
           onCerrar={() => setToast(null)}
         />
+      )}
+
+      {imagenAmpliada && (
+        <>
+          <Overlay onClick={() => setImagenAmpliada(null)} />
+          <div className="comunicados__lightbox" onClick={() => setImagenAmpliada(null)}>
+            <img
+              src={imagenAmpliada}
+              alt="Imagen del comunicado"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <button
+              className="comunicados__lightbox-cerrar"
+              onClick={(e) => {
+                e.stopPropagation();
+                setImagenAmpliada(null);
+              }}
+              aria-label="Cerrar imagen"
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </>
       )}
 
       {dialogo}
