@@ -19,160 +19,70 @@ import NoAutorizado from "./pages/NoAutorizado/NoAutorizado";
 
 export default function App() {
   return (
-    <Routes>
+    <>
       {/* Ruta pública */}
-      <Route path="/login" element={<Login />} />
+      <Routes>
+        <Route path="/login" element={<Login />} />
+      </Routes>
 
-      {/* Rutas protegidas - Todos los usuarios logueados */}
-      <Route
-        path="/"
-        element={
-          <RequireAuth>
-            <NotificacionesProvider>
-              <Layout>
-                <Dashboard />
-              </Layout>
-            </NotificacionesProvider>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/calendario"
-        element={
-          <RequireAuth>
-            <NotificacionesProvider>
-              <Layout>
-                <Calendario />
-              </Layout>
-            </NotificacionesProvider>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/mensajes"
-        element={
-          <RequireAuth>
-            <NotificacionesProvider>
-              <Layout>
-                <Mensajes />
-              </Layout>
-            </NotificacionesProvider>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/comunicados"
-        element={
-          <RequireAuth>
-            <NotificacionesProvider>
-              <Layout>
-                <Comunicados />
-              </Layout>
-            </NotificacionesProvider>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/perfil"
-        element={
-          <RequireAuth>
-            <NotificacionesProvider>
-              <Layout>
-                <Perfil />
-              </Layout>
-            </NotificacionesProvider>
-          </RequireAuth>
-        }
-      />
+      {/* Provider único para todas las rutas protegidas */}
+      <NotificacionesProvider>
+        <Routes>
+          {/* Rutas protegidas - Todos los usuarios logueados */}
+          <Route
+            path="/"
+            element={<RequireAuth><Layout><Dashboard /></Layout></RequireAuth>}
+          />
+          <Route
+            path="/calendario"
+            element={<RequireAuth><Layout><Calendario /></Layout></RequireAuth>}
+          />
+          <Route
+            path="/mensajes"
+            element={<RequireAuth><Layout><Mensajes /></Layout></RequireAuth>}
+          />
+          <Route
+            path="/comunicados"
+            element={<RequireAuth><Layout><Comunicados /></Layout></RequireAuth>}
+          />
+          <Route
+            path="/perfil"
+            element={<RequireAuth><Layout><Perfil /></Layout></RequireAuth>}
+          />
 
-      {/* Rutas protegidas por rol */}
-      <Route
-        path="/servidores"
-        element={
-          <RequireAuth roles={["admin", "super_admin", "director"]}>
-            <NotificacionesProvider>
-              <Layout>
-                <Servidores />
-              </Layout>
-            </NotificacionesProvider>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/categorias"
-        element={
-          <RequireAuth roles={["admin", "super_admin", "director"]}>
-            <NotificacionesProvider>
-              <Layout>
-                <Categorias />
-              </Layout>
-            </NotificacionesProvider>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/canales"
-        element={
-          <RequireAuth roles={["admin", "super_admin", "director", "profesor"]}>
-            <NotificacionesProvider>
-              <Layout>
-                <Canales />
-              </Layout>
-            </NotificacionesProvider>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/miembros"
-        element={
-          <RequireAuth roles={["admin", "super_admin", "director", "profesor"]}>
-            <NotificacionesProvider>
-              <Layout>
-                <Miembros />
-              </Layout>
-            </NotificacionesProvider>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/usuarios"
-        element={
-          <RequireAuth roles={["admin", "super_admin"]}>
-            <NotificacionesProvider>
-              <Layout>
-                <Usuarios />
-              </Layout>
-            </NotificacionesProvider>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/admin"
-        element={
-          <RequireAuth roles={["admin", "super_admin"]}>
-            <NotificacionesProvider>
-              <Layout>
-                <PanelAdmin />
-              </Layout>
-            </NotificacionesProvider>
-          </RequireAuth>
-        }
-      />
+          {/* Rutas protegidas por rol */}
+          <Route
+            path="/servidores"
+            element={<RequireAuth roles={["admin", "super_admin", "director"]}><Layout><Servidores /></Layout></RequireAuth>}
+          />
+          <Route
+            path="/categorias"
+            element={<RequireAuth roles={["admin", "super_admin", "director"]}><Layout><Categorias /></Layout></RequireAuth>}
+          />
+          <Route
+            path="/canales"
+            element={<RequireAuth roles={["admin", "super_admin", "director", "profesor"]}><Layout><Canales /></Layout></RequireAuth>}
+          />
+          <Route
+            path="/miembros"
+            element={<RequireAuth roles={["admin", "super_admin", "director", "profesor"]}><Layout><Miembros /></Layout></RequireAuth>}
+          />
+          <Route
+            path="/usuarios"
+            element={<RequireAuth roles={["admin", "super_admin"]}><Layout><Usuarios /></Layout></RequireAuth>}
+          />
+          <Route
+            path="/admin"
+            element={<RequireAuth roles={["admin", "super_admin"]}><Layout><PanelAdmin /></Layout></RequireAuth>}
+          />
 
-      {/* Página 403 */}
-      <Route path="/no-autorizado" element={<NoAutorizado />} />
+          {/* Página 403 */}
+          <Route path="/no-autorizado" element={<NoAutorizado />} />
 
-      {/* 404 */}
-      <Route
-        path="*"
-        element={
-          <NotificacionesProvider>
-            <Layout>
-              <NotFound />
-            </Layout>
-          </NotificacionesProvider>
-        }
-      />
-    </Routes>
+          {/* 404 */}
+          <Route path="*" element={<Layout><NotFound /></Layout>} />
+        </Routes>
+      </NotificacionesProvider>
+    </>
   );
 }

@@ -383,6 +383,99 @@
   margin-top: var(--space-sm);
 }
 
+/* NUEVO: gestión de miembros, roles y avisos */
+.mensajes__members-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--color-gris-azulado);
+  color: var(--color-azul-petroleo);
+  cursor: pointer;
+}
+
+.mensajes__rol-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-right: var(--space-xs);
+  margin-top: 2px;
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-sm);
+  background: var(--color-gris-azulado);
+  color: var(--texto-secundario);
+}
+
+.mensajes__rol-badge--admin { background: var(--color-turquesa-claro); color: var(--color-blanco); }
+.mensajes__rol-badge--miembro { background: var(--color-celeste-gris); color: var(--texto-oscuro); }
+.mensajes__rol-badge--observador { background: var(--color-gris-azulado); color: var(--texto-secundario); }
+
+.mensajes__contact-meta { font-size: var(--font-size-sm); color: var(--texto-secundario); }
+.mensajes__contact-username { font-weight: 600; }
+.mensajes__contact-roles { color: var(--texto-secundario); }
+
+.mensajes__add-member-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--color-turquesa-claro);
+  color: var(--color-blanco);
+  cursor: pointer;
+}
+
+.mensajes__remove-member-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--texto-secundario);
+  cursor: pointer;
+}
+
+.mensajes__rol-option {
+  border: 1px solid var(--color-celeste-gris);
+  background: var(--color-blanco);
+  color: var(--texto-secundario);
+  border-radius: var(--radius-md);
+  padding: var(--space-xs) var(--space-sm);
+  cursor: pointer;
+}
+
+.mensajes__rol-option--active {
+  border-color: var(--color-turquesa-claro);
+  background: var(--color-gris-azulado);
+  color: var(--color-azul-petroleo);
+}
+
+.mensajes__toast {
+  position: fixed;
+  right: var(--space-md);
+  bottom: var(--space-md);
+  z-index: 2000;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-blanco);
+  font-size: var(--font-size-sm);
+  animation: toastIn 0.2s ease-out;
+}
+
+.mensajes__toast--error { background: #b42318; }
+.mensajes__toast--success { background: var(--color-verde-esmeralda, #1f9d55); }
+
+@keyframes toastIn {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
 @media (min-width: 768px) {
   .mensajes__list-panel {
     width: 340px;
