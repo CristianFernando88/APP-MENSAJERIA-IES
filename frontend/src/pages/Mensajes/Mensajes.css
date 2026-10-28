@@ -501,3 +501,119 @@
   padding-bottom: 4px;
   border-bottom: 1px solid rgba(0,0,0,0.05);
 }
+
+/* Modal Nuevo mensaje */
+.mensajes__new-message-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  max-height: 70vh;
+}
+
+.mensajes__new-message-tabs {
+  display: flex;
+  gap: var(--space-xs);
+  padding: var(--space-xs);
+  background-color: var(--color-gris-azulado);
+  border-radius: var(--radius-md);
+}
+
+.mensajes__new-message-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--texto-secundario);
+  cursor: pointer;
+}
+
+.mensajes__new-message-tab--active {
+  background-color: var(--color-blanco);
+  color: var(--color-acento-calido);
+  box-shadow: var(--shadow-sm);
+}
+
+.mensajes__new-message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--color-gris-azulado);
+  border-radius: var(--radius-md);
+}
+
+.mensajes__new-message-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  border: none;
+  border-bottom: 1px solid var(--color-gris-azulado);
+  background-color: var(--color-blanco);
+  text-align: left;
+  cursor: pointer;
+}
+
+.mensajes__new-message-item:last-child {
+  border-bottom: none;
+}
+
+.mensajes__new-message-item:hover {
+  background-color: var(--color-gris-azulado);
+}
+
+.mensajes__new-message-item--selected {
+  box-shadow: inset 4px 0 0 var(--color-turquesa-claro);
+  background-color: var(--color-gris-azulado);
+}
+
+.mensajes__new-message-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-gris-azulado);
+}
+
+.mensajes__new-message-cancel,
+.mensajes__new-message-submit {
+  min-height: 38px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mensajes__new-message-cancel {
+  border: 1px solid var(--color-gris-azulado);
+  background-color: var(--color-blanco);
+  color: var(--texto-oscuro);
+}
+
+.mensajes__new-message-submit {
+  border: 1px solid var(--color-turquesa-claro);
+  background-color: var(--color-turquesa-claro);
+  color: var(--texto-claro);
+}
+
+.mensajes__new-message-submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.mensajes__new-message-hint {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--texto-secundario);
+  text-align: center;
+}

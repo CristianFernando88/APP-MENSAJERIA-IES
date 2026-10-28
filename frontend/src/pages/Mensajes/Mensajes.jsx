@@ -9,6 +9,7 @@ import { listarMensajesVistos, crearMensajeVisto } from "../../api/mensajesVisto
 import { listarUsuarios } from "../../api/usuarios";
 import { getMiembrosCanal, getMiembrosDisponibles, listarCanales } from "../../api/canales";
 import { crearMiembroCanal, eliminarMiembroCanal, listarMiembrosCanal } from "../../api/miembrosCanal";
+import { listarRelaciones } from "../../api/relacionesUsuario";
 import Modal from "../../components/ui/Modal/Modal";
 import "./Mensajes.css";
 
@@ -80,9 +81,12 @@ export default function Mensajes() {
 
   const [modalNuevoChat, setModalNuevoChat] = useState(false);
   const [busquedaUsuario, setBusquedaUsuario] = useState("");
+  const [pestanaNuevoChat, setPestanaNuevoChat] = useState("canal");
+  const [destinoNuevoChat, setDestinoNuevoChat] = useState(null);
 
   // NUEVO: permisos, contactos, gestión de miembros y avisos locales
   const [contactosPermitidosBackend, setContactosPermitidosBackend] = useState([]);
+  const [relaciones, setRelaciones] = useState([]);
   const [miRolEnCanalActivo, setMiRolEnCanalActivo] = useState(null);
   const [modalMiembros, setModalMiembros] = useState(false);
   const [modalAgregarMiembro, setModalAgregarMiembro] = useState(false);
@@ -227,15 +231,20 @@ export default function Mensajes() {
   useEffect(() => {
     async function cargarDatos() {
       try {
-        const [resCanales, resUsuarios, resMiembros, resDMs, resVistos, resContactos] = await Promise.all([
+        const [resCanales, resUsuarios, resMiembros, resDMs, resVistos, resContactos, resRelaciones] = await Promise.all([
           listarCanales(),
           listarUsuarios(),
           listarMiembrosCanal(),
           listarMensajesDirectos(),
           listarMensajesVistos(),
-          getContactosPermitidos()
+          getContactosPermitidos(),
+          listarRelaciones().catch((error) => {
+            console.error("Error al cargar relaciones usuario:", error);
+            return [];
+          })
         ]);
         setContactosPermitidosBackend(Array.isArray(resContactos) ? resContactos : []);
+        setRelaciones(Array.isArray(resRelaciones) ? resRelaciones : []);
 
         let misCanales = resCanales;
         if (!hasRole(["super_admin", "admin"])) {
@@ -519,6 +528,57 @@ export default function Mensajes() {
     }).sort((a, b) => getNombre(a.id_usuario).localeCompare(getNombre(b.id_usuario)));
   }, [usuarios, miembrosCanal, mensajesDirectos, contactosPermitidosBackend, user, busquedaUsuario, esAlumno, esTutorPuroFlag, nombresRoles]);
 
+  const tutoresDeAlumnosCompartidos = useMemo(() => {
+    const puedeVerTutores = nombresRoles.some((rol) =>
+      ["super_admin", "admin", "director", "profesor"].includes(rol)
+    );
+    if (!puedeVerTutores || esAlumno || esTutorPuroFlag) return [];
+
+    const misCanalesIds = new Set(
+      miembrosCanal
+        .filter((miembro) => Number(miembro.usuario_id) === Number(user.id_usuario))
+        .map((miembro) => Number(miembro.canal_id))
+    );
+
+    const alumnosCompartidosIds = new Set();
+    miembrosCanal.forEach((miembro) => {
+      if (!misCanalesIds.has(Number(miembro.canal_id))) return;
+
+      const usuario = usuarios.find((item) =>
+        Number(item.id_usuario) === Number(miembro.usuario_id)
+      );
+      if (usuario && nombresRolesUsuario(usuario).includes("alumno")) {
+        alumnosCompartidosIds.add(Number(miembro.usuario_id));
+      }
+    });
+
+    const tutoresIds = new Set();
+    relaciones.forEach((relacion) => {
+      if (String(relacion.tipo || "").toLowerCase() !== "tutor") return;
+
+      const usuarioId = Number(relacion.usuario_id);
+      const relacionadoId = Number(relacion.relacionado_id);
+      if (alumnosCompartidosIds.has(usuarioId)) tutoresIds.add(relacionadoId);
+      if (alumnosCompartidosIds.has(relacionadoId)) tutoresIds.add(usuarioId);
+    });
+
+    return usuarios.filter((usuario) =>
+      tutoresIds.has(Number(usuario.id_usuario)) &&
+      nombresRolesUsuario(usuario).includes("tutor")
+    );
+  }, [miembrosCanal, usuarios, relaciones, user, nombresRoles, esAlumno, esTutorPuroFlag]);
+
+  const personasParaNuevoChat = useMemo(() => {
+    const personas = new Map();
+    // TODO BACKEND: cuando exista GET /mensajes-directos/contactos, priorizar ese endpoint y dejar este fallback local como respaldo.
+    [...contactosParaNuevoChat, ...tutoresDeAlumnosCompartidos].forEach((usuario) => {
+      personas.set(Number(usuario.id_usuario), usuario);
+    });
+    return [...personas.values()].sort((a, b) =>
+      getNombre(a.id_usuario).localeCompare(getNombre(b.id_usuario))
+    );
+  }, [contactosParaNuevoChat, tutoresDeAlumnosCompartidos]);
+
   function nombresRolesUsuario(usuarioObj) {
     const roles = [];
     (usuarioObj?.roles || usuarioObj?.asignaciones || []).forEach((item) => {
@@ -741,47 +801,146 @@ export default function Mensajes() {
 
       {modalNuevoChat && !esAlumno && (
         <Modal title="Nuevo mensaje" onClose={() => setModalNuevoChat(false)}>
-          <div className="mensajes__search-contacts" style={{ marginBottom: "1rem" }}>
-            <Search size={18} />
-            <input type="text" placeholder="Buscar canal o usuario..." value={busquedaUsuario} onChange={(e) => setBusquedaUsuario(e.target.value)} autoFocus />
-          </div>
-
-          {/* NUEVO: canales con permiso real de escritura */}
-          <p className="mensajes__modal-section">Canales</p>
-          <div className="mensajes__contacts-list">
-            {canalesParaNuevoChat.filter((canal) => canal.nombre.toLowerCase().includes(busquedaUsuario.toLowerCase())).map((canal) => (
-              <button key={`nuevo-canal-${canal.id_canal}`} className="mensajes__contact-item" onClick={() => { setChatActivo({ tipo: "canal", id: canal.id_canal, nombre: canal.nombre }); setModalNuevoChat(false); }}>
-                <div className="mensajes__avatar mensajes__avatar--canal"><Hash size={18} /></div>
-                <div>
-                  <p className="mensajes__contact-name">{canal.nombre}</p>
-                  <p className="mensajes__contact-cargo">Canal de {canal.tipo}</p>
-                </div>
+          <form
+            className="mensajes__new-message-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!destinoNuevoChat) return;
+              setChatActivo(destinoNuevoChat);
+              setModalNuevoChat(false);
+            }}
+          >
+            <div className="mensajes__new-message-tabs">
+              <button
+                type="button"
+                className={`mensajes__new-message-tab${pestanaNuevoChat === "canal" ? " mensajes__new-message-tab--active" : ""}`}
+                onClick={() => {
+                  setPestanaNuevoChat("canal");
+                  setDestinoNuevoChat(null);
+                }}
+              >
+                <Hash size={15} /> Canal
               </button>
-            ))}
-            {canalesParaNuevoChat.length === 0 && <p className="mensajes__hint">No hay canales disponibles para escribir.</p>}
-          </div>
-
-          {/* NUEVO: contactos filtrados; nunca se muestran todos los usuarios */}
-          <p className="mensajes__modal-section">Contactos</p>
-          <div className="mensajes__contacts-list">
-            {contactosParaNuevoChat.filter((u) => getNombre(u.id_usuario).toLowerCase().includes(busquedaUsuario.toLowerCase()) || String(u.nombre_usuario || "").toLowerCase().includes(busquedaUsuario.toLowerCase())).map((u) => (
-              <button key={`nuevo-contacto-${u.id_usuario}`} className="mensajes__contact-item" onClick={() => { setChatActivo({ tipo: "directo", id: u.id_usuario, nombre: getNombre(u.id_usuario) }); setModalNuevoChat(false); }}>
-                <div className="mensajes__avatar">{u.perfil?.foto_perfil ? <img src={u.perfil.foto_perfil} alt={`Foto de ${getNombre(u.id_usuario)}`} /> : getNombre(u.id_usuario).charAt(0).toUpperCase()}</div>
-                <div>
-                  <p className="mensajes__contact-name">{getNombre(u.id_usuario)}</p>
-                  <div className="mensajes__contact-meta">
-                    <span className="mensajes__contact-username">@{u.nombre_usuario}</span>
-                    <span className="mensajes__contact-roles"> · {rolPrincipalDe(u) || "Usuario"}</span>
-                  </div>
-                </div>
+              <button
+                type="button"
+                className={`mensajes__new-message-tab${pestanaNuevoChat === "persona" ? " mensajes__new-message-tab--active" : ""}`}
+                onClick={() => {
+                  setPestanaNuevoChat("persona");
+                  setDestinoNuevoChat(null);
+                }}
+              >
+                <Users size={15} /> Persona
               </button>
-            ))}
-            {contactosParaNuevoChat.length === 0 && (
-              esTutorPuroFlag
-                ? <p className="mensajes__hint">Los contactos disponibles aparecerán cuando el sistema de permisos esté completo.</p>
-                : <p className="mensajes__list-empty">No se encontraron contactos permitidos.</p>
+            </div>
+
+            <div className="mensajes__search-contacts">
+              <Search size={18} />
+              <input
+                type="text"
+                placeholder={pestanaNuevoChat === "canal" ? "Buscar canal..." : "Buscar persona..."}
+                value={busquedaUsuario}
+                onChange={(e) => setBusquedaUsuario(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            <div className="mensajes__new-message-list">
+              {pestanaNuevoChat === "canal" && canalesParaNuevoChat
+                .filter((canal) => canal.nombre.toLowerCase().includes(busquedaUsuario.toLowerCase()))
+                .map((canal) => {
+                  const seleccionado = destinoNuevoChat?.tipo === "canal" &&
+                    Number(destinoNuevoChat.id) === Number(canal.id_canal);
+                  const tipoCanal = String(canal.tipo || "chat").toLowerCase() === "informativo"
+                    ? "📢 Informativo"
+                    : "💬 Chat";
+                  return (
+                    <button
+                      key={`nuevo-canal-${canal.id_canal}`}
+                      type="button"
+                      className={`mensajes__new-message-item${seleccionado ? " mensajes__new-message-item--selected" : ""}`}
+                      onClick={() => setDestinoNuevoChat({ tipo: "canal", id: canal.id_canal, nombre: canal.nombre })}
+                    >
+                      <div className="mensajes__avatar mensajes__avatar--canal"><Hash size={18} /></div>
+                      <div>
+                        <p className="mensajes__contact-name">{canal.nombre}</p>
+                        <p className="mensajes__contact-cargo">{tipoCanal}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+
+              {pestanaNuevoChat === "persona" && personasParaNuevoChat
+                .filter((usuario) =>
+                  getNombre(usuario.id_usuario).toLowerCase().includes(busquedaUsuario.toLowerCase()) ||
+                  String(usuario.nombre_usuario || "").toLowerCase().includes(busquedaUsuario.toLowerCase())
+                )
+                .map((usuario) => {
+                  const seleccionado = destinoNuevoChat?.tipo === "directo" &&
+                    Number(destinoNuevoChat.id) === Number(usuario.id_usuario);
+                  return (
+                    <button
+                      key={`nuevo-contacto-${usuario.id_usuario}`}
+                      type="button"
+                      className={`mensajes__new-message-item${seleccionado ? " mensajes__new-message-item--selected" : ""}`}
+                      onClick={() => setDestinoNuevoChat({
+                        tipo: "directo",
+                        id: usuario.id_usuario,
+                        nombre: getNombre(usuario.id_usuario),
+                      })}
+                    >
+                      <div className="mensajes__avatar">
+                        {usuario.perfil?.foto_perfil
+                          ? <img src={usuario.perfil.foto_perfil} alt={`Foto de ${getNombre(usuario.id_usuario)}`} />
+                          : getNombre(usuario.id_usuario).charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="mensajes__contact-name">{getNombre(usuario.id_usuario)}</p>
+                        <div className="mensajes__contact-meta">
+                          <span className="mensajes__contact-username">@{usuario.nombre_usuario}</span>
+                          <span className="mensajes__contact-roles"> · {rolPrincipalDe(usuario) || "Usuario"}</span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+
+              {pestanaNuevoChat === "canal" && canalesParaNuevoChat
+                .filter((canal) => canal.nombre.toLowerCase().includes(busquedaUsuario.toLowerCase())).length === 0 && (
+                  <p className="mensajes__new-message-hint">No hay canales disponibles para escribir.</p>
+                )}
+
+              {pestanaNuevoChat === "persona" && personasParaNuevoChat
+                .filter((usuario) =>
+                  getNombre(usuario.id_usuario).toLowerCase().includes(busquedaUsuario.toLowerCase()) ||
+                  String(usuario.nombre_usuario || "").toLowerCase().includes(busquedaUsuario.toLowerCase())
+                ).length === 0 && (
+                  esTutorPuroFlag
+                    ? <p className="mensajes__new-message-hint">Los contactos disponibles aparecerán cuando el sistema de permisos esté completo.</p>
+                    : <p className="mensajes__new-message-hint">No se encontraron contactos permitidos.</p>
+                )}
+            </div>
+
+            {destinoNuevoChat && (
+              <p className="mensajes__new-message-hint">Seleccionado: {destinoNuevoChat.nombre}</p>
             )}
-          </div>
+
+            <div className="mensajes__new-message-footer">
+              <button
+                type="button"
+                className="mensajes__new-message-cancel"
+                onClick={() => setModalNuevoChat(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="mensajes__new-message-submit"
+                disabled={!destinoNuevoChat}
+              >
+                Abrir conversación
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
 
