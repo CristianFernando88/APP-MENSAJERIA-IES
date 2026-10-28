@@ -1,21 +1,29 @@
 import { apiGet, apiPost, apiPut, apiDelete } from "./apiClient";
 
-export function listarRelacionesUsuario() {
-    return apiGet("/relaciones-usuario");
+const RUTA = "/relaciones-usuario/";
+
+export function listarRelaciones() {
+  return apiGet(RUTA);
 }
 
-export function obtenerRelacionUsuario(relacionId) {
-    return apiGet(`/relaciones-usuario/${relacionId}`);
+export function obtenerRelacion(relacionId) {
+  return apiGet(`${RUTA}${relacionId}`);
 }
 
-export function crearRelacionUsuario(data) {
-    return apiPost("/relaciones-usuario", data);
+export function crearRelacion(data) {
+  return apiPost(RUTA, data);
 }
 
-export function actualizarRelacionUsuario(relacionId, data) {
-    return apiPut(`/relaciones-usuario/${relacionId}`, data);
+export function actualizarRelacion(relacionId, data) {
+  return apiPut(`${RUTA}${relacionId}`, data);
 }
 
-export function eliminarRelacionUsuario(relacionId) {
-    return apiDelete(`/relaciones-usuario/${relacionId}`);
+export function eliminarRelacion(relacionId) {
+  return apiDelete(`${RUTA}${relacionId}`);
 }
+
+export const listarRelacionesUsuario = listarRelaciones;
+export const obtenerRelacionUsuario = obtenerRelacion;
+export const crearRelacionUsuario = crearRelacion;
+export const actualizarRelacionUsuario = actualizarRelacion;
+export const eliminarRelacionUsuario = eliminarRelacion;

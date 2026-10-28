@@ -1,5 +1,5 @@
 :root {
-  /* Colores base */
+  
   --color-azul-marino: #002850;
   --color-azul-petroleo: #025176;
   --color-teal-medio: #0C7685;
@@ -18,38 +18,45 @@
   var(--color-verde-esmeralda) 100%
 );
 
-  /* Texto — una familia por tipo de fondo */
   --texto-oscuro: #10243A;
   --texto-secundario: #5A6B6B;
   --texto-claro: #FFFFFF;
   --texto-claro-secundario: var(--color-menta-palido);
 
-  /* Espaciado */
+
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 16px;
   --space-lg: 24px;
   --space-xl: 32px;
 
-  /* Radios */
+
   --radius-sm: 6px;
   --radius-md: 12px;
   --radius-lg: 20px;
   --radius-pill: 999px;
 
-  /* Sombras */
+
   --shadow-sm: 0 1px 3px rgba(0, 40, 80, 0.15);
   --shadow-md: 0 6px 16px rgba(0, 40, 80, 0.25);
 
-  /* Tipografía */
+
   --font-size-sm: 0.85rem;
   --font-size-md: 1rem;
   --font-size-lg: 1.25rem;
 
-  /* Layout */
+ 
   --header-height: 60px;
   --sidebar-width: 240px;
   --footer-height: 48px;
   --z-header: 100;
   --z-sidebar: 90;
+
+
+--color-acento-calido: #E8590C;
+--color-acento-suave: #FDEBD8;
+
+--color-peligro: #C0292C;
+--color-peligro-suave: #FDDEDE;
 }
+
