@@ -135,3 +135,101 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+
+/* Panel de detalle del miembro */
+.canales__panel-detalle {
+  width: 360px;
+  flex-shrink: 0;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background-color: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.canales__panel-detalle-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 12px;
+}
+
+.canales__panel-detalle-titulo {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #024566 !important;
+  background-color: transparent !important;
+  margin: 0;
+}
+
+.canales__panel-detalle-cerrar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.canales__panel-detalle-cerrar:hover {
+  background-color: #f1f5f9;
+  color: #1e293b;
+}
+
+.canales__perfil-avatar {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #f1f5f9;
+}
+
+.canales__perfil-nombre {
+  font-size: 18px;
+  text-align: center;
+  color: #024566;
+}
+
+.canales__perfil-dato {
+  margin: 8px 0;
+  font-size: 13px;
+  color: #1e293b;
+  overflow-wrap: anywhere;
+}
+
+.canales__perfil-info {
+  padding: 12px;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.canales__perfil-info-titulo {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #024566;
+}
+
+.canales__perfil-acciones {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
