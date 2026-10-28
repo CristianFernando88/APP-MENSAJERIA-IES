@@ -617,3 +617,73 @@
   color: var(--texto-secundario);
   text-align: center;
 }
+
+/* Agrupación Alumno → Tutores en Nuevo mensaje */
+.mensajes__alumnos-seccion,
+.mensajes__otros-contactos-seccion {
+  display: flex;
+  flex-direction: column;
+}
+
+.mensajes__alumnos-seccion-titulo {
+  margin: var(--space-xs) 0;
+  padding: 0 var(--space-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--texto-secundario);
+}
+
+.mensajes__alumno-grupo {
+  border-bottom: 1px solid var(--color-gris-azulado);
+}
+
+.mensajes__alumno-grupo:last-child {
+  border-bottom: none;
+}
+
+.mensajes__alumno-fila {
+  border-bottom: none;
+}
+
+.mensajes__alumno-fila--open {
+  background-color: var(--color-gris-azulado);
+}
+
+.mensajes__alumno-tutores-btn {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-right: var(--space-md);
+  padding: 0 0 var(--space-sm);
+  border: none;
+  background: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--texto-secundario);
+  cursor: pointer;
+}
+
+.mensajes__chev {
+  transition: transform 0.2s ease;
+}
+
+.mensajes__chev--abierto {
+  transform: rotate(180deg);
+  transition: transform 0.2s ease;
+}
+
+.mensajes__tutor-sublista {
+  display: flex;
+  flex-direction: column;
+  padding-left: var(--space-lg);
+  padding-bottom: var(--space-sm);
+}
+
+.mensajes__tutor-fila {
+  border-bottom: 1px solid var(--color-gris-azulado);
+}
+
+.mensajes__tutor-fila:last-child {
+  border-bottom: none;
+}

@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Send, Search, Hash, ChevronLeft, Plus, Users, UserPlus, X } from "lucide-react";
+import { Send, Search, Hash, ChevronLeft, ChevronDown, Plus, Users, UserPlus, X } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useNotificaciones } from "../../context/NotificacionesContext";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { listarMensajes } from "../../api/mensajes";
+import { listarUsuarioRol } from "../../api/usuarioRol";
+import { listarRoles } from "../../api/roles";
 import { listarMensajesDirectos, actualizarMensajeDirecto, getContactosPermitidos } from "../../api/mensajesDirectos";
 import { listarMensajesVistos, crearMensajeVisto } from "../../api/mensajesVistos";
 import { listarUsuarios } from "../../api/usuarios";
@@ -48,11 +50,15 @@ function motivoSoloLectura({ user, canal, miRolEnCanal, esTutorPuroFlag }) {
   return "tu rol no permite escribir mensajes";
 }
 
-function rolPrincipalDe(usuarioObj) {
+function rolPrincipalDe(usuarioObj, rolesExtra = []) {
   const roles = [];
-  (usuarioObj?.roles || usuarioObj?.asignaciones || []).forEach((item) => {
-    const nombre = typeof item === "string" ? item : item?.rol?.nombre || item?.nombre || item?.nombre_rol;
-    if (nombre) roles.push(String(nombre).toLowerCase());
+  [...(usuarioObj?.roles || []), ...(usuarioObj?.asignaciones || []), ...(rolesExtra || [])].forEach((item) => {
+    const nombre = typeof item === "string"
+      ? item
+      : item?.rol?.nombre || item?.nombre || item?.nombre_rol || item?.rol;
+    if (typeof nombre === "string" && nombre.trim()) {
+      roles.push(nombre.toLowerCase());
+    }
   });
   const prioridad = ["super_admin", "admin", "director", "profesor", "tutor", "alumno", "usuario"];
   const nombres = { super_admin: "Super administrador", admin: "Administrador", director: "Director", profesor: "Profesor", tutor: "Tutor", alumno: "Alumno", usuario: "Usuario" };
@@ -83,10 +89,13 @@ export default function Mensajes() {
   const [busquedaUsuario, setBusquedaUsuario] = useState("");
   const [pestanaNuevoChat, setPestanaNuevoChat] = useState("canal");
   const [destinoNuevoChat, setDestinoNuevoChat] = useState(null);
+  const [alumnoExpandido, setAlumnoExpandido] = useState(null);
 
   // NUEVO: permisos, contactos, gestión de miembros y avisos locales
   const [contactosPermitidosBackend, setContactosPermitidosBackend] = useState([]);
   const [relaciones, setRelaciones] = useState([]);
+  const [usuarioRoles, setUsuarioRoles] = useState([]);
+  const [rolesCatalogo, setRolesCatalogo] = useState([]);
   const [miRolEnCanalActivo, setMiRolEnCanalActivo] = useState(null);
   const [modalMiembros, setModalMiembros] = useState(false);
   const [modalAgregarMiembro, setModalAgregarMiembro] = useState(false);
@@ -110,6 +119,26 @@ export default function Mensajes() {
     });
     return [...new Set(roles)];
   }, [user, asignaciones]);
+
+  const rolesPorUsuario = useMemo(() => {
+    const nombresPorRol = new Map(
+      rolesCatalogo.map((rol) => [Number(rol.id_rol), rol.nombre])
+    );
+    const mapa = new Map();
+
+    usuarioRoles.forEach((asignacion) => {
+      const nombreDesdeCatalogo = nombresPorRol.get(Number(asignacion.rol_id));
+      const nombre = asignacion?.rol?.nombre || asignacion?.nombre_rol || nombreDesdeCatalogo;
+      if (!nombre) return;
+
+      const usuarioId = Number(asignacion.usuario_id);
+      const asignaciones = mapa.get(usuarioId) || [];
+      asignaciones.push({ rol: { nombre: String(nombre).toLowerCase() } });
+      mapa.set(usuarioId, asignaciones);
+    });
+
+    return mapa;
+  }, [usuarioRoles, rolesCatalogo]);
 
   const esAlumno = nombresRoles.includes("alumno") &&
     !["super_admin", "admin", "director", "profesor", "tutor"].some((rol) => nombresRoles.includes(rol));
@@ -231,7 +260,7 @@ export default function Mensajes() {
   useEffect(() => {
     async function cargarDatos() {
       try {
-        const [resCanales, resUsuarios, resMiembros, resDMs, resVistos, resContactos, resRelaciones] = await Promise.all([
+        const [resCanales, resUsuarios, resMiembros, resDMs, resVistos, resContactos, resRelaciones, resUsuarioRoles, resRoles] = await Promise.all([
           listarCanales(),
           listarUsuarios(),
           listarMiembrosCanal(),
@@ -241,10 +270,20 @@ export default function Mensajes() {
           listarRelaciones().catch((error) => {
             console.error("Error al cargar relaciones usuario:", error);
             return [];
+          }),
+          listarUsuarioRol().catch((error) => {
+            console.error("Error al cargar asignaciones de usuario:", error);
+            return [];
+          }),
+          listarRoles().catch((error) => {
+            console.error("Error al cargar roles:", error);
+            return [];
           })
         ]);
         setContactosPermitidosBackend(Array.isArray(resContactos) ? resContactos : []);
         setRelaciones(Array.isArray(resRelaciones) ? resRelaciones : []);
+        setUsuarioRoles(Array.isArray(resUsuarioRoles) ? resUsuarioRoles : []);
+        setRolesCatalogo(Array.isArray(resRoles) ? resRoles : []);
 
         let misCanales = resCanales;
         if (!hasRole(["super_admin", "admin"])) {
@@ -528,11 +567,12 @@ export default function Mensajes() {
     }).sort((a, b) => getNombre(a.id_usuario).localeCompare(getNombre(b.id_usuario)));
   }, [usuarios, miembrosCanal, mensajesDirectos, contactosPermitidosBackend, user, busquedaUsuario, esAlumno, esTutorPuroFlag, nombresRoles]);
 
-  const tutoresDeAlumnosCompartidos = useMemo(() => {
-    const puedeVerTutores = nombresRoles.some((rol) =>
-      ["super_admin", "admin", "director", "profesor"].includes(rol)
-    );
-    if (!puedeVerTutores || esAlumno || esTutorPuroFlag) return [];
+  const puedeAgruparAlumnos = nombresRoles.some((rol) =>
+    ["super_admin", "admin", "director", "profesor"].includes(rol)
+  ) && !esAlumno && !esTutorPuroFlag;
+
+  const alumnosConTutores = useMemo(() => {
+    if (!puedeAgruparAlumnos) return [];
 
     const misCanalesIds = new Set(
       miembrosCanal
@@ -540,52 +580,72 @@ export default function Mensajes() {
         .map((miembro) => Number(miembro.canal_id))
     );
 
-    const alumnosCompartidosIds = new Set();
-    miembrosCanal.forEach((miembro) => {
-      if (!misCanalesIds.has(Number(miembro.canal_id))) return;
+    const canalIdsVisibles = nombresRoles.some((rol) => ["super_admin", "admin", "director"].includes(rol))
+      ? new Set(miembrosCanal.map((miembro) => Number(miembro.canal_id)))
+      : misCanalesIds;
 
-      const usuario = usuarios.find((item) =>
-        Number(item.id_usuario) === Number(miembro.usuario_id)
-      );
+    const alumnosIds = new Set();
+    miembrosCanal.forEach((miembro) => {
+      if (!canalIdsVisibles.has(Number(miembro.canal_id))) return;
+      const usuario = usuarios.find((item) => Number(item.id_usuario) === Number(miembro.usuario_id));
       if (usuario && nombresRolesUsuario(usuario).includes("alumno")) {
-        alumnosCompartidosIds.add(Number(miembro.usuario_id));
+        alumnosIds.add(Number(miembro.usuario_id));
       }
     });
 
-    const tutoresIds = new Set();
-    relaciones.forEach((relacion) => {
-      if (String(relacion.tipo || "").toLowerCase() !== "tutor") return;
+    return usuarios
+      .filter((usuario) => alumnosIds.has(Number(usuario.id_usuario)))
+      .map((alumno) => {
+        const alumnoId = Number(alumno.id_usuario);
+        const tutoresPorId = new Map();
 
-      const usuarioId = Number(relacion.usuario_id);
-      const relacionadoId = Number(relacion.relacionado_id);
-      if (alumnosCompartidosIds.has(usuarioId)) tutoresIds.add(relacionadoId);
-      if (alumnosCompartidosIds.has(relacionadoId)) tutoresIds.add(usuarioId);
-    });
+        relaciones.forEach((relacion) => {
+          const tipo = String(relacion.tipo || "tutor").trim().toLowerCase();
+          if (!["tutor", "padre", "madre"].includes(tipo)) return;
 
-    return usuarios.filter((usuario) =>
-      tutoresIds.has(Number(usuario.id_usuario)) &&
-      nombresRolesUsuario(usuario).includes("tutor")
-    );
-  }, [miembrosCanal, usuarios, relaciones, user, nombresRoles, esAlumno, esTutorPuroFlag]);
+          const usuarioId = Number(relacion.usuario_id);
+          const relacionadoId = Number(relacion.relacionado_id);
+          let tutorId = null;
+
+          if (usuarioId === alumnoId) tutorId = relacionadoId;
+          if (relacionadoId === alumnoId) tutorId = usuarioId;
+          if (tutorId === null) return;
+
+          const tutor = usuarios.find((item) => Number(item.id_usuario) === Number(tutorId));
+          if (tutor && nombresRolesUsuario(tutor).includes("tutor")) {
+            tutoresPorId.set(Number(tutorId), { tutor, tipo });
+          }
+        });
+
+        return {
+          alumno,
+          tutores: [...tutoresPorId.values()].sort((a, b) =>
+            getNombre(a.tutor.id_usuario).localeCompare(getNombre(b.tutor.id_usuario))
+          ),
+        };
+      })
+      .sort((a, b) => getNombre(a.alumno.id_usuario).localeCompare(getNombre(b.alumno.id_usuario)));
+  }, [puedeAgruparAlumnos, miembrosCanal, usuarios, relaciones, user, nombresRoles, rolesPorUsuario]);
 
   const personasParaNuevoChat = useMemo(() => {
     const personas = new Map();
     // TODO BACKEND: cuando exista GET /mensajes-directos/contactos, priorizar ese endpoint y dejar este fallback local como respaldo.
-    [...contactosParaNuevoChat, ...tutoresDeAlumnosCompartidos].forEach((usuario) => {
+    [...contactosParaNuevoChat].forEach((usuario) => {
       personas.set(Number(usuario.id_usuario), usuario);
     });
     return [...personas.values()].sort((a, b) =>
       getNombre(a.id_usuario).localeCompare(getNombre(b.id_usuario))
     );
-  }, [contactosParaNuevoChat, tutoresDeAlumnosCompartidos]);
+  }, [contactosParaNuevoChat]);
 
   function nombresRolesUsuario(usuarioObj) {
     const roles = [];
-    (usuarioObj?.roles || usuarioObj?.asignaciones || []).forEach((item) => {
-      const nombre = typeof item === "string" ? item : item?.rol?.nombre || item?.nombre || item?.nombre_rol;
-      if (nombre) roles.push(String(nombre).toLowerCase());
+    const extras = rolesPorUsuario.get(Number(usuarioObj?.id_usuario)) || [];
+    [...(usuarioObj?.roles || []), ...(usuarioObj?.asignaciones || []), ...extras].forEach((item) => {
+      const nombre = typeof item === "string" ? item : item?.rol?.nombre || item?.nombre || item?.nombre_rol || item?.rol;
+      if (typeof nombre === "string" && nombre.trim()) roles.push(nombre.toLowerCase());
     });
-    return roles;
+    return [...new Set(roles)];
   }
 
   const mostrarToast = (msg, tipo = "success") => {
@@ -869,7 +929,153 @@ export default function Mensajes() {
                   );
                 })}
 
-              {pestanaNuevoChat === "persona" && personasParaNuevoChat
+              {pestanaNuevoChat === "persona" && puedeAgruparAlumnos && (
+                <>
+                  <div className="mensajes__alumnos-seccion">
+                    <p className="mensajes__alumnos-seccion-titulo">Alumnos</p>
+                    {alumnosConTutores
+                      .filter(({ alumno, tutores }) => {
+                        const texto = busquedaUsuario.trim().toLowerCase();
+                        if (!texto) return true;
+                        const coincideAlumno = getNombre(alumno.id_usuario).toLowerCase().includes(texto) ||
+                          String(alumno.nombre_usuario || "").toLowerCase().includes(texto);
+                        const coincideTutor = tutores.some(({ tutor }) =>
+                          getNombre(tutor.id_usuario).toLowerCase().includes(texto) ||
+                          String(tutor.nombre_usuario || "").toLowerCase().includes(texto)
+                        );
+                        return coincideAlumno || coincideTutor;
+                      })
+                      .map(({ alumno, tutores }) => {
+                        const seleccionadoAlumno = destinoNuevoChat?.tipo === "directo" &&
+                          Number(destinoNuevoChat.id) === Number(alumno.id_usuario);
+                        const abierto = Number(alumnoExpandido) === Number(alumno.id_usuario);
+                        return (
+                          <div className="mensajes__alumno-grupo" key={`alumno-grupo-${alumno.id_usuario}`}>
+                            <button
+                              type="button"
+                              className={`mensajes__alumno-fila mensajes__new-message-item${seleccionadoAlumno ? " mensajes__new-message-item--selected" : ""}${abierto ? " mensajes__alumno-fila--open" : ""}`}
+                              onClick={() => {
+                                setChatActivo({ tipo: "directo", id: alumno.id_usuario, nombre: getNombre(alumno.id_usuario) });
+                                setModalNuevoChat(false);
+                              }}
+                            >
+                              <div className="mensajes__avatar">
+                                {alumno.perfil?.foto_perfil
+                                  ? <img src={alumno.perfil.foto_perfil} alt={`Foto de ${getNombre(alumno.id_usuario)}`} />
+                                  : getNombre(alumno.id_usuario).charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="mensajes__contact-name">{getNombre(alumno.id_usuario)}</p>
+                                <div className="mensajes__contact-meta">
+                                  <span className="mensajes__contact-username">@{alumno.nombre_usuario}</span>
+                                  <span className="mensajes__contact-roles"> · {rolPrincipalDe(alumno, rolesPorUsuario.get(alumno.id_usuario) || []) || "Alumno"}</span>
+                                </div>
+                              </div>
+                            </button>
+
+                            {tutores.length > 0 && (
+                              <button
+                                type="button"
+                                className="mensajes__alumno-tutores-btn"
+                                onClick={() => setAlumnoExpandido(abierto ? null : alumno.id_usuario)}
+                                aria-label="Ver tutores"
+                              >
+                                <span>{tutores.length} tutor{tutores.length === 1 ? "" : "es"}</span>
+                                <ChevronDown size={16} className={abierto ? "mensajes__chev--abierto" : "mensajes__chev"} />
+                              </button>
+                            )}
+
+                            {abierto && (
+                              <div className="mensajes__tutor-sublista">
+                                {tutores
+                                  .filter(({ tutor }) => {
+                                    const texto = busquedaUsuario.trim().toLowerCase();
+                                    if (!texto) return true;
+                                    return getNombre(tutor.id_usuario).toLowerCase().includes(texto) ||
+                                      String(tutor.nombre_usuario || "").toLowerCase().includes(texto);
+                                  })
+                                  .map(({ tutor, tipo }) => {
+                                    const seleccionadoTutor = destinoNuevoChat?.tipo === "directo" &&
+                                      Number(destinoNuevoChat.id) === Number(tutor.id_usuario);
+                                    const tipoTutor = tipo ? tipo.charAt(0).toUpperCase() + tipo.slice(1) : "Tutor";
+                                    return (
+                                      <button
+                                        type="button"
+                                        key={`tutor-${tutor.id_usuario}`}
+                                        className={`mensajes__tutor-fila mensajes__new-message-item${seleccionadoTutor ? " mensajes__new-message-item--selected" : ""}`}
+                                        onClick={() => {
+                                          setChatActivo({ tipo: "directo", id: tutor.id_usuario, nombre: getNombre(tutor.id_usuario) });
+                                          setModalNuevoChat(false);
+                                        }}
+                                      >
+                                        <div className="mensajes__avatar">
+                                          {tutor.perfil?.foto_perfil
+                                            ? <img src={tutor.perfil.foto_perfil} alt={`Foto de ${getNombre(tutor.id_usuario)}`} />
+                                            : getNombre(tutor.id_usuario).charAt(0).toUpperCase()}
+                                        </div>
+                                        <div>
+                                          <p className="mensajes__contact-name">{getNombre(tutor.id_usuario)}</p>
+                                          <div className="mensajes__contact-meta">
+                                            <span className="mensajes__contact-username">@{tutor.nombre_usuario}</span>
+                                            <span className="mensajes__contact-roles"> · {rolPrincipalDe(tutor, rolesPorUsuario.get(tutor.id_usuario) || []) || "Tutor"} ({tipoTutor})</span>
+                                          </div>
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+
+                  <div className="mensajes__otros-contactos-seccion">
+                    <p className="mensajes__alumnos-seccion-titulo">Otros contactos</p>
+                    {personasParaNuevoChat
+                      .filter((usuario) => {
+                        const texto = busquedaUsuario.trim().toLowerCase();
+                        const idsAgrupados = new Set(alumnosConTutores.flatMap(({ alumno, tutores }) => [
+                          Number(alumno.id_usuario),
+                          ...tutores.map(({ tutor }) => Number(tutor.id_usuario)),
+                        ]));
+                        if (idsAgrupados.has(Number(usuario.id_usuario))) return false;
+                        return !texto || getNombre(usuario.id_usuario).toLowerCase().includes(texto) ||
+                          String(usuario.nombre_usuario || "").toLowerCase().includes(texto);
+                      })
+                      .map((usuario) => {
+                        const seleccionado = destinoNuevoChat?.tipo === "directo" &&
+                          Number(destinoNuevoChat.id) === Number(usuario.id_usuario);
+                        return (
+                          <button
+                            key={`nuevo-contacto-${usuario.id_usuario}`}
+                            type="button"
+                            className={`mensajes__new-message-item${seleccionado ? " mensajes__new-message-item--selected" : ""}`}
+                            onClick={() => {
+                              setChatActivo({ tipo: "directo", id: usuario.id_usuario, nombre: getNombre(usuario.id_usuario) });
+                              setModalNuevoChat(false);
+                            }}
+                          >
+                            <div className="mensajes__avatar">
+                              {usuario.perfil?.foto_perfil
+                                ? <img src={usuario.perfil.foto_perfil} alt={`Foto de ${getNombre(usuario.id_usuario)}`} />
+                                : getNombre(usuario.id_usuario).charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="mensajes__contact-name">{getNombre(usuario.id_usuario)}</p>
+                              <div className="mensajes__contact-meta">
+                                <span className="mensajes__contact-username">@{usuario.nombre_usuario}</span>
+                                <span className="mensajes__contact-roles"> · {rolPrincipalDe(usuario, rolesPorUsuario.get(usuario.id_usuario) || []) || "Usuario"}</span>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                  </div>
+                </>
+              )}
+
+              {pestanaNuevoChat === "persona" && !puedeAgruparAlumnos && personasParaNuevoChat
                 .filter((usuario) =>
                   getNombre(usuario.id_usuario).toLowerCase().includes(busquedaUsuario.toLowerCase()) ||
                   String(usuario.nombre_usuario || "").toLowerCase().includes(busquedaUsuario.toLowerCase())
@@ -882,11 +1088,10 @@ export default function Mensajes() {
                       key={`nuevo-contacto-${usuario.id_usuario}`}
                       type="button"
                       className={`mensajes__new-message-item${seleccionado ? " mensajes__new-message-item--selected" : ""}`}
-                      onClick={() => setDestinoNuevoChat({
-                        tipo: "directo",
-                        id: usuario.id_usuario,
-                        nombre: getNombre(usuario.id_usuario),
-                      })}
+                      onClick={() => {
+                        setChatActivo({ tipo: "directo", id: usuario.id_usuario, nombre: getNombre(usuario.id_usuario) });
+                        setModalNuevoChat(false);
+                      }}
                     >
                       <div className="mensajes__avatar">
                         {usuario.perfil?.foto_perfil
@@ -897,7 +1102,7 @@ export default function Mensajes() {
                         <p className="mensajes__contact-name">{getNombre(usuario.id_usuario)}</p>
                         <div className="mensajes__contact-meta">
                           <span className="mensajes__contact-username">@{usuario.nombre_usuario}</span>
-                          <span className="mensajes__contact-roles"> · {rolPrincipalDe(usuario) || "Usuario"}</span>
+                          <span className="mensajes__contact-roles"> · {rolPrincipalDe(usuario, rolesPorUsuario.get(usuario.id_usuario) || []) || "Usuario"}</span>
                         </div>
                       </div>
                     </button>
@@ -909,15 +1114,11 @@ export default function Mensajes() {
                   <p className="mensajes__new-message-hint">No hay canales disponibles para escribir.</p>
                 )}
 
-              {pestanaNuevoChat === "persona" && personasParaNuevoChat
-                .filter((usuario) =>
-                  getNombre(usuario.id_usuario).toLowerCase().includes(busquedaUsuario.toLowerCase()) ||
-                  String(usuario.nombre_usuario || "").toLowerCase().includes(busquedaUsuario.toLowerCase())
-                ).length === 0 && (
-                  esTutorPuroFlag
-                    ? <p className="mensajes__new-message-hint">Los contactos disponibles aparecerán cuando el sistema de permisos esté completo.</p>
-                    : <p className="mensajes__new-message-hint">No se encontraron contactos permitidos.</p>
-                )}
+              {pestanaNuevoChat === "persona" && !busquedaUsuario && alumnosConTutores.length === 0 && personasParaNuevoChat.length === 0 && (
+                esTutorPuroFlag
+                  ? <p className="mensajes__new-message-hint">Los contactos disponibles aparecerán cuando el sistema de permisos esté completo.</p>
+                  : <p className="mensajes__new-message-hint">No se encontraron contactos permitidos.</p>
+              )}
             </div>
 
             {destinoNuevoChat && (
@@ -959,7 +1160,7 @@ export default function Mensajes() {
                     <p className="mensajes__contact-name">{getNombre(miembro.usuario_id)}</p>
                     <div className="mensajes__contact-meta">
                       <span className="mensajes__contact-username">@{usuario?.nombre_usuario || "usuario"}</span>
-                      <span className="mensajes__contact-roles"> · {usuario ? (rolPrincipalDe(usuario) || "Usuario") : "Usuario"}</span>
+                      <span className="mensajes__contact-roles"> · {usuario ? (rolPrincipalDe(usuario, rolesPorUsuario.get(usuario.id_usuario) || []) || "Usuario") : "Usuario"}</span>
                     </div>
                     <span className={`mensajes__rol-badge mensajes__rol-badge--${miembro.rol_en_canal}`}>{miembro.rol_en_canal}</span>
                   </div>
