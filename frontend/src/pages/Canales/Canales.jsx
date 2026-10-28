@@ -31,6 +31,7 @@ export default function Canales() {
   // --- UI ---
   const [busqueda, setBusqueda] = useState("");
   const [canalSeleccionadoId, setCanalSeleccionadoId] = useState(null);
+  const [miembroSeleccionado, setMiembroSeleccionado] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // --- Modales ---
@@ -200,7 +201,7 @@ export default function Canales() {
             {canalesFiltrados.map((c) => (
               <li key={c.id_canal}>
                 <button
-                  onClick={() => setCanalSeleccionadoId(c.id_canal)}
+                  onClick={() => { setCanalSeleccionadoId(c.id_canal); setMiembroSeleccionado(null); }}
                   style={{
                     width: "100%", display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", border: "none", borderRadius: "8px", cursor: "pointer", textAlign: "left",
                     background: c.id_canal === canalSeleccionadoId ? "var(--color-azul-petroleo)" : "transparent",
@@ -251,7 +252,7 @@ export default function Canales() {
                 ) : (
                   <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                     {miembrosDelCanal.map((u) => (
-                      <li key={u.id_usuario} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px", background: "var(--color-gris-azulado)", borderRadius: "8px", marginBottom: "8px" }}>
+                      <li key={u.id_usuario} onClick={() => setMiembroSeleccionado(u)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px", background: "var(--color-gris-azulado)", borderRadius: "8px", marginBottom: "8px", cursor: "pointer" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                           <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "var(--color-menta-palido)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", color: "var(--color-azul-petroleo)" }}>
                             {u.nombre_usuario.charAt(0).toUpperCase()}
@@ -262,28 +263,9 @@ export default function Canales() {
                           </div>
                         </div>
                         
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          {puedeGestionar ? (
-                            <select
-                              value={rolEnCanalDe(u.id_usuario)}
-                              onChange={(e) => cambiarRolMiembro(u.id_usuario, e.target.value)}
-                              style={{ padding: "4px 8px", borderRadius: "4px", border: "1px solid #ccc", fontSize: "12px", background: "white" }}
-                            >
-                              <option value="admin">Admin</option>
-                              <option value="tutor">Tutor</option>
-                              <option value="miembro">Miembro</option>
-                            </select>
-                          ) : (
-                            <span style={{ fontSize: "12px", fontWeight: 600, background: "var(--color-menta-palido)", padding: "2px 8px", borderRadius: "12px", color: "var(--color-azul-petroleo)" }}>
-                              {rolEnCanalDe(u.id_usuario)}
-                            </span>
-                          )}
-                          {puedeGestionar && (
-                            <button onClick={() => quitarMiembro(u.id_usuario)} style={{ background: "none", border: "none", cursor: "pointer", color: "#c00", padding: "4px" }}>
-                              <Trash2 size={16} />
-                            </button>
-                          )}
-                        </div>
+                        <button onClick={(e) => { e.stopPropagation(); setMiembroSeleccionado(u); }} style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", padding: "6px", color: "var(--texto-secundario)" }}>
+                          <ChevronRight size={20} />
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -292,6 +274,65 @@ export default function Canales() {
             </>
           )}
         </main>
+
+        {miembroSeleccionado && canalActivo && (
+        <aside className="canales__panel-detalle">
+          <div className="canales__panel-detalle-header">
+            <h3 className="canales__panel-detalle-titulo" style={{ color: "#024566" }}>Detalle del miembro</h3>
+            <button
+              className="canales__panel-detalle-cerrar"
+              onClick={() => setMiembroSeleccionado(null)}
+            >
+              <X size={20} />
+            </button>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px", marginBottom: "1.5rem" }}>
+            {miembroSeleccionado.perfil?.foto_perfil ? (
+              <img className="canales__perfil-avatar" src={miembroSeleccionado.perfil.foto_perfil} alt="Foto de perfil" />
+            ) : (
+              <div className="canales__perfil-avatar" style={{ background: "var(--color-menta-palido)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "32px", fontWeight: "bold", color: "var(--color-azul-petroleo)" }}>{(miembroSeleccionado.perfil?.nombres || miembroSeleccionado.nombre_usuario || "?").charAt(0).toUpperCase()}</div>
+            )}
+            <strong className="canales__perfil-nombre">
+              {[miembroSeleccionado.perfil?.nombres, miembroSeleccionado.perfil?.apellidos].filter(Boolean).join(" ") || miembroSeleccionado.nombre_usuario}
+            </strong>
+            <span style={{ fontSize: "13px", color: "var(--texto-secundario)" }}>@{miembroSeleccionado.nombre_usuario}</span>
+            <span style={{ fontSize: "13px", color: "var(--texto-secundario)" }}>{miembroSeleccionado.email}</span>
+            {miembroSeleccionado.perfil?.biografia && (
+              <p style={{ textAlign: "center", fontSize: "14px", margin: "8px 0 0" }}>{miembroSeleccionado.perfil.biografia}</p>
+            )}
+          </div>
+
+          <div className="canales__perfil-info">
+            <h4 className="canales__perfil-info-titulo">Información de la cuenta</h4>
+            <p className="canales__perfil-dato">
+              <strong>DNI:</strong> {miembroSeleccionado.perfil?.dni || "No informado"}
+            </p>
+            <p className="canales__perfil-dato">
+              <strong>Estado:</strong> {miembroSeleccionado.activo ? "Activo" : "Inactivo"}
+            </p>
+            <p className="canales__perfil-dato">
+              <strong>Fecha de registro:</strong> {miembroSeleccionado.fecha_registro ? new Date(miembroSeleccionado.fecha_registro).toLocaleDateString("es-AR") : "No disponible"}
+            </p>
+          </div>
+          <div style={{ marginBottom: "1rem" }}>
+            <label className="canales__perfil-info-titulo">Rol en el canal</label>
+            {puedeGestionar ? (
+              <select className="canales__perfil-dato" value={rolEnCanalDe(miembroSeleccionado.id_usuario)} onChange={(e) => cambiarRolMiembro(miembroSeleccionado.id_usuario, e.target.value)} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc", background: "white" }}>
+                <option value="admin">Admin</option>
+                <option value="tutor">Tutor</option>
+                <option value="miembro">Miembro</option>
+              </select>
+            ) : (
+              <span>{rolEnCanalDe(miembroSeleccionado.id_usuario)}</span>
+            )}
+          </div>
+          {puedeGestionar && (
+            <button className="canales__perfil-acciones" onClick={() => quitarMiembro(miembroSeleccionado.id_usuario)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "10px", border: "none", borderRadius: "6px", background: "#fee2e2", color: "#b91c1c", cursor: "pointer" }}>
+              <Trash2 size={16} /> Quitar del canal
+            </button>
+          )}
+        </aside>
+        )}
       </div>
 
       {/* MODAL AGREGAR MIEMBRO */}
