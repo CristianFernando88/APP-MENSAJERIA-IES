@@ -1,8 +1,8 @@
 # Diagrama entidad-relación
 
-**Última actualización:** 26/10/2026
+**Última actualización:** 29/10/2026
 
-Este documento describe las 18 entidades registradas en `backend/app/models`, de acuerdo con sus modelos SQLAlchemy actuales. Los nombres de tablas, columnas, tipos, claves foráneas, restricciones explícitas y valores predeterminados se han tomado de esos modelos.
+Este documento describe las 19 entidades registradas en `backend/app/models`, de acuerdo con sus modelos SQLAlchemy actuales. Los nombres de tablas, columnas, tipos, claves foráneas, restricciones explícitas y valores predeterminados se han tomado de esos modelos.
 
 > Los valores predeterminados de fecha se generan en la aplicación mediante `datetime.utcnow`. Las referencias a valores como `chat`, `global` o `tutor` describen convenciones del código: los modelos no declaran restricciones `CHECK` que limiten esos valores.
 >
@@ -35,6 +35,7 @@ erDiagram
     USUARIO ||--o{ MENSAJE_DIRECTO : recibe
     USUARIO ||--o{ COMUNICADO : publica
     COMUNICADO ||--o{ COMUNICADO_DESTINATARIO : dirige
+    COMUNICADO ||--o{ COMUNICADO_ADJUNTO : adjunta
     SERVIDOR o|--o{ COMUNICADO_DESTINATARIO : destino
     CANAL o|--o{ COMUNICADO_DESTINATARIO : destino
     USUARIO o|--o{ COMUNICADO_DESTINATARIO : destino
@@ -48,7 +49,7 @@ erDiagram
     USUARIO ||--o{ RELACION_USUARIO : relacionado
 ```
 
-Las relaciones opcionales del diagrama corresponden a claves foráneas que aceptan `NULL`. `USUARIO_ROL` y `MIEMBRO_SERVIDOR` son entidades de asociación; los destinos de `COMUNICADO_DESTINATARIO` son opcionales en el modelo.
+Las relaciones opcionales del diagrama corresponden a claves foráneas que aceptan `NULL`. `USUARIO_ROL` y `MIEMBRO_SERVIDOR` son entidades de asociación; los destinos de `COMUNICADO_DESTINATARIO` son opcionales en el modelo. `COMUNICADO_ADJUNTO` corresponde a la entidad física `comunicado_adjunto`.
 
 ## Entidades
 
@@ -241,6 +242,22 @@ Descripción: destinos opcionales asociados a un comunicado.
 
 Los modelos permiten que las tres columnas de destinatario sean nulas; no declaran una regla que obligue a elegir exactamente un destino.
 
+### ComunicadoAdjunto — `comunicado_adjunto`
+
+Descripción: archivo almacenado en Cloudinary y asociado a un comunicado.
+Índices explícitos: ninguno.
+
+| Campo | Tipo | Obligatorio | Restricciones / valor predeterminado |
+|---|---|---:|---|
+| `id` | Integer | Sí | PK, autoincremental |
+| `comunicado_id` | Integer | Sí | FK → `comunicado.id_comunicado`, `ON DELETE CASCADE` |
+| `nombre_original` | String(255) | Sí | — |
+| `url` | String(500) | Sí | — |
+| `public_id` | String(255) | Sí | — |
+| `tipo_mime` | String(150) | Sí | — |
+| `tamano_bytes` | Integer | Sí | — |
+| `fecha_subida` | DateTime | Sí | `datetime.utcnow` |
+
 ### ComunicadoVisto — `comunicado_visto`
 
 Descripción: registro de visualización de un comunicado por un usuario.
@@ -336,6 +353,7 @@ Descripción: relación tipada entre dos usuarios.
 | `comunicado_destinatario` | `servidor_id` | `servidor.id_servidor` |
 | `comunicado_destinatario` | `canal_id` | `canal.id_canal` |
 | `comunicado_destinatario` | `usuario_id` | `usuario.id_usuario` |
+| `comunicado_adjunto` | `comunicado_id` | `comunicado.id_comunicado` |
 | `comunicado_visto` | `comunicado_id` | `comunicado.id_comunicado` |
 | `comunicado_visto` | `usuario_id` | `usuario.id_usuario` |
 | `mensaje_visto` | `mensaje_id` | `mensaje.id_mensaje` |
@@ -380,17 +398,18 @@ Los modelos SQLAlchemy no declaran tipos `Enum` ni tipos SQL personalizados. Los
 | 11 | `mensaje_directo` | Mensaje privado entre usuarios |
 | 12 | `comunicado` | Comunicado publicado por un usuario |
 | 13 | `comunicado_destinatario` | Destinos opcionales de un comunicado |
-| 14 | `comunicado_visto` | Registro de visualización de comunicados |
-| 15 | `mensaje_visto` | Registro de visualización de mensajes |
-| 16 | `notificacion` | Notificación asociada a un usuario |
-| 17 | `recordatorio` | Recordatorio asociado a un usuario |
-| 18 | `relacion_usuario` | Relación tipada entre dos usuarios |
+| 14 | `comunicado_adjunto` | Archivo asociado a un comunicado |
+| 15 | `comunicado_visto` | Registro de visualización de comunicados |
+| 16 | `mensaje_visto` | Registro de visualización de mensajes |
+| 17 | `notificacion` | Notificación asociada a un usuario |
+| 18 | `recordatorio` | Recordatorio asociado a un usuario |
+| 19 | `relacion_usuario` | Relación tipada entre dos usuarios |
 
-**Total: 18 entidades.**
+**Total: 19 entidades.**
 
 ## Notas de actualización
 
 - Se añadió la fecha de actualización y una descripción para cada entidad.
 - Se explicitó que los modelos no declaran índices adicionales ni tipos `Enum` de base de datos; las restricciones únicas existentes siguen documentadas en los campos.
-- Se verificó el inventario contra `backend/app/models`: siguen siendo 18 entidades y no se detectaron tablas añadidas o eliminadas respecto de este documento.
-- Las relaciones de borrado `ON DELETE CASCADE` en `comunicado_destinatario.comunicado_id` y `comunicado_visto.comunicado_id` se mantienen reflejadas en las tablas de campos.
+- Se verificó el inventario contra `backend/app/models`: actualmente existen 19 entidades; se incorporó `comunicado_adjunto` junto con su relación de cascada desde comunicado.
+- Las relaciones de borrado `ON DELETE CASCADE` en `comunicado_destinatario.comunicado_id`, `comunicado_adjunto.comunicado_id` y `comunicado_visto.comunicado_id` se mantienen reflejadas en las tablas de campos.

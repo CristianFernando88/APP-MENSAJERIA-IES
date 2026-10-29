@@ -3,7 +3,7 @@ FRONTEND - APP MENSAJERIA IES
 
 Proyecto: IES Connect
 Versión de package.json: 0.0.0
-Última actualización: 26/10/2026
+Última actualización: 29/10/2026
 Stack: React 19, JavaScript/JSX, Vite 8 y React Router 7.
 
 Informe del frontend implementado en frontend/src. Resume la arquitectura, las
@@ -139,6 +139,14 @@ Mensajes
   permite conversar en tiempo real mediante WebSockets y utiliza registros de
   mensajes vistos o estados de lectura. El hook useWebSocket gestiona la
   conexión según el canal o usuario.
+  Incluye un modal "Nuevo mensaje" con pestañas Canal y Persona, buscador,
+  selección única y apertura directa de la conversación sin enviar un primer
+  mensaje. En Persona carga usuarios, roles y asignaciones usuario-rol para
+  resolver el rol institucional real. Los alumnos compartidos se agrupan junto
+  a sus tutores mediante relaciones usuario; tanto alumno como tutor pueden
+  abrir un chat directo. Profesor, director, administrador y super administrador
+  ven el agrupamiento; tutor puro conserva una lista plana de contactos permitidos
+  y el alumno no dispone del botón +.
 
 Comunicados
   Lista comunicados, permite buscar y filtrar no leídos, consultar destinatarios
@@ -189,7 +197,10 @@ Hay módulos por dominio para:
 - usuarios, perfiles, roles y asignaciones usuario-rol;
 - servidores, canales, categorías, miembros de servidor y miembros de canal;
 - mensajes, mensajes directos y registros de mensajes vistos;
-- comunicados, destinatarios y registros de comunicados vistos;
+- roles y asignaciones usuario-rol para resolver los roles institucionales en
+  la interfaz;
+- relaciones usuario para agrupar alumnos y tutores en Nuevo mensaje;
+- comunicados, destinatarios, adjuntos y registros de comunicados vistos;
 - notificaciones y recordatorios;
 - calendario y fechas institucionales;
 - construcción de parámetros de consulta.
@@ -291,3 +302,12 @@ Desde la carpeta frontend:
   autenticación global; los permisos del frontend no sustituyen autorización
   del backend.
 - No se encontraron archivos de pruebas automatizadas bajo frontend/src.
+- Se actualizó Mensajes para cargar listarUsuarioRol(), listarRoles() y
+  listarRelaciones(), resolviendo roles reales por usuario y mostrando relaciones
+  Alumno → Tutores en el modal Nuevo mensaje.
+- Para profesor, director, administrador y super administrador se muestran
+  alumnos compartidos agrupados; las sublistas permiten abrir conversación con
+  cada tutor y mostrar su parentesco (padre, madre o tutor) cuando existe.
+- El modal conserva selección única, busca alumnos y tutores en tiempo real,
+  excluye duplicados y mantiene la lista plana para tutor puro.
+- La compilación de producción con npm run build fue verificada al 29/10/2026.

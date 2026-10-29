@@ -6,7 +6,7 @@ actualmente en la carpeta backend.
 
 Proyecto: APP MENSAJERÍA API
 Versión declarada por FastAPI: 1.0.0
-Última actualización: 26/10/2026
+Última actualización: 29/10/2026
 Lenguaje: Python. No existe backend/package.json ni versión de paquete Python
 declarada en el repositorio.
 
@@ -128,9 +128,9 @@ el código, pero no están incluidos en el ejemplo de entorno.
 3.3 MODELOS / ENTIDADES
 -----------------------
 
-Los 18 modelos actuales son: Usuario, Perfil, Rol, UsuarioRol, Servidor,
+Los 19 modelos actuales son: Usuario, Perfil, Rol, UsuarioRol, Servidor,
 MiembroServidor, Categoria, Canal, MiembroCanal, Mensaje, MensajeDirecto,
-Comunicado, ComunicadoDestinatario, ComunicadoVisto, MensajeVisto,
+Comunicado, ComunicadoDestinatario, ComunicadoAdjunto, ComunicadoVisto, MensajeVisto,
 Notificacion, Recordatorio y RelacionUsuario.
 
 El detalle de campos, claves, restricciones y relaciones se mantiene en
@@ -198,6 +198,12 @@ Comunicados y lecturas
                              CRUD estándar; identificador {destinatario_id}.
   /comunicados-vistos/       CRUD estándar; identificador {visto_id}.
   /mensajes-vistos/          CRUD estándar; identificador {visto_id}.
+  /comunicados/{comunicado_id}/adjuntos
+                             POST permite subir entre 1 y 5 archivos (máximo
+                             10 MB por archivo); GET lista sus adjuntos.
+  /comunicados-adjuntos/{adjunto_id}
+                             DELETE elimina un adjunto de Cloudinary y de la base
+                             de datos.
 
 Otros recursos
   /notificaciones/           CRUD estándar; identificador {notificacion_id}.
@@ -352,3 +358,8 @@ Además de las rutas HTTP, hay dos WebSockets:
   .env.example.
 - La comprobación /health informa de los errores de conexión a la base de datos
   en su respuesta cuando la comprobación falla.
+- Se incorporó el recurso ComunicadoAdjunto para almacenar metadatos de archivos
+  publicados en comunicados, con subida y eliminación en Cloudinary mediante
+  /comunicados/{comunicado_id}/adjuntos y /comunicados-adjuntos/{adjunto_id}.
+- Los documentos actuales reflejan 19 modelos registrados. El DER y este
+  documento deben mantenerse sincronizados al añadir nuevas entidades o rutas.
