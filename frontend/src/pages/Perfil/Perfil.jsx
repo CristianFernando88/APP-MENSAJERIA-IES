@@ -5,7 +5,7 @@ import Input from "../../components/ui/Input/Input";
 import Button from "../../components/ui/Button/Button";
 import Badge from "../../components/ui/Badge/Badge";
 import "./Perfil.css";
-import { obtenerPerfil, subirFotoPerfil } from "../../api/perfiles";
+import { obtenerPerfil, actualizarPerfil, subirFotoPerfil } from "../../api/perfiles";
 
 export default function Perfil() {
   const { user } = useAuth();
@@ -27,6 +27,7 @@ export default function Perfil() {
     email: "",
     password: "",
     activo: true,
+    biografia: "",
   });
 
   
@@ -50,6 +51,7 @@ export default function Perfil() {
           email: data.email || "",
           password: "",
           activo: data.activo ?? true,
+          biografia: dataPerfil?.biografia || "",
         });
       } catch (err) {
         if (!cancelado) setError(err?.message || "No se pudo cargar el perfil");
@@ -142,12 +144,23 @@ export default function Perfil() {
 
       const actualizado = await actualizarUsuario(user.id_usuario, payload);
 
+      const biografiaFinal =
+        form.biografia && form.biografia.trim()
+          ? form.biografia.trim()
+          : null;
+
+      const actualizadoPerfil = await actualizarPerfil(user.id_usuario, {
+        biografia: biografiaFinal,
+      });
+
       setPerfil(actualizado);
+      setDatosPerfil(actualizadoPerfil);
       setForm((prev) => ({
         ...prev,
         nombre_usuario: actualizado.nombre_usuario,
         email: actualizado.email,
         password: "",
+        biografia: biografiaFinal || "",
       }));
 
       setMensaje("Perfil actualizado correctamente.");
@@ -192,6 +205,19 @@ export default function Perfil() {
           <Badge variant={perfil?.activo ? "success" : "danger"}>
             {perfil?.activo ? "Activo" : "Inactivo"}
           </Badge>
+
+          {datosPerfil?.biografia && (
+            <p
+              style={{
+                fontSize: "13px",
+                color: "#475569",
+                margin: "8px 0 0 0",
+                lineHeight: 1.5,
+              }}
+            >
+              {datosPerfil.biografia}
+            </p>
+          )}
         </div>
       </div>
 
@@ -257,6 +283,42 @@ export default function Perfil() {
           </div>
         )}
 
+        {editando && (
+          <div className="perfil__grid">
+            <div style={{ gridColumn: "1 / -1", width: "100%" }}>
+              <label
+                htmlFor="biografia"
+                style={{
+                  display: "block",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  marginBottom: "6px",
+                  color: "#334155",
+                }}
+              >
+                Biografía
+              </label>
+              <textarea
+                id="biografia"
+                name="biografia"
+                value={form.biografia || ""}
+                onChange={handleChange}
+                placeholder="Contá tu biografía..."
+                rows={3}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: "10px",
+                  border: "1px solid #CBD5E1",
+                  fontSize: "14px",
+                  fontFamily: "inherit",
+                  resize: "vertical",
+                }}
+              />
+            </div>
+          </div>
+        )}
+
         <p className="perfil__meta">
           Miembro desde {perfil?.fecha_registro
             ? new Date(perfil.fecha_registro).toLocaleDateString("es-AR")
@@ -289,6 +351,7 @@ export default function Perfil() {
                     email: perfil?.email || "",
                     password: "",
                     activo: perfil?.activo ?? true,
+                    biografia: datosPerfil?.biografia || "",
                   });
                 }}
               >

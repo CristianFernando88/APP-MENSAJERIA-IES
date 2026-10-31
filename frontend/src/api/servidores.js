@@ -5,7 +5,6 @@ import { listarCanales } from "./canales";
 
 const SERVIDORES = "/servidores/";
 
-// ---------- CRUD ----------
 export function listarServidores() {
   return apiGet(SERVIDORES);
 }
@@ -26,7 +25,6 @@ export function eliminarServidor(servidorId) {
   return apiDelete(`/servidores/${servidorId}`);
 }
 
-// ---------- Jerarquía ----------
 export async function obtenerJerarquiaServidor(servidorId) {
   const [servidor, categorias, canales] = await Promise.all([
     obtenerServidor(servidorId),

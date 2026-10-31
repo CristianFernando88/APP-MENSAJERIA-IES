@@ -21,7 +21,6 @@ export function eliminarCategoria(categoriaId) {
   return apiDelete(`/categorias/${categoriaId}`);
 }
 
-// Filtro por servidor (antes vivía en services/servidoresService.js)
 export async function listarCategoriasPorServidor(servidorId) {
   const categorias = await listarCategorias();
   return categorias.filter((c) => Number(c.servidor_id) === Number(servidorId));

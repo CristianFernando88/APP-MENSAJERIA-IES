@@ -1,3 +1,4 @@
+// src/api/perfiles.js
 import { apiGet, apiPost, apiPut, apiUpload } from "./apiClient";
 
 export function obtenerPerfil(usuarioId) {

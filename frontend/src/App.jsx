@@ -3,7 +3,7 @@ import Layout from "./components/Layout/Layout";
 import RequireAuth from "./components/RequireAuth/RequireAuth";
 import { NotificacionesProvider } from "./context/NotificacionesContext"; // NUEVO
 import Dashboard from "./pages/Dashboard/Dashboard";
-import Servidores from "./pages/Servidores/Servidores";
+import Servidores from "./pages/Servidores/servidores.jsx";
 import Canales from "./pages/Canales/Canales";
 import Categorias from "./pages/Categorias/Categorias";
 import Usuarios from "./pages/Usuarios/Usuarios";

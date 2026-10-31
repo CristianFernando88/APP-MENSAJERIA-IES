@@ -1,3 +1,4 @@
+// src/api/usuarios.js
 import { apiGet, apiPost, apiPut, apiDelete } from "./apiClient";
 import { queryParams } from "./queryParams";
 
