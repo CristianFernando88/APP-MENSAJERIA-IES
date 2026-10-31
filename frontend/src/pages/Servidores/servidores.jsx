@@ -1,14 +1,106 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import "./servidores.css";
 import { listarServidores } from "../../api/servidores";
 import { listarCategoriasPorServidor, crearCategoria, actualizarCategoria, eliminarCategoria } from "../../api/categorias";
 import { listarCanales, crearCanal, actualizarCanal, eliminarCanal } from "../../api/canales";
 import { listarMiembrosServidor, crearMiembroServidor, actualizarMiembroServidor, eliminarMiembroServidor } from "../../api/miembrosServidor";
-import { crearMiembroCanal, eliminarMiembroCanal } from "../../api/miembrosCanal";
-import { listarUsuarioRol } from "../../api/usuarioRol";
+import { listarUsuarioRol, crearUsuarioRol, eliminarUsuarioRol } from "../../api/usuarioRol";
 import { listarRoles } from "../../api/roles";
-import { obtenerUsuario } from "../../api/usuarios";
-import { obtenerPerfil } from "../../api/perfiles";
+import { obtenerPerfil, actualizarPerfil, crearPerfil } from "../../api/perfiles";
+import { crearRelacionUsuario } from "../../api/relacionesUsuario";
+import { useAuth } from "../../context/AuthContext";
+
+import * as miembrosCanalApi from "../../api/miembrosCanal";
+import * as usuariosApi from "../../api/usuarios";
+import * as relacionesApi from "../../api/relacionesUsuario";
+
+const SOLO_MIS_SERVIDORES = true;
+
+const ROLES_QUE_VEN_TODO = ["administrador"];
+const TAMANO_VISTA = 10;
+const ROLES_CANAL = ["miembro", "admin", "tutor"];
+const TIPOS_VINCULO = ["padre", "madre", "tutor", "hermano"];
+
+
+const llamar = (fn, ...args) => {
+  if (typeof fn !== "function") {
+    return Promise.reject(new Error("Falta implementar esa función en la carpeta api/"));
+  }
+  return fn(...args);
+};
+
+const mensajeError = (error, porDefecto = "Ocurrió un error") => {
+  const msg = error?.message || "";
+  if (!msg || msg.includes("[object Object]")) return `${porDefecto}: datos inválidos, revisá los campos.`;
+  return msg;
+};
+
+const formatearFecha = (f) => {
+  if (!f) return "—";
+  const d = new Date(f);
+  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("es-AR");
+};
+
+const etiquetaTipo = (t) => (t === "chat" ? "General / Chat" : t === "informativo" ? "Informativo" : t);
+const aTipoApi = (v) => (v === "chat" || v === "General / Chat" ? "chat" : "informativo");
+
+const generarPasswordTemporal = () => {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const bytes = new Uint8Array(10);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => chars[b % chars.length]).join("") + "1!";
+};
+
+const nombreUsuarioLibre = (email, usuarios) => {
+  let base = email.split("@")[0].toLowerCase().replace(/[^a-z0-9._-]/g, "");
+  if (base.length < 3) base = `usuario${base}`; // el backend exige al menos 3 caracteres
+  const usados = new Set(usuarios.map((u) => String(u.nombre_usuario || "").toLowerCase()));
+  let candidato = base;
+  let n = 1;
+  while (usados.has(candidato)) {
+    n += 1;
+    candidato = `${base}${n}`;
+  }
+  return candidato;
+};
+
+
+const btnProps = (fn) => ({
+  role: "button",
+  tabIndex: 0,
+  onClick: fn,
+  onKeyDown: (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      fn();
+    }
+  },
+});
+
+function useVistas(items, clave) {
+  const [limite, setLimite] = useState(TAMANO_VISTA);
+  useEffect(() => {
+    setLimite(TAMANO_VISTA);
+  }, [clave]);
+  return {
+    visibles: items.slice(0, limite),
+    total: items.length,
+    hayMas: limite < items.length,
+    verMas: () => setLimite((l) => l + TAMANO_VISTA),
+  };
+}
+
+const PieVistas = ({ vistas }) =>
+  vistas.total > 0 ? (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "11px", color: "#64748b", paddingTop: "4px" }}>
+      <span>Mostrando {vistas.visibles.length} de {vistas.total}</span>
+      {vistas.hayMas && (
+        <button type="button" onClick={vistas.verMas} style={{ background: "#ccfbf1", color: "#0f766e", border: "none", padding: "4px 10px", borderRadius: "8px", fontSize: "11px", fontWeight: "600", cursor: "pointer" }}>
+          Ver más
+        </button>
+      )}
+    </div>
+  ) : null;
 
 const IconSearch = ({ size = 16, className = "" }) => (
   <svg width={size} height={size} className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -72,12 +164,14 @@ const IconArrowLeft = ({ size = 16, className = "" }) => (
 );
 
 export default function Servidores() {
+  const { user } = useAuth();
   const [servidores, setServidores] = useState([]);
   const [servidorActivo, setServidorActivo] = useState(null);
   const [busquedaServidor, setBusquedaServidor] = useState("");
   const [tabActiva, setTabActiva] = useState("canales");
   const [errorCarga, setErrorCarga] = useState(null);
-  const [cargando, setCargando] = useState(false);
+  const [cargandoServidores, setCargandoServidores] = useState(true);
+  const [guardando, setGuardando] = useState(false);
 
   const [busquedaCanal, setBusquedaCanal] = useState("");
   const [filtroTipoCanal, setFiltroTipoCanal] = useState("todos");
@@ -90,6 +184,8 @@ export default function Servidores() {
   const [canales, setCanales] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [miembros, setMiembros] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [usuariosTodos, setUsuariosTodos] = useState(null);
 
   const [miembroDetalle, setMiembroDetalle] = useState(null);
   const [perfilMiembro, setPerfilMiembro] = useState(null);
@@ -105,176 +201,313 @@ export default function Servidores() {
 
   const [nuevoCanalSelec, setNuevoCanalSelec] = useState("");
   const [nuevoRolCanal, setNuevoRolCanal] = useState("miembro");
-  const [reemplazarCanal, setReemplazarCanal] = useState("no");
 
   const [nuevoRolSelec, setNuevoRolSelec] = useState("");
   const [tipoVinculo, setTipoVinculo] = useState("padre");
   const [usuarioVinculo, setUsuarioVinculo] = useState("");
 
-  const ID_USUARIO_ACTUAL = 1;
+  const [perfilActual, setPerfilActual] = useState(null);
+  const [usuarioActual, setUsuarioActual] = useState(null);
+
+  const ID_USUARIO_ACTUAL = user?.id_usuario;
+
+  const servidorRef = useRef(null);
+  servidorRef.current = servidorActivo?.id ?? null;
+  const abiertoRef = useRef(null);
+  abiertoRef.current = itemSeleccionado?.tipo === "miembro" ? Number(itemSeleccionado.data.usuarioId) : null;
+  const miembrosRef = useRef([]);
+  miembrosRef.current = miembros;
+
+  const requiereSesion = () => {
+    if (!ID_USUARIO_ACTUAL) {
+      alert("No hay una sesión activa.");
+      return false;
+    }
+    return true;
+  };
 
   useEffect(() => {
+    const cargarPerfilActual = async () => {
+      if (!user?.id_usuario) return;
+      try {
+        const [p, u] = await Promise.all([
+          obtenerPerfil(user.id_usuario).catch(() => null),
+          llamar(usuariosApi.obtenerUsuario, user.id_usuario).catch(() => null),
+        ]);
+        setPerfilActual(p);
+        setUsuarioActual(u);
+      } catch (error) {
+        setPerfilActual(null);
+      }
+    };
+    cargarPerfilActual();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user?.id_usuario) return undefined;
+    let cancelado = false;
     const cargarServidores = async () => {
-      setCargando(true);
+      setCargandoServidores(true);
       setErrorCarga(null);
       try {
-        const data = await listarServidores();
-        // CORRECCIÓN: el backend devuelve `id_servidor`; el resto del componente usa `id`.
-        // Sin este campo, srv.id era undefined y todos los servidores quedaban "activos".
-        setServidores(data.map((s) => ({ ...s, id: s.id_servidor })));
-        if (data.length > 0) {
-          setServidorActivo((anterior) =>
-            anterior ?? {
-              id: data[0].id_servidor,
-              nombre: data[0].nombre,
-              descripcion: data[0].descripcion,
-            }
+        const [todos, membresias] = await Promise.all([
+          listarServidores(),
+          SOLO_MIS_SERVIDORES ? listarMiembrosServidor() : Promise.resolve([]),
+        ]);
+        const veTodo = (user.roles || []).some((r) => ROLES_QUE_VEN_TODO.includes(String(r.nombre || "").toLowerCase()));
+        let visibles = todos;
+        if (SOLO_MIS_SERVIDORES && !veTodo) {
+          const idsMios = new Set(
+            membresias
+              .filter((m) => Number(m.usuario_id) === Number(user.id_usuario) && m.activo !== false)
+              .map((m) => Number(m.servidor_id))
+          );
+          visibles = todos.filter(
+            (s) => idsMios.has(Number(s.id_servidor)) || Number(s.creador_id) === Number(user.id_usuario)
           );
         }
+        if (cancelado) return;
+        const normalizados = visibles.map((s) => ({ ...s, id: s.id_servidor }));
+        setServidores(normalizados);
+        setServidorActivo((anterior) =>
+          anterior && normalizados.some((s) => s.id === anterior.id) ? anterior : normalizados[0] ?? null
+        );
       } catch (error) {
-        setErrorCarga(error?.message || "No se pudieron cargar los servidores");
+        if (!cancelado) setErrorCarga(mensajeError(error, "No se pudieron cargar los servidores"));
       } finally {
-        setCargando(false);
+        if (!cancelado) setCargandoServidores(false);
       }
     };
     cargarServidores();
-  }, []);
+    return () => {
+      cancelado = true;
+    };
+  }, [user?.id_usuario]);
+
+  const cargarCanales = useCallback(async () => {
+    if (!servidorActivo) return [];
+    const idSrv = servidorActivo.id;
+    try {
+      const data = await listarCanales();
+      if (servidorRef.current !== idSrv) return [];
+      const lista = data
+        .filter((c) => Number(c.servidor_id) === Number(idSrv))
+        .map((c) => ({
+          id: c.id_canal,
+          servidorId: c.servidor_id,
+          nombre: c.nombre,
+          tipo: c.tipo,
+          categoria: c.categoria_id,
+          descripcion: c.descripcion,
+          orden: c.orden ?? 0,
+        }));
+      setCanales(lista);
+      return lista;
+    } catch (error) {
+      if (servidorRef.current === idSrv) setErrorCarga(mensajeError(error, "No se pudieron cargar los canales"));
+      return [];
+    }
+  }, [servidorActivo]);
+
+  const cargarCategorias = useCallback(async () => {
+    if (!servidorActivo) return [];
+    const idSrv = servidorActivo.id;
+    try {
+      const data = await listarCategoriasPorServidor(idSrv);
+      if (servidorRef.current !== idSrv) return [];
+      const lista = data.map((cat) => ({
+        id: cat.id_categoria,
+        servidorId: cat.servidor_id,
+        nombre: cat.nombre,
+        descripcion: cat.descripcion,
+        orden: cat.orden,
+        padreId: cat.padre_id,
+      }));
+      setCategorias(lista);
+      return lista;
+    } catch (error) {
+      if (servidorRef.current === idSrv) setErrorCarga(mensajeError(error, "No se pudieron cargar las categorías"));
+      return [];
+    }
+  }, [servidorActivo]);
+
+  const cargarMiembros = useCallback(async () => {
+    if (!servidorActivo) return null;
+    const idSrv = servidorActivo.id;
+    const nombreSrv = servidorActivo.nombre;
+    try {
+      const [todas, asignaciones, rolesData, usuariosLista] = await Promise.all([
+        listarMiembrosServidor(),
+        listarUsuarioRol({ servidor_id: idSrv }),
+        listarRoles(),
+        llamar(usuariosApi.listarUsuarios).catch(() => null),
+      ]);
+      const membresias = todas.filter((m) => Number(m.servidor_id) === Number(idSrv));
+      const rolesPorId = {};
+      rolesData.forEach((r) => {
+        rolesPorId[r.id_rol] = r.nombre;
+      });
+      const usuarioPorId = {};
+      (usuariosLista || []).forEach((u) => {
+        usuarioPorId[u.id_usuario] = u;
+      });
+
+      const enriquecidos = await Promise.all(
+        membresias.map(async (m) => {
+          const perfil = await obtenerPerfil(m.usuario_id).catch(() => null);
+          const usuario =
+            usuarioPorId[m.usuario_id] ?? (await llamar(usuariosApi.obtenerUsuario, m.usuario_id).catch(() => null));
+          const rolesAsignados = asignaciones
+            .filter((a) => Number(a.usuario_id) === Number(m.usuario_id) && Number(a.servidor_id) === Number(idSrv))
+            .map((a) => {
+              const quien = usuarioPorId[a.asignado_por]?.nombre_usuario;
+              return {
+                id: a.id_usuario_rol,
+                rolId: a.rol_id,
+                nombre: rolesPorId[a.rol_id] || `Rol #${a.rol_id}`,
+                contexto: `${nombreSrv} · asignado el ${formatearFecha(a.fecha_asignacion)}${quien ? ` por ${quien}` : ""}`,
+              };
+            });
+          return {
+            ...m,
+            id: m.usuario_id,
+            servidorId: m.servidor_id,
+            usuarioId: m.usuario_id,
+            perfil,
+            usuario,
+            nombreUsuario: usuario?.nombre_usuario || "",
+            tienePerfil: perfil !== null,
+            nombres: perfil?.nombres || usuario?.nombre_usuario || "",
+            apellidos: perfil?.apellidos || "",
+            email: usuario?.email || "",
+            rol: rolesAsignados[0]?.nombre || "Sin rol",
+            activo: m.activo ?? usuario?.activo,
+            fechaRegistro: usuario?.fecha_registro || m.fecha_union,
+            canales: [],
+            roles: rolesAsignados,
+            vinculosFamiliares: [],
+          };
+        })
+      );
+      if (servidorRef.current !== idSrv) return null;
+      setRoles(rolesData);
+      setMiembros(enriquecidos);
+      return enriquecidos;
+    } catch (error) {
+      if (servidorRef.current === idSrv) setErrorCarga(mensajeError(error, "No se pudieron cargar los miembros"));
+      return null;
+    }
+  }, [servidorActivo]);
 
   useEffect(() => {
-    const cargarCanales = async () => {
-      if (!servidorActivo) return;
-      setCargando(true);
-      setErrorCarga(null);
-      try {
-        const data = await listarCanales();
-        const dataFiltrados = data.filter(
-          (c) => Number(c.servidor_id) === Number(servidorActivo.id)
-        );
-        setCanales(
-          dataFiltrados.map((c) => ({
-            id: c.id_canal,
-            servidorId: c.servidor_id,
-            nombre: c.nombre,
-            tipo: c.tipo === "chat" ? "General / Chat" : c.tipo === "informativo" ? "Informativo" : c.tipo,
-            categoria: c.categoria_id,
-            descripcion: c.descripcion,
-          }))
-        );
-      } catch (error) {
-        setErrorCarga(error?.message || "No se pudieron cargar los canales");
-      } finally {
-        setCargando(false);
-      }
-    };
+    setErrorCarga(null);
+    setCanales([]);
+    setCategorias([]);
+    setMiembros([]);
     cargarCanales();
-  }, [servidorActivo]);
-
-  useEffect(() => {
-    const cargarCategorias = async () => {
-      if (!servidorActivo) return;
-      try {
-        const data = await listarCategoriasPorServidor(servidorActivo.id);
-        setCategorias(
-          data.map((cat) => ({
-            id: cat.id_categoria,
-            servidorId: cat.servidor_id,
-            nombre: cat.nombre,
-            descripcion: cat.descripcion,
-            orden: cat.orden,
-          }))
-        );
-      } catch (error) {
-        setErrorCarga(error?.message || "No se pudieron cargar las categorías");
-      }
-    };
     cargarCategorias();
-  }, [servidorActivo]);
+    cargarMiembros();
+  }, [cargarCanales, cargarCategorias, cargarMiembros]);
 
+  // Datos de cuenta y perfil del miembro abierto
   useEffect(() => {
-    const cargarMiembros = async () => {
-      if (!servidorActivo) return;
-      setCargando(true);
-      setErrorCarga(null);
+    if (itemSeleccionado?.tipo !== "miembro") return undefined;
+    const usuarioId = Number(itemSeleccionado.data?.usuarioId);
+    if (!usuarioId) return undefined;
+    let cancelado = false;
+    (async () => {
       try {
-        const data = await listarMiembrosServidor();
-        const membresias = data.filter(
-          (m) => Number(m.servidor_id) === Number(servidorActivo.id)
+        const [usuario, perfil] = await Promise.all([
+          llamar(usuariosApi.obtenerUsuario, usuarioId),
+          obtenerPerfil(usuarioId).catch(() => null),
+        ]);
+        if (cancelado) return;
+        setMiembroDetalle(usuario);
+        setPerfilMiembro(perfil);
+        setFormData((prev) => ({
+          ...prev,
+          dni: perfil?.dni || "",
+          nombres: perfil?.nombres || "",
+          apellidos: perfil?.apellidos || "",
+          usuario: usuario?.nombre_usuario || "",
+          email: usuario?.email || "",
+        }));
+      } catch (error) {
+        if (!cancelado) setErrorCarga(mensajeError(error, "No se pudo cargar el detalle del miembro"));
+      }
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [itemSeleccionado]);
+
+  const resolverNombre = async (id) => {
+    const m = miembrosRef.current.find((x) => Number(x.usuarioId) === Number(id));
+    if (m) return m.apellidos ? `${m.apellidos}, ${m.nombres}` : m.nombres;
+    try {
+      const [u, p] = await Promise.all([
+        llamar(usuariosApi.obtenerUsuario, id),
+        obtenerPerfil(id).catch(() => null),
+      ]);
+      return p?.nombres ? `${p.apellidos ? p.apellidos + ", " : ""}${p.nombres}` : u?.nombre_usuario || `Usuario #${id}`;
+    } catch (error) {
+      return `Usuario #${id}`;
+    }
+  };
+
+  const cargarRelacionesMiembro = useCallback(
+    async (usuarioId) => {
+      const nombrePorCanal = new Map(canales.map((c) => [Number(c.id), c.nombre]));
+      let listaCanales = [];
+      let listaVinculos = [];
+      try {
+        const mc = await llamar(miembrosCanalApi.listarMiembrosCanal);
+        listaCanales = mc
+          .filter((x) => Number(x.usuario_id) === Number(usuarioId) && nombrePorCanal.has(Number(x.canal_id)))
+          .map((x) => ({
+            id: x.id_miembro_canal,
+            canalId: x.canal_id,
+            nombre: nombrePorCanal.get(Number(x.canal_id)),
+            rolInCanal: x.rol_en_canal,
+          }));
+      } catch (error) {
+        setErrorCarga(`Canales del miembro: ${mensajeError(error, "no se pudieron cargar")}`);
+      }
+      try {
+        const rel = await llamar(relacionesApi.listarRelacionesUsuario);
+        const propias = rel.filter(
+          (r) => Number(r.usuario_id) === Number(usuarioId) || Number(r.relacionado_id) === Number(usuarioId)
         );
-        const asignaciones = await listarUsuarioRol({
-          servidor_id: servidorActivo.id,
-        });
-        const rolesData = await listarRoles();
-        const rolesPorId = {};
-        rolesData.forEach((r) => {
-          rolesPorId[r.id_rol] = r.nombre;
-        });
-        const miembrosEnriquecidos = await Promise.all(
-          membresias.map(async (m) => {
-            let perfil = null;
-            let perfilExiste = true;
-            try {
-              perfil = await obtenerPerfil(m.usuario_id);
-            } catch (error) {
-              perfilExiste = false;
-            }
-            const usuario = await obtenerUsuario(m.usuario_id);
-            const rolesAsignados = asignaciones
-              .filter((a) => Number(a.usuario_id) === Number(m.usuario_id))
-              .map((a) => rolesPorId[a.rol_id])
-              .filter(Boolean);
+        listaVinculos = await Promise.all(
+          propias.map(async (r) => {
+            const esOrigen = Number(r.usuario_id) === Number(usuarioId);
+            const otroId = esOrigen ? r.relacionado_id : r.usuario_id;
+            const nombre = await resolverNombre(otroId);
+            const tipo = String(r.tipo || "").toUpperCase();
             return {
-              ...m,
-              id: m.usuario_id,
-              servidorId: m.servidor_id,
-              usuarioId: m.usuario_id,
-              tienePerfil: perfilExiste,
-              nombres: perfil?.nombres || usuario?.nombre_usuario || "",
-              apellidos: perfil?.apellidos || "",
-              email: usuario?.email || "",
-              rol: rolesAsignados[0] || "Sin rol",
-              activo: m.activo ?? usuario?.activo,
-              fechaRegistro: usuario?.fecha_registro || m.fecha_union,
-              canales: [],
-              roles: rolesAsignados,
-              vinculosFamiliares: [],
+              id: r.id_relacion,
+              otroId: Number(otroId),
+              esOrigen,
+              tipo: r.tipo,
+              texto: esOrigen ? `${nombre} (${tipo})` : `${tipo} de ${nombre}`,
             };
           })
         );
-        setMiembros(miembrosEnriquecidos);
       } catch (error) {
-        setErrorCarga(error?.message || "No se pudieron cargar los miembros");
-      } finally {
-        setCargando(false);
+        setErrorCarga(`Vínculos familiares: ${mensajeError(error, "no se pudieron cargar")}`);
       }
-    };
-    cargarMiembros();
-  }, [servidorActivo]);
+      if (abiertoRef.current !== Number(usuarioId)) return;
+      setFormData((prev) => ({ ...prev, canales: listaCanales, vinculosFamiliares: listaVinculos }));
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [canales]
+  );
 
   useEffect(() => {
-    const cargarDetalleMiembro = async () => {
-      if (itemSeleccionado?.tipo !== "miembro") return;
-      const usuarioId = itemSeleccionado.data?.usuarioId || itemSeleccionado.data?.usuario_id;
-      if (!usuarioId) return;
-      setCargando(true);
-      setErrorCarga(null);
-      try {
-        const usuario = await obtenerUsuario(usuarioId);
-        let perfil = null;
-        try {
-          perfil = await obtenerPerfil(usuarioId);
-        } catch (error) {
-          perfil = null;
-        }
-        setMiembroDetalle(usuario);
-        setPerfilMiembro(perfil);
-      } catch (error) {
-        setPerfilMiembro(null);
-      } finally {
-        setCargando(false);
-      }
-    };
-    cargarDetalleMiembro();
-  }, [itemSeleccionado]);
+    if (itemSeleccionado?.tipo === "miembro") {
+      cargarRelacionesMiembro(Number(itemSeleccionado.data.usuarioId));
+    }
+  }, [itemSeleccionado, cargarRelacionesMiembro]);
 
   const toggleAccordion = (sec) => {
     setAccordionOpen((prev) => ({ ...prev, [sec]: !prev[sec] }));
@@ -282,57 +515,55 @@ export default function Servidores() {
 
   const handleSelect = (tipo, data) => {
     setItemSeleccionado({ tipo, data });
-    setFormData({ ...data });
+    setNuevoCanalSelec("");
+    setNuevoRolSelec("");
+    setUsuarioVinculo("");
+    if (tipo === "canal") {
+      setFormData({ ...data, tipo: etiquetaTipo(data.tipo), categoria: data.categoria ?? "" });
+    } else if (tipo === "miembro") {
+      setMiembroDetalle(data.usuario ?? null);
+      setPerfilMiembro(data.perfil ?? null);
+      setFormData({
+        ...data,
+        dni: data.perfil?.dni || "",
+        nombres: data.perfil?.nombres || "",
+        apellidos: data.perfil?.apellidos || "",
+        usuario: data.nombreUsuario || "",
+        email: data.email || "",
+      });
+    } else {
+      setFormData({ ...data });
+    }
   };
 
   const handleAbrirNuevoCanal = () => {
-    setItemSeleccionado({
-      tipo: "nuevo_canal",
-      data: { servidorId: servidorActivo?.id, nombre: "", tipo: "General / Chat", categoria: "", descripcion: "" },
-    });
-    setFormData({ servidorId: servidorActivo?.id, nombre: "", tipo: "General / Chat", categoria: "", descripcion: "" });
+    const base = { servidorId: servidorActivo?.id, nombre: "", tipo: "General / Chat", categoria: "", descripcion: "" };
+    setItemSeleccionado({ tipo: "nuevo_canal", data: base });
+    setFormData(base);
   };
 
   const handleAbrirNuevaCategoria = () => {
-    setItemSeleccionado({
-      tipo: "nueva_categoria",
-      data: { servidorId: servidorActivo?.id, nombre: "", descripcion: "", orden: 1 },
-    });
-    setFormData({ servidorId: servidorActivo?.id, nombre: "", descripcion: "", orden: 1 });
+    const base = { servidorId: servidorActivo?.id, nombre: "", descripcion: "", orden: 1 };
+    setItemSeleccionado({ tipo: "nueva_categoria", data: base });
+    setFormData(base);
   };
 
   const handleAbrirNuevoMiembro = () => {
-    setItemSeleccionado({
-      tipo: "nuevo_miembro",
-      data: {
-        servidorId: servidorActivo?.id,
-        nombres: "",
-        apellidos: "",
-        rol: "Alumno",
-        email: "",
-        dni: "",
-        usuario: "",
-        activo: true,
-        fechaRegistro: new Date().toLocaleDateString(),
-        canales: [],
-        roles: [],
-        vinculosFamiliares: [],
-      },
-    });
-    setFormData({
+    const base = {
       servidorId: servidorActivo?.id,
       nombres: "",
       apellidos: "",
-      rol: "Alumno",
+      rolId: "",
       email: "",
       dni: "",
       usuario: "",
       activo: true,
-      fechaRegistro: new Date().toLocaleDateString(),
       canales: [],
       roles: [],
       vinculosFamiliares: [],
-    });
+    };
+    setItemSeleccionado({ tipo: "nuevo_miembro", data: base });
+    setFormData(base);
   };
 
   const handleInputChange = (field, value) => {
@@ -366,183 +597,360 @@ export default function Servidores() {
     return miembros.filter((m) => {
       const perteneceServidor = servidorActivo ? Number(m.servidorId) === Number(servidorActivo.id) : true;
       const matchTexto = `${m.nombres || ""} ${m.apellidos || ""} ${m.email || ""}`.toLowerCase().includes(busquedaMiembro.toLowerCase());
-      const matchRol = filtroRolMiembro === "todos" || (m.rol || "").toLowerCase() === filtroRolMiembro.toLowerCase();
+      const matchRol =
+        filtroRolMiembro === "todos" ||
+        (m.roles || []).some((r) => String(r.nombre || "").toLowerCase() === filtroRolMiembro.toLowerCase());
       return perteneceServidor && matchTexto && matchRol;
     });
   }, [miembros, servidorActivo, busquedaMiembro, filtroRolMiembro]);
 
   const miembrosSinPerfil = miembros.filter((m) => m.tienePerfil === false);
 
-  const handleGuardarCambios = async (e) => {
-    e.preventDefault();
-    if (!itemSeleccionado) return;
+  const vistasCanales = useVistas(canalesFiltrados, `${busquedaCanal}|${filtroTipoCanal}|${servidorActivo?.id}|${canales.length}`);
+  const vistasCategorias = useVistas(categoriasFiltradas, `${busquedaCategoria}|${servidorActivo?.id}|${categorias.length}`);
+  const vistasMiembros = useVistas(miembrosFiltrados, `${busquedaMiembro}|${filtroRolMiembro}|${servidorActivo?.id}|${miembros.length}`);
 
-    try {
-      if (itemSeleccionado.tipo === "miembro") {
-        await actualizarMiembroServidor(
-          Number(itemSeleccionado.data.usuarioId ?? itemSeleccionado.data.usuario_id),
-          Number(itemSeleccionado.data.servidorId ?? itemSeleccionado.data.servidor_id),
-          { activo: formData.activo ?? true }
-        );
-        setMiembros((prev) =>
-          prev.map((m) =>
-            m.usuarioId === Number(itemSeleccionado.data.usuarioId ?? itemSeleccionado.data.usuario_id)
-              ? { ...m, activo: formData.activo ?? true }
-              : m
-          )
-        );
-        alert("¡Miembro actualizado con éxito!");
-      } else if (itemSeleccionado.tipo === "canal") {
-        await actualizarCanal(itemSeleccionado.data.id, {
-          nombre: formData.nombre,
-          descripcion: formData.descripcion,
-          categoria_id: formData.categoria ? Number(formData.categoria) : null,
-          orden: formData.orden ?? 0,
-          tipo: formData.tipo === "chat" || formData.tipo === "General / Chat" ? "chat" : "informativo",
-        });
-        alert("¡Canal actualizado con éxito!");
-      } else if (itemSeleccionado.tipo === "categoria") {
-        await actualizarCategoria(itemSeleccionado.data.id, {
-          nombre: formData.nombre,
-          descripcion: formData.descripcion,
-          orden: formData.orden ?? 0,
-        });
-        alert("¡Categoría actualizada con éxito!");
-      } else if (itemSeleccionado.tipo === "nuevo_canal") {
-        await crearCanal({
-          servidor_id: servidorActivo?.id,
-          creador_id: ID_USUARIO_ACTUAL,
-          nombre: formData.nombre,
-          descripcion: formData.descripcion,
-          categoria_id: formData.categoria ? Number(formData.categoria) : null,
-          orden: 0,
-          tipo: formData.tipo === "chat" || formData.tipo === "General / Chat" ? "chat" : "informativo",
-        });
-        alert("¡Nuevo canal creado con éxito!");
-        setItemSeleccionado(null);
-      } else if (itemSeleccionado.tipo === "nueva_categoria") {
-        await crearCategoria({
-          servidor_id: servidorActivo?.id,
-          nombre: formData.nombre,
-          descripcion: formData.descripcion,
-          orden: formData.orden ?? 1,
-        });
-        alert("¡Nueva categoría creada con éxito!");
-        setItemSeleccionado(null);
-      } else if (itemSeleccionado.tipo === "nuevo_miembro") {
-        await crearMiembroServidor({
-          usuario_id: ID_USUARIO_ACTUAL,
-          servidor_id: servidorActivo?.id,
-          activo: true,
-        });
-        alert("¡Nuevo miembro agregado con éxito!");
-        setItemSeleccionado(null);
-      }
-    } catch (error) {
-      alert(error?.message || "Error al guardar los cambios");
-    }
+  const handleScrollContenido = (e) => {
+    const el = e.currentTarget;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight > 80) return;
+    const v = tabActiva === "canales" ? vistasCanales : tabActiva === "categorias" ? vistasCategorias : vistasMiembros;
+    if (v.hayMas) v.verMas();
   };
+
+  const guardarMiembroExistente = async () => {
+    const d = itemSeleccionado.data;
+    const usuarioId = Number(d.usuarioId);
+    const servidorId = Number(d.servidorId);
+    const activo = formData.activo ?? true;
+
+    const cambiosUsuario = {};
+    const usuarioNuevo = String(formData.usuario || "").trim();
+    const emailNuevo = String(formData.email || "").trim();
+    if (usuarioNuevo && usuarioNuevo !== (miembroDetalle?.nombre_usuario || "")) cambiosUsuario.nombre_usuario = usuarioNuevo;
+    if (emailNuevo && emailNuevo !== (miembroDetalle?.email || "")) cambiosUsuario.email = emailNuevo;
+    if (activo !== (miembroDetalle?.activo ?? true)) cambiosUsuario.activo = activo;
+    if (Object.keys(cambiosUsuario).length > 0) await llamar(usuariosApi.actualizarUsuario, usuarioId, cambiosUsuario);
+
+    if (activo !== (d.activo ?? true)) await actualizarMiembroServidor(usuarioId, servidorId, { activo });
+
+    const dni = String(formData.dni || "").trim();
+    const nombres = String(formData.nombres || "").trim();
+    const apellidos = String(formData.apellidos || "").trim();
+    if (perfilMiembro) {
+      if (dni !== (perfilMiembro.dni || "") || nombres !== (perfilMiembro.nombres || "") || apellidos !== (perfilMiembro.apellidos || "")) {
+        await actualizarPerfil(usuarioId, { dni: dni || null, nombres: nombres || null, apellidos: apellidos || null });
+      }
+    } else if (dni || nombres || apellidos) {
+      await crearPerfil({ usuario_id: usuarioId, dni: dni || null, nombres: nombres || null, apellidos: apellidos || null, biografia: null });
+    }
+
+  };
+
+  const crearMiembroNuevo = async () => {
+    const email = String(formData.email || "").trim().toLowerCase();
+    const nombres = String(formData.nombres || "").trim();
+    const apellidos = String(formData.apellidos || "").trim();
+    const dni = String(formData.dni || "").trim();
+
+    const lista = await llamar(usuariosApi.listarUsuarios);
+    setUsuariosTodos(lista);
+    let usuario = lista.find((u) => String(u.email || "").toLowerCase() === email);
+    const existia = Boolean(usuario);
+    if (usuario && miembros.some((m) => Number(m.usuarioId) === Number(usuario.id_usuario))) {
+      alert("Ese usuario ya es miembro de este servidor.");
+      return false;
+    }
+
+    let passwordTemporal = null;
+    if (!usuario) {
+      passwordTemporal = generarPasswordTemporal();
+      usuario = await llamar(usuariosApi.crearUsuario, {
+        nombre_usuario: nombreUsuarioLibre(email, lista),
+        email,
+        password: passwordTemporal,
+        activo: true,
+      });
+    }
+    const idUsuario = usuario.id_usuario;
+
+    const perfilPrevio = existia ? await obtenerPerfil(idUsuario).catch(() => null) : null;
+    if (!perfilPrevio) {
+      await crearPerfil({ usuario_id: idUsuario, nombres, apellidos, dni: dni || null, biografia: null });
+    }
+    await crearMiembroServidor({ usuario_id: idUsuario, servidor_id: servidorActivo.id, activo: true });
+    if (formData.rolId) {
+      await crearUsuarioRol({
+        usuario_id: idUsuario,
+        rol_id: Number(formData.rolId),
+        servidor_id: servidorActivo.id,
+        asignado_por: ID_USUARIO_ACTUAL,
+      });
+    }
+    
+    alert(
+      passwordTemporal
+        ? `¡Nuevo miembro agregado con éxito!\n\nUsuario: ${usuario.nombre_usuario}\nContraseña temporal: ${passwordTemporal}\n\nAnotala y entregásela al usuario: no se vuelve a mostrar.`
+        : "¡Nuevo miembro agregado con éxito!"
+    );
+  };
+
+  const cargarDatos = async () => {
+    await Promise.all([
+      cargarCanales(),
+      cargarCategorias(),
+      cargarMiembros(),
+    ]);
+  };
+
+  const handleGuardarCambios = async (e) => {
+  e.preventDefault();
+  if (!itemSeleccionado || guardando) return;
+  if (!requiereSesion()) return;
+
+  const tipo = itemSeleccionado.tipo;
+  if (tipo === "miembro") {
+    setItemSeleccionado(null);
+    setFormData({});
+  }
+  setGuardando(true);
+  try {
+    if (tipo === "miembro") {
+      await guardarMiembroExistente();
+    } else if (tipo === "canal") {
+      await actualizarCanal(itemSeleccionado.data.id, {
+        nombre: formData.nombre,
+        descripcion: formData.descripcion,
+        categoria_id: formData.categoria ? Number(formData.categoria) : null,
+        orden: formData.orden ?? 0,
+        tipo: aTipoApi(formData.tipo),
+      });
+    } else if (tipo === "categoria") {
+      await actualizarCategoria(itemSeleccionado.data.id, {
+        nombre: formData.nombre,
+        descripcion: formData.descripcion,
+        orden: Number(formData.orden) || 0,
+      });
+    } else if (tipo === "nuevo_canal") {
+      await crearCanal({
+        servidor_id: servidorActivo?.id,
+        creador_id: ID_USUARIO_ACTUAL,
+        nombre: formData.nombre,
+        descripcion: formData.descripcion,
+        categoria_id: formData.categoria ? Number(formData.categoria) : null,
+        orden: 0,
+        tipo: aTipoApi(formData.tipo),
+      });
+    } else if (tipo === "nueva_categoria") {
+      await crearCategoria({
+        servidor_id: servidorActivo?.id,
+        nombre: formData.nombre,
+        descripcion: formData.descripcion,
+        orden: Number(formData.orden) || 1,
+      });
+    } else if (tipo === "nuevo_miembro") {
+      const creado = await crearMiembroNuevo();
+      if (creado === false) return; // ya era miembro: se deja abierto
+    }
+
+    setItemSeleccionado(null);
+    setFormData({});
+    await cargarDatos();
+  } catch (error) {
+    alert(mensajeError(error, "Error al guardar los cambios"));
+    if (tipo === "miembro" || tipo === "nuevo_miembro") await cargarMiembros();
+  } finally {
+    setGuardando(false);
+  }
+};
 
   const handleEliminarCanal = async () => {
     try {
       if (window.confirm(`¿Deseas eliminar el canal #${formData.nombre}?`)) {
         await eliminarCanal(formData.id);
-        setCanales((prev) => prev.filter((c) => c.id !== formData.id));
+        await cargarCanales();
         setItemSeleccionado(null);
       }
     } catch (error) {
-      alert(error?.message || "Error al eliminar el canal");
+      alert(`No se pudo eliminar el canal (puede tener miembros o mensajes asociados): ${mensajeError(error)}`);
     }
   };
 
   const handleEliminarCategoria = async () => {
     try {
-      if (window.confirm(`¿Deseas eliminar la categoría ${formData.nombre}?`)) {
+      const canalesDeCategoria = canales.filter((c) => Number(c.categoria) === Number(formData.id));
+      const hijas = categorias.filter((cat) => Number(cat.padreId) === Number(formData.id));
+      const aviso =
+        canalesDeCategoria.length > 0 || hijas.length > 0
+          ? ` Sus ${canalesDeCategoria.length} canales y ${hijas.length} subcategorías quedarán sin categoría.`
+          : "";
+      if (window.confirm(`¿Deseas eliminar la categoría ${formData.nombre}?${aviso}`)) {
+        for (const c of canalesDeCategoria) await actualizarCanal(c.id, { categoria_id: null });
+        for (const h of hijas) await actualizarCategoria(h.id, { padre_id: null });
         await eliminarCategoria(formData.id);
-        setCategorias((prev) => prev.filter((cat) => cat.id !== formData.id));
+        await Promise.all([cargarCategorias(), cargarCanales()]);
         setItemSeleccionado(null);
       }
     } catch (error) {
-      alert(error?.message || "Error al eliminar la categoría");
+      alert(mensajeError(error, "Error al eliminar la categoría"));
     }
   };
 
   const handleAgregarCanalMiembro = async () => {
     if (!nuevoCanalSelec) return;
+    const usuarioId = Number(itemSeleccionado.data.usuarioId);
+    if ((formData.canales || []).some((c) => Number(c.canalId) === Number(nuevoCanalSelec))) {
+      alert("El miembro ya pertenece a ese canal.");
+      return;
+    }
     try {
-      const miembroCanal = await crearMiembroCanal({
-        usuario_id: Number(formData.usuarioId),
+      await llamar(miembrosCanalApi.crearMiembroCanal, {
+        usuario_id: usuarioId,
         canal_id: Number(nuevoCanalSelec),
         rol_en_canal: nuevoRolCanal,
       });
-      const canalObj = canalesFiltrados.find((c) => Number(c.id) === Number(nuevoCanalSelec));
-      const nuevosCanales = [
-        ...(formData.canales || []),
-        {
-          id: miembroCanal?.id_miembro_canal,
-          nombre: canalObj ? canalObj.nombre : nuevoCanalSelec,
-          rolInCanal: nuevoRolCanal,
-        },
-      ];
-      const updated = { ...formData, canales: nuevosCanales };
-      setFormData(updated);
-      setMiembros((prev) => prev.map((m) => (m.usuarioId === updated.usuarioId ? updated : m)));
       setNuevoCanalSelec("");
+      await cargarRelacionesMiembro(usuarioId);
     } catch (error) {
-      alert(error?.message || "Error al agregar el canal");
+      alert(mensajeError(error, "Error al agregar el canal"));
     }
   };
 
   const handleEliminarCanalMiembro = async (idMiembroCanal) => {
     try {
-      await eliminarMiembroCanal(idMiembroCanal);
-      const nuevosCanales = (formData.canales || []).filter((c) => c.id !== idMiembroCanal);
-      const updated = { ...formData, canales: nuevosCanales };
-      setFormData(updated);
-      setMiembros((prev) => prev.map((m) => (m.usuarioId === updated.usuarioId ? updated : m)));
+      await llamar(miembrosCanalApi.eliminarMiembroCanal, idMiembroCanal);
+      await cargarRelacionesMiembro(Number(itemSeleccionado.data.usuarioId));
     } catch (error) {
-      alert(error?.message || "Error al eliminar el canal del miembro");
+      alert(mensajeError(error, "Error al eliminar el canal del miembro"));
+    }
+  };
+
+  const refrescarRolesMiembro = async (usuarioId) => {
+    const lista = await cargarMiembros();
+    const actualizado = lista?.find((m) => Number(m.usuarioId) === Number(usuarioId));
+    if (actualizado && abiertoRef.current === Number(usuarioId)) {
+      setFormData((prev) => ({ ...prev, roles: actualizado.roles, rol: actualizado.rol }));
+    }
+  };
+
+  const handleAgregarRolMiembro = async () => {
+    if (!nuevoRolSelec) return;
+    if (!requiereSesion()) return;
+    const usuarioId = Number(itemSeleccionado.data.usuarioId);
+    if ((formData.roles || []).some((r) => Number(r.rolId) === Number(nuevoRolSelec))) {
+      alert("El miembro ya tiene ese rol en este servidor.");
+      return;
+    }
+    try {
+      await crearUsuarioRol({
+        usuario_id: usuarioId,
+        rol_id: Number(nuevoRolSelec),
+        servidor_id: servidorActivo?.id,
+        asignado_por: ID_USUARIO_ACTUAL,
+      });
+      setNuevoRolSelec("");
+      await refrescarRolesMiembro(usuarioId);
+    } catch (error) {
+      alert(mensajeError(error, "Error al asignar el rol"));
+    }
+  };
+
+  const handleEliminarRolMiembro = async (rol) => {
+    const usuarioId = Number(itemSeleccionado.data.usuarioId);
+    try {
+      await eliminarUsuarioRol(usuarioId, Number(rol.rolId), Number(servidorActivo?.id));
+      await refrescarRolesMiembro(usuarioId);
+    } catch (error) {
+      alert(mensajeError(error, "Error al quitar el rol"));
+    }
+  };
+
+  const buscarUsuarioPorTexto = async (texto) => {
+    const t = texto.trim().toLowerCase();
+    const lista = usuariosTodos ?? (await llamar(usuariosApi.listarUsuarios));
+    if (!usuariosTodos) setUsuariosTodos(lista);
+    const candidatos = [
+      ...miembrosRef.current.map((m) => ({
+        id: Number(m.usuarioId),
+        claves: [m.email, m.nombreUsuario, `${m.nombres} ${m.apellidos}`.trim(), `${m.apellidos}, ${m.nombres}`],
+      })),
+      ...lista.map((u) => ({ id: Number(u.id_usuario), claves: [u.email, u.nombre_usuario] })),
+    ];
+    return candidatos.find((c) => c.claves.some((k) => k && String(k).trim().toLowerCase() === t)) || null;
+  };
+
+  const handleVincularFamiliar = async () => {
+    if (!usuarioVinculo.trim()) return;
+    const usuarioId = Number(itemSeleccionado.data.usuarioId);
+    try {
+      const destino = await buscarUsuarioPorTexto(usuarioVinculo);
+      if (!destino) {
+        alert("No se encontró ningún usuario con ese nombre o correo. Escribilo igual que figura en la lista de miembros.");
+        return;
+      }
+      if (destino.id === usuarioId) {
+        alert("No podés vincular un usuario consigo mismo.");
+        return;
+      }
+      if ((formData.vinculosFamiliares || []).some((v) => v.otroId === destino.id && v.esOrigen && v.tipo === tipoVinculo)) {
+        alert("Ese vínculo ya está registrado.");
+        return;
+      }
+      await llamar(relacionesApi.crearRelacionUsuario, {
+        usuario_id: usuarioId,
+        relacionado_id: destino.id,
+        tipo: tipoVinculo,
+      });
+      setUsuarioVinculo("");
+      await cargarRelacionesMiembro(usuarioId);
+    } catch (error) {
+      alert(mensajeError(error, "Error al agregar el vínculo"));
+    }
+  };
+
+  const handleEliminarVinculo = async (idRelacion) => {
+    try {
+      await llamar(relacionesApi.eliminarRelacionUsuario, idRelacion);
+      await cargarRelacionesMiembro(Number(itemSeleccionado.data.usuarioId));
+    } catch (error) {
+      alert(mensajeError(error, "Error al eliminar el vínculo"));
     }
   };
 
   const handleQuitarDelServidor = async () => {
+    const d = itemSeleccionado.data;
+    const usuarioId = Number(d.usuarioId);
+    const servidorId = Number(d.servidorId);
+    const nombre = d.apellidos ? `${d.apellidos}, ${d.nombres}` : d.nombres;
     try {
-      if (window.confirm(`¿Quitar a ${formData.nombres} ${formData.apellidos} del servidor ${servidorActivo?.nombre}?`)) {
-        await eliminarMiembroServidor(Number(formData.usuarioId), Number(formData.servidorId));
-        setMiembros((prev) => prev.filter((m) => m.usuarioId !== Number(formData.usuarioId)));
+      if (window.confirm(`¿Quitar a ${nombre} del servidor ${servidorActivo?.nombre}? También se quitarán sus canales y roles de este servidor.`)) {
+        for (const c of formData.canales || []) await llamar(miembrosCanalApi.eliminarMiembroCanal, c.id);
+        for (const r of formData.roles || []) await eliminarUsuarioRol(usuarioId, Number(r.rolId), servidorId);
+        await eliminarMiembroServidor(usuarioId, servidorId);
+        await cargarMiembros();
         setItemSeleccionado(null);
       }
     } catch (error) {
-      alert(error?.message || "Error al quitar del servidor");
+      alert(mensajeError(error, "Error al quitar del servidor"));
+      await cargarMiembros();
     }
   };
 
-  const handleAgregarRolMiembro = () => {
-    if (!nuevoRolSelec) return;
-    const nuevo = { id: Date.now(), nombre: nuevoRolSelec, contexto: `${servidorActivo?.nombre} · asignado hoy por Administrador` };
-    const nuevosRoles = [...(formData.roles || []), nuevo];
-    const updated = { ...formData, roles: nuevosRoles };
-    setFormData(updated);
-    setMiembros((prev) => prev.map((m) => (m.usuarioId === updated.usuarioId ? updated : m)));
-    setNuevoRolSelec("");
-  };
+  const nombreHeader = perfilActual?.apellidos
+    ? `${perfilActual.apellidos}, ${perfilActual.nombres}`
+    : perfilActual?.nombres || usuarioActual?.nombre_usuario || user?.nombre_usuario || "";
+  const emailHeader = usuarioActual?.email || user?.email || "";
+  const inicialesHeader = (
+    perfilActual?.nombres || perfilActual?.apellidos
+      ? `${perfilActual?.nombres?.[0] || ""}${perfilActual?.apellidos?.[0] || ""}`
+      : (usuarioActual?.nombre_usuario || user?.nombre_usuario || "U").slice(0, 2)
+  ).toUpperCase();
 
-  const handleEliminarRolMiembro = (rolId) => {
-    const nuevosRoles = (formData.roles || []).filter((r) => r.id !== rolId);
-    const updated = { ...formData, roles: nuevosRoles };
-    setFormData(updated);
-    setMiembros((prev) => prev.map((m) => (m.usuarioId === updated.usuarioId ? updated : m)));
-  };
-
-  const handleVincularFamiliar = () => {
-    if (!usuarioVinculo) return;
-    const nuevo = `${usuarioVinculo} (${tipoVinculo.toUpperCase()})`;
-    const nuevosVinculos = [...(formData.vinculosFamiliares || []), nuevo];
-    const updated = { ...formData, vinculosFamiliares: nuevosVinculos };
-    setFormData(updated);
-    setMiembros((prev) => prev.map((m) => (m.usuarioId === updated.usuarioId ? updated : m)));
-    setUsuarioVinculo("");
-  };
+  const canalesParaAsignar = canales.filter(
+    (c) => !(formData.canales || []).some((x) => Number(x.canalId) === Number(c.id))
+  );
+  const rolesParaAsignar = roles.filter(
+    (r) => !(formData.roles || []).some((x) => Number(x.rolId) === Number(r.id_rol))
+  );
 
   return (
     <div style={{ padding: "24px", height: "100vh", display: "flex", flexDirection: "column", boxSizing: "border-box", backgroundColor: "#f0f4f8" }}>
@@ -553,12 +961,16 @@ export default function Servidores() {
           <p style={{ fontSize: "13px", color: "#64748b", margin: "2px 0 0 0" }}>Gestión institucional de espacios de comunicación</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", background: "#ffffff", padding: "6px 14px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
-          <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "#0f766e", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", fontSize: "13px" }}>
-            RG
+          <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "#0f766e", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", fontSize: "13px", overflow: "hidden" }}>
+            {perfilActual?.foto_perfil ? (
+              <img src={perfilActual.foto_perfil} alt="Foto" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            ) : (
+              inicialesHeader
+            )}
           </div>
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: "12px", fontWeight: "bold", color: "#1e293b" }}>Gómez, Roberto</div>
-            <div style={{ fontSize: "11px", color: "#64748b" }}>director@colegio.edu</div>
+            <div style={{ fontSize: "12px", fontWeight: "bold", color: "#1e293b" }}>{nombreHeader}</div>
+            <div style={{ fontSize: "11px", color: "#64748b" }}>{emailHeader}</div>
           </div>
         </div>
       </header>
@@ -586,6 +998,11 @@ export default function Servidores() {
             </div>
           </div>
           <div style={{ flex: 1, overflowY: "auto", padding: "12px" }}>
+            {servidoresFiltrados.length === 0 && (
+              <div style={{ fontSize: "12px", color: "#94a3b8", textAlign: "center", padding: "20px" }}>
+                {cargandoServidores ? "Cargando servidores..." : "No hay servidores para mostrar."}
+              </div>
+            )}
             <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
               {servidoresFiltrados.map((srv) => {
                 const isActive = servidorActivo?.id === srv.id;
@@ -632,12 +1049,14 @@ export default function Servidores() {
                 <h2 style={{ fontSize: "1.2rem", fontWeight: "700", color: "#0f766e", margin: 0 }}>{servidorActivo?.nombre}</h2>
                 <p style={{ fontSize: "12px", color: "#64748b", margin: "2px 0 0 0" }}>{servidorActivo?.descripcion}</p>
               </div>
-              <button
-                onClick={() => setItemSeleccionado(null)}
-                style={{ background: "#f1f5f9", border: "1px solid #cbd5e1", color: "#334155", padding: "6px 12px", borderRadius: "8px", fontSize: "11px", fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}
-              >
-                <IconArrowLeft size={14} /> Volver
-              </button>
+              {itemSeleccionado && (
+                <button
+                  onClick={() => setItemSeleccionado(null)}
+                  style={{ background: "#f1f5f9", border: "1px solid #cbd5e1", color: "#334155", padding: "6px 12px", borderRadius: "8px", fontSize: "11px", fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}
+                >
+                  <IconArrowLeft size={14} /> Volver
+                </button>
+              )}
             </div>
             <div style={{ display: "flex", gap: "8px", background: "#f1f5f9", padding: "4px", borderRadius: "12px", width: "fit-content" }}>
               <button
@@ -660,7 +1079,7 @@ export default function Servidores() {
               </button>
             </div>
           </div>
-          <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+          <div onScroll={handleScrollContenido} style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
             {tabActiva === "canales" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -677,9 +1096,8 @@ export default function Servidores() {
                   </div>
                   <select value={filtroTipoCanal} onChange={(e) => setFiltroTipoCanal(e.target.value)} style={{ padding: "6px 10px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", color: "#334155" }}>
                     <option value="todos">Todos los tipos</option>
-                    <option value="General / Chat">General / Chat</option>
-                    <option value="Anuncios / Avisos">Anuncios / Avisos</option>
-                    <option value="Informativo">Informativo</option>
+                    <option value="chat">Chat</option>
+                    <option value="informativo">Informativo</option>
                   </select>
                 </div>
 
@@ -687,10 +1105,10 @@ export default function Servidores() {
                   {canalesFiltrados.length === 0 ? (
                     <span style={{ fontSize: "12px", color: "#94a3b8", textAlign: "center", padding: "20px" }}>No hay canales registrados en este servidor.</span>
                   ) : (
-                    canalesFiltrados.map((c) => {
+                    vistasCanales.visibles.map((c) => {
                       const isSelected = itemSeleccionado?.tipo === "canal" && itemSeleccionado?.data?.id === c.id;
                       return (
-                        <div key={c.id} onClick={() => handleSelect("canal", c)} style={{ padding: "12px 16px", borderRadius: "12px", border: isSelected ? "2px solid #0d9488" : "1px solid #e2e8f0", backgroundColor: isSelected ? "#f0fdfa" : "#f8fafc", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div key={c.id} {...btnProps(() => handleSelect("canal", c))} style={{ padding: "12px 16px", borderRadius: "12px", border: isSelected ? "2px solid #0d9488" : "1px solid #e2e8f0", backgroundColor: isSelected ? "#f0fdfa" : "#f8fafc", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                             <IconHash size={16} style={{ color: "#0f766e" }} />
                             <div>
@@ -699,7 +1117,7 @@ export default function Servidores() {
                             </div>
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                            <span style={{ fontSize: "10px", background: "#ccfbf1", color: "#0f766e", padding: "2px 6px", borderRadius: "6px", fontWeight: "bold" }}>{c.tipo}</span>
+                            <span style={{ fontSize: "10px", background: "#ccfbf1", color: "#0f766e", padding: "2px 6px", borderRadius: "6px", fontWeight: "bold" }}>{etiquetaTipo(c.tipo)}</span>
                             <div style={{ width: "22px", height: "22px", borderRadius: "50%", border: isSelected ? "2px solid #0d9488" : "2px solid #cbd5e1", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: isSelected ? "#0d9488" : "transparent" }}>
                               {isSelected && <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: "#ffffff" }} />}
                             </div>
@@ -708,6 +1126,7 @@ export default function Servidores() {
                       );
                     })
                   )}
+                  <PieVistas vistas={vistasCanales} />
                 </div>
               </div>
             )}
@@ -728,10 +1147,10 @@ export default function Servidores() {
                   {categoriasFiltradas.length === 0 ? (
                     <span style={{ fontSize: "12px", color: "#94a3b8", textAlign: "center", padding: "20px" }}>No hay categorías registradas en este servidor.</span>
                   ) : (
-                    categoriasFiltradas.map((cat) => {
+                    vistasCategorias.visibles.map((cat) => {
                       const isSelected = itemSeleccionado?.tipo === "categoria" && itemSeleccionado?.data?.id === cat.id;
                       return (
-                        <div key={cat.id} onClick={() => handleSelect("categoria", cat)} style={{ padding: "14px 16px", borderRadius: "12px", border: isSelected ? "2px solid #0d9488" : "1px solid #e2e8f0", backgroundColor: isSelected ? "#f0fdfa" : "#f8fafc", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div key={cat.id} {...btnProps(() => handleSelect("categoria", cat))} style={{ padding: "14px 16px", borderRadius: "12px", border: isSelected ? "2px solid #0d9488" : "1px solid #e2e8f0", backgroundColor: isSelected ? "#f0fdfa" : "#f8fafc", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <div>
                             <div style={{ fontWeight: "700", fontSize: "13px", color: "#0f766e" }}>{cat.nombre}</div>
                             <div style={{ fontSize: "12px", color: "#64748b" }}>{cat.descripcion}</div>
@@ -743,6 +1162,7 @@ export default function Servidores() {
                       );
                     })
                   )}
+                  <PieVistas vistas={vistasCategorias} />
                 </div>
               </div>
             )}
@@ -767,19 +1187,19 @@ export default function Servidores() {
                   </div>
                   <select value={filtroRolMiembro} onChange={(e) => setFiltroRolMiembro(e.target.value)} style={{ padding: "6px 10px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", color: "#334155" }}>
                     <option value="todos">Todos los roles</option>
-                    <option value="Director">Director</option>
-                    <option value="Profesor">Profesor</option>
-                    <option value="Alumno">Alumno</option>
+                    {roles.map((r) => (
+                      <option key={r.id_rol} value={r.nombre}>{r.nombre}</option>
+                    ))}
                   </select>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   {miembrosFiltrados.length === 0 ? (
                     <span style={{ fontSize: "12px", color: "#94a3b8", textAlign: "center", padding: "20px" }}>No hay miembros registrados en este servidor.</span>
                   ) : (
-                    miembrosFiltrados.map((m) => {
+                    vistasMiembros.visibles.map((m) => {
                       const isSelected = itemSeleccionado?.tipo === "miembro" && itemSeleccionado?.data?.id === m.id;
                       return (
-                        <div key={m.id} onClick={() => handleSelect("miembro", m)} style={{ padding: "14px 16px", borderRadius: "12px", border: isSelected ? "2px solid #0d9488" : "1px solid #e2e8f0", backgroundColor: isSelected ? "#f0fdfa" : "#f8fafc", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div key={m.id} {...btnProps(() => handleSelect("miembro", m))} style={{ padding: "14px 16px", borderRadius: "12px", border: isSelected ? "2px solid #0d9488" : "1px solid #e2e8f0", backgroundColor: isSelected ? "#f0fdfa" : "#f8fafc", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <div>
                             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                               <span style={{ fontWeight: "700", fontSize: "13px", color: "#0f766e" }}>{m.apellidos ? `${m.apellidos}, ${m.nombres}` : m.nombres}</span>
@@ -794,6 +1214,7 @@ export default function Servidores() {
                       );
                     })
                   )}
+                  <PieVistas vistas={vistasMiembros} />
                 </div>
               </div>
             )}
@@ -824,7 +1245,7 @@ export default function Servidores() {
                       {perfilMiembro?.foto_perfil ? (
                         <img src={perfilMiembro.foto_perfil} alt="Foto" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       ) : (
-                        (perfilMiembro?.nombres || miembroDetalle?.nombre_usuario || miembroDetalle?.nombre || "U").toString().charAt(0).toUpperCase()
+                        (perfilMiembro?.nombres || miembroDetalle?.nombre_usuario || "U").toString().charAt(0).toUpperCase()
                       )}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -833,20 +1254,30 @@ export default function Servidores() {
                         <span style={{ fontSize: "10px", background: miembroDetalle?.activo === false ? "#fee2e2" : "#dcfce7", color: miembroDetalle?.activo === false ? "#991b1b" : "#166534", padding: "2px 8px", borderRadius: "6px", fontWeight: "bold" }}>{miembroDetalle?.activo !== false ? "Activo" : "Inactivo"}</span>
                       </div>
                       <div style={{ fontSize: "11px", color: "#64748b" }}>@{miembroDetalle?.nombre_usuario || "usuario"}</div>
-                      <div style={{ fontSize: "11px", color: "#1e293b", marginTop: "6px" }}><strong>Email:</strong> {miembroDetalle?.email || perfilMiembro?.email || "No registrado"}</div>
-                      <div style={{ fontSize: "11px", color: "#1e293b", marginTop: "2px" }}><strong>DNI:</strong> {perfilMiembro?.dni || miembroDetalle?.dni || "No registrado"}</div>
-                      <div style={{ fontSize: "11px", color: "#1e293b", marginTop: "2px" }}><strong>Fecha de registro:</strong> {miembroDetalle?.fecha_registro || perfilMiembro?.fecha_registro || miembroDetalle?.fechaRegistro || "—"}</div>
+                      <div style={{ fontSize: "11px", color: "#1e293b", marginTop: "6px" }}><strong>Email:</strong> {miembroDetalle?.email || "No registrado"}</div>
+                      <div style={{ fontSize: "11px", color: "#1e293b", marginTop: "2px" }}><strong>DNI:</strong> {perfilMiembro?.dni || "No registrado"}</div>
+                      <div style={{ fontSize: "11px", color: "#1e293b", marginTop: "2px" }}><strong>Fecha de registro:</strong> {formatearFecha(miembroDetalle?.fecha_registro)}</div>
                       {perfilMiembro?.biografia ? (
                         <div style={{ fontSize: "11px", color: "#1e293b", marginTop: "6px" }}><strong>Biografía:</strong> {perfilMiembro.biografia}</div>
                       ) : null}
                     </div>
                   </div>
-                  {itemSeleccionado.data?.tienePerfil === false && (
+                  {itemSeleccionado.data?.tienePerfil === false && !perfilMiembro && (
                     <div style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: "10px", padding: "10px 14px", fontSize: "12px", color: "#92400e" }}>
-                      Este miembro todavía no tiene un perfil creado.
+                      Este miembro todavía no tiene un perfil creado. Al completar sus datos y guardar, se crea.
                     </div>
                   )}
                   <form onSubmit={handleGuardarCambios} style={{ display: "flex", flexDirection: "column", gap: "12px", borderBottom: "1px solid #e2e8f0", paddingBottom: "16px" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                      <div>
+                        <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Nombres</label>
+                        <input type="text" value={formData.nombres || ""} onChange={(e) => handleInputChange("nombres", e.target.value)} style={{ width: "100%", padding: "8px 10px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Apellidos</label>
+                        <input type="text" value={formData.apellidos || ""} onChange={(e) => handleInputChange("apellidos", e.target.value)} style={{ width: "100%", padding: "8px 10px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }} />
+                      </div>
+                    </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                       <div>
                         <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>DNI</label>
@@ -862,13 +1293,13 @@ export default function Servidores() {
                       <input type="email" value={formData.email || ""} onChange={(e) => handleInputChange("email", e.target.value)} style={{ width: "100%", padding: "8px 10px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }} />
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f8fafc", padding: "10px 12px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-                      <span style={{ fontSize: "11px", color: "#64748b" }}>Registrado el {formData.fechaRegistro || "12/03/2025"}</span>
+                      <span style={{ fontSize: "11px", color: "#64748b" }}>Registrado el {formatearFecha(miembroDetalle?.fecha_registro)}</span>
                       <label style={{ fontSize: "11px", fontWeight: "600", color: "#1e293b", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
                         <input type="checkbox" checked={formData.activo ?? true} onChange={(e) => handleInputChange("activo", e.target.checked)} />
                         Cuenta activa
                       </label>
                     </div>
-                    <button type="submit" style={{ width: "100%", padding: "10px", background: "#0d9488", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", fontSize: "12px", cursor: "pointer" }}>
+                    <button type="submit" disabled={guardando} style={{ width: "100%", padding: "10px", background: "#0d9488", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", fontSize: "12px", cursor: "pointer" }}>
                       Guardar cambios
                     </button>
                   </form>
@@ -901,7 +1332,7 @@ export default function Servidores() {
                                 <label style={{ fontSize: "11px", fontWeight: "700", color: "#64748b", display: "block", marginBottom: "4px" }}>Nuevo canal</label>
                                 <select value={nuevoCanalSelec} onChange={(e) => setNuevoCanalSelec(e.target.value)} style={{ width: "100%", padding: "7px", fontSize: "11px", borderRadius: "6px", border: "1px solid #cbd5e1" }}>
                                   <option value="">Seleccionar canal...</option>
-                                  {canalesFiltrados.map((c) => (
+                                  {canalesParaAsignar.map((c) => (
                                     <option key={c.id} value={c.id}>{c.nombre}</option>
                                   ))}
                                 </select>
@@ -909,9 +1340,9 @@ export default function Servidores() {
                               <div>
                                 <label style={{ fontSize: "11px", fontWeight: "700", color: "#64748b", display: "block", marginBottom: "4px" }}>Rol en canal</label>
                                 <select value={nuevoRolCanal} onChange={(e) => setNuevoRolCanal(e.target.value)} style={{ width: "100%", padding: "7px", fontSize: "11px", borderRadius: "6px", border: "1px solid #cbd5e1" }}>
-                                  <option value="miembro">miembro</option>
-                                  <option value="admin">admin</option>
-                                  <option value="tutor">tutor</option>
+                                  {ROLES_CANAL.map((r) => (
+                                    <option key={r} value={r}>{r}</option>
+                                  ))}
                                 </select>
                               </div>
                             </div>
@@ -929,13 +1360,16 @@ export default function Servidores() {
                       </div>
                       {accordionOpen.roles && (
                         <div style={{ padding: "14px", background: "#ffffff", display: "flex", flexDirection: "column", gap: "12px" }}>
-                          {formData.roles?.map((r) => (
+                          {(formData.roles || []).length === 0 && (
+                            <span style={{ fontSize: "11px", color: "#64748b" }}>Sin roles asignados en este servidor.</span>
+                          )}
+                          {(formData.roles || []).map((r) => (
                             <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
                               <div>
                                 <div style={{ fontSize: "12px", fontWeight: "700", color: "#0f766e" }}>{r.nombre}</div>
                                 <div style={{ fontSize: "11px", color: "#64748b" }}>{r.contexto}</div>
                               </div>
-                              <button type="button" onClick={() => handleEliminarRolMiembro(r.id)} style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer" }}>
+                              <button type="button" onClick={() => handleEliminarRolMiembro(r)} style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer" }}>
                                 <IconTrash size={16} />
                               </button>
                             </div>
@@ -944,10 +1378,9 @@ export default function Servidores() {
                             <label style={{ fontSize: "11px", fontWeight: "700", color: "#64748b" }}>Asignar rol</label>
                             <select value={nuevoRolSelec} onChange={(e) => setNuevoRolSelec(e.target.value)} style={{ width: "100%", padding: "7px", fontSize: "11px", borderRadius: "6px", border: "1px solid #cbd5e1" }}>
                               <option value="">Elegir rol...</option>
-                              <option value="Director (servidor)">Director (servidor)</option>
-                              <option value="Profesor (servidor)">Profesor (servidor)</option>
-                              <option value="Alumno (servidor)">Alumno (servidor)</option>
-                              <option value="Administrador (global)">Administrador (global)</option>
+                              {rolesParaAsignar.map((r) => (
+                                <option key={r.id_rol} value={r.id_rol}>{r.nombre} ({r.tipo})</option>
+                              ))}
                             </select>
                             <button type="button" onClick={handleAgregarRolMiembro} style={{ padding: "9px", background: "#e0f2fe", color: "#0284c7", border: "none", borderRadius: "8px", fontWeight: "bold", fontSize: "11px", cursor: "pointer" }}>
                               Asignar
@@ -966,9 +1399,12 @@ export default function Servidores() {
                           {(formData.vinculosFamiliares || []).length === 0 ? (
                             <span style={{ fontSize: "11px", color: "#64748b" }}>Sin vínculos familiares registrados.</span>
                           ) : (
-                            (formData.vinculosFamiliares || []).map((v, i) => (
-                              <div key={i} style={{ fontSize: "11px", padding: "8px 12px", background: "#f8fafc", borderRadius: "6px", color: "#1e293b", border: "1px solid #e2e8f0" }}>
-                                🛡️ {v}
+                            (formData.vinculosFamiliares || []).map((v) => (
+                              <div key={v.id} style={{ fontSize: "11px", padding: "8px 12px", background: "#f8fafc", borderRadius: "6px", color: "#1e293b", border: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <span>🛡️ {v.texto}</span>
+                                <button type="button" onClick={() => handleEliminarVinculo(v.id)} style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer" }}>
+                                  <IconTrash size={14} />
+                                </button>
                               </div>
                             ))
                           )}
@@ -976,15 +1412,21 @@ export default function Servidores() {
                             <div>
                               <label style={{ fontSize: "11px", fontWeight: "700", color: "#64748b", display: "block", marginBottom: "4px" }}>Tipo</label>
                               <select value={tipoVinculo} onChange={(e) => setTipoVinculo(e.target.value)} style={{ width: "100%", padding: "7px", fontSize: "11px", borderRadius: "6px", border: "1px solid #cbd5e1" }}>
-                                <option value="padre">padre</option>
-                                <option value="madre">madre</option>
-                                <option value="tutor">tutor</option>
-                                <option value="hermano">hermano</option>
+                                {TIPOS_VINCULO.map((t) => (
+                                  <option key={t} value={t}>{t}</option>
+                                ))}
                               </select>
                             </div>
                             <div>
                               <label style={{ fontSize: "11px", fontWeight: "700", color: "#64748b", display: "block", marginBottom: "4px" }}>Usuario relacionado</label>
-                              <input type="text" value={usuarioVinculo} onChange={(e) => setUsuarioVinculo(e.target.value)} placeholder="Nombre o correo" style={{ width: "100%", padding: "7px", fontSize: "11px", borderRadius: "6px", border: "1px solid #cbd5e1", boxSizing: "border-box" }} />
+                              <input type="text" list="usuarios-vinculo" value={usuarioVinculo} onChange={(e) => setUsuarioVinculo(e.target.value)} placeholder="Nombre o correo" style={{ width: "100%", padding: "7px", fontSize: "11px", borderRadius: "6px", border: "1px solid #cbd5e1", boxSizing: "border-box" }} />
+                              <datalist id="usuarios-vinculo">
+                                {miembros
+                                  .filter((m) => Number(m.usuarioId) !== Number(itemSeleccionado.data.usuarioId))
+                                  .map((m) => (
+                                    <option key={m.usuarioId} value={m.email}>{m.apellidos ? `${m.apellidos}, ${m.nombres}` : m.nombres}</option>
+                                  ))}
+                              </datalist>
                             </div>
                           </div>
                           <button type="button" onClick={handleVincularFamiliar} style={{ padding: "9px", background: "#e0f2fe", color: "#0284c7", border: "none", borderRadius: "8px", fontWeight: "bold", fontSize: "11px", cursor: "pointer" }}>
@@ -1003,9 +1445,11 @@ export default function Servidores() {
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                             <div>
                               <div style={{ fontWeight: "bold", fontSize: "13px", color: "#1e293b" }}>{servidorActivo?.nombre}</div>
-                              <div style={{ fontSize: "11px", color: "#64748b" }}>Miembro desde {formData.fechaRegistro || "12/03/2025"}</div>
+                              <div style={{ fontSize: "11px", color: "#64748b" }}>Miembro desde {formatearFecha(itemSeleccionado.data?.fecha_union)}</div>
                             </div>
-                            <span style={{ fontSize: "10px", background: "#dcfce7", color: "#166534", padding: "3px 8px", borderRadius: "6px", fontWeight: "bold" }}>Activo</span>
+                            <span style={{ fontSize: "10px", background: itemSeleccionado.data?.activo === false ? "#fee2e2" : "#dcfce7", color: itemSeleccionado.data?.activo === false ? "#991b1b" : "#166534", padding: "3px 8px", borderRadius: "6px", fontWeight: "bold" }}>
+                              {itemSeleccionado.data?.activo === false ? "Inactivo" : "Activo"}
+                            </span>
                           </div>
                           <button type="button" onClick={handleQuitarDelServidor} style={{ padding: "9px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: "8px", fontWeight: "bold", fontSize: "11px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
                             <IconTrash size={14} /> Quitar del servidor
@@ -1021,11 +1465,11 @@ export default function Servidores() {
                 <form onSubmit={handleGuardarCambios} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                   <div>
                     <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Nombre del Canal</label>
-                    <input type="text" value={formData.nombre || ""} onChange={(e) => handleInputChange("nombre", e.target.value)} style={{ width: "100%", padding: "8px 12px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }} />
+                    <input type="text" required value={formData.nombre || ""} onChange={(e) => handleInputChange("nombre", e.target.value)} style={{ width: "100%", padding: "8px 12px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }} />
                   </div>
                   <div>
                     <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Tipo</label>
-                    <select value={formData.tipo || "General / Chat"} onChange={(e) => handleInputChange("tipo", e.target.value)} style={{ width: "100%", padding: "8px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px" }}>
+                    <select value={formData.tipo || "General / Chat"} onChange={(e) => handleInputChange("tipo", e.target.value)} style={{ width: "100%", padding: "8px 12px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }}>
                       <option value="General / Chat">General / Chat</option>
                       <option value="Anuncios / Avisos">Anuncios / Avisos</option>
                       <option value="Informativo">Informativo</option>
@@ -1033,8 +1477,9 @@ export default function Servidores() {
                   </div>
                   <div>
                     <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Categoría Organizadora</label>
-                    <select value={formData.categoria || ""} onChange={(e) => handleInputChange("categoria", e.target.value)} style={{ width: "100%", padding: "8px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px" }}>
-                      {categoriasFiltradas.map((cat) => (
+                    <select value={formData.categoria ?? ""} onChange={(e) => handleInputChange("categoria", e.target.value)} style={{ width: "100%", padding: "8px 12px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }}>
+                      <option value="">Sin categoría</option>
+                      {categorias.map((cat) => (
                         <option key={cat.id} value={cat.id}>{cat.nombre}</option>
                       ))}
                     </select>
@@ -1043,7 +1488,7 @@ export default function Servidores() {
                     <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Descripción</label>
                     <textarea value={formData.descripcion || ""} onChange={(e) => handleInputChange("descripcion", e.target.value)} style={{ width: "100%", padding: "8px 12px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", height: "70px", resize: "none", boxSizing: "border-box" }} />
                   </div>
-                  <button type="submit" style={{ width: "100%", padding: "10px", background: "#0d9488", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", fontSize: "12px", cursor: "pointer" }}>
+                  <button type="submit" disabled={guardando} style={{ width: "100%", padding: "10px", background: "#0d9488", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", fontSize: "12px", cursor: "pointer" }}>
                     Guardar cambios de canal
                   </button>
                   <button type="button" onClick={handleEliminarCanal} style={{ width: "100%", padding: "9px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: "10px", fontWeight: "bold", fontSize: "11px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
@@ -1056,7 +1501,7 @@ export default function Servidores() {
                 <form onSubmit={handleGuardarCambios} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                   <div>
                     <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Nombre de Categoría</label>
-                    <input type="text" value={formData.nombre || ""} onChange={(e) => handleInputChange("nombre", e.target.value)} style={{ width: "100%", padding: "8px 12px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }} />
+                    <input type="text" required value={formData.nombre || ""} onChange={(e) => handleInputChange("nombre", e.target.value)} style={{ width: "100%", padding: "8px 12px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }} />
                   </div>
                   <div>
                     <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Descripción</label>
@@ -1064,9 +1509,9 @@ export default function Servidores() {
                   </div>
                   <div>
                     <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Orden jerárquico</label>
-                    <input type="number" value={formData.orden || 1} onChange={(e) => handleInputChange("orden", parseInt(e.target.value))} style={{ width: "100%", padding: "8px 10px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }} />
+                    <input type="number" value={formData.orden ?? 1} onChange={(e) => handleInputChange("orden", e.target.value)} style={{ width: "100%", padding: "8px 10px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }} />
                   </div>
-                  <button type="submit" style={{ width: "100%", padding: "10px", background: "#0d9488", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", fontSize: "12px", cursor: "pointer" }}>
+                  <button type="submit" disabled={guardando} style={{ width: "100%", padding: "10px", background: "#0d9488", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", fontSize: "12px", cursor: "pointer" }}>
                     Guardar cambios de categoría
                   </button>
                   <button type="button" onClick={handleEliminarCategoria} style={{ width: "100%", padding: "9px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: "10px", fontWeight: "bold", fontSize: "11px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
@@ -1086,7 +1531,7 @@ export default function Servidores() {
                   </div>
                   <div>
                     <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Tipo de Canal</label>
-                    <select value={formData.tipo || "General / Chat"} onChange={(e) => handleInputChange("tipo", e.target.value)} style={{ width: "100%", padding: "8px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px" }}>
+                    <select value={formData.tipo || "General / Chat"} onChange={(e) => handleInputChange("tipo", e.target.value)} style={{ width: "100%", padding: "8px 12px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }}>
                       <option value="General / Chat">General / Chat</option>
                       <option value="Anuncios / Avisos">Anuncios / Avisos</option>
                       <option value="Informativo">Informativo</option>
@@ -1094,9 +1539,9 @@ export default function Servidores() {
                   </div>
                   <div>
                     <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Categoría</label>
-                    <select value={formData.categoria || ""} onChange={(e) => handleInputChange("categoria", e.target.value)} style={{ width: "100%", padding: "8px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px" }}>
+                    <select value={formData.categoria ?? ""} onChange={(e) => handleInputChange("categoria", e.target.value)} style={{ width: "100%", padding: "8px 12px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }}>
                       <option value="">Seleccionar categoría...</option>
-                      {categoriasFiltradas.map((cat) => (
+                      {categorias.map((cat) => (
                         <option key={cat.id} value={cat.id}>{cat.nombre}</option>
                       ))}
                     </select>
@@ -1105,7 +1550,7 @@ export default function Servidores() {
                     <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Descripción</label>
                     <textarea placeholder="Breve descripción del canal..." value={formData.descripcion || ""} onChange={(e) => handleInputChange("descripcion", e.target.value)} style={{ width: "100%", padding: "8px 12px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", height: "70px", resize: "none", boxSizing: "border-box" }} />
                   </div>
-                  <button type="submit" style={{ width: "100%", padding: "10px", background: "#0d9488", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", fontSize: "12px", cursor: "pointer" }}>
+                  <button type="submit" disabled={guardando} style={{ width: "100%", padding: "10px", background: "#0d9488", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", fontSize: "12px", cursor: "pointer" }}>
                     Registrar nuevo canal
                   </button>
                 </form>
@@ -1126,9 +1571,9 @@ export default function Servidores() {
                   </div>
                   <div>
                     <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Orden jerárquico</label>
-                    <input type="number" value={formData.orden || 1} onChange={(e) => handleInputChange("orden", parseInt(e.target.value))} style={{ width: "100%", padding: "8px 10px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }} />
+                    <input type="number" value={formData.orden ?? 1} onChange={(e) => handleInputChange("orden", e.target.value)} style={{ width: "100%", padding: "8px 10px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }} />
                   </div>
-                  <button type="submit" style={{ width: "100%", padding: "10px", background: "#0d9488", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", fontSize: "12px", cursor: "pointer" }}>
+                  <button type="submit" disabled={guardando} style={{ width: "100%", padding: "10px", background: "#0d9488", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", fontSize: "12px", cursor: "pointer" }}>
                     Registrar nueva categoría
                   </button>
                 </form>
@@ -1160,15 +1605,15 @@ export default function Servidores() {
                     </div>
                     <div>
                       <label style={{ fontSize: "11px", fontWeight: "700", color: "#475569", display: "block", marginBottom: "4px" }}>Rol institucional</label>
-                      <select value={formData.rol || "Alumno"} onChange={(e) => handleInputChange("rol", e.target.value)} style={{ width: "100%", padding: "8px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px" }}>
-                        <option value="Alumno">Alumno</option>
-                        <option value="Profesor">Profesor</option>
-                        <option value="Director">Director</option>
-                        <option value="Tutor">Tutor</option>
+                      <select value={formData.rolId ?? ""} onChange={(e) => handleInputChange("rolId", e.target.value)} style={{ width: "100%", padding: "8px 10px", fontSize: "12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", boxSizing: "border-box" }}>
+                        <option value="">Sin rol</option>
+                        {roles.map((r) => (
+                          <option key={r.id_rol} value={r.id_rol}>{r.nombre}</option>
+                        ))}
                       </select>
                     </div>
                   </div>
-                  <button type="submit" style={{ width: "100%", padding: "10px", background: "#0d9488", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", fontSize: "12px", cursor: "pointer" }}>
+                  <button type="submit" disabled={guardando} style={{ width: "100%", padding: "10px", background: "#0d9488", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", fontSize: "12px", cursor: "pointer" }}>
                     Guardar y agregar miembro
                   </button>
                 </form>

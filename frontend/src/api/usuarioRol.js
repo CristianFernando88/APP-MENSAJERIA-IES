@@ -1,3 +1,4 @@
+// src/api/usuarioRol.js
 import { apiGet, apiPost, apiDelete } from "./apiClient";
 
 export function listarUsuarioRol(filtros = {}) {

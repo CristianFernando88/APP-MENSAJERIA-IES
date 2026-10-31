@@ -1,3 +1,4 @@
+// src/api/miembrosCanal.js
 import { apiGet, apiPost, apiPut, apiDelete } from "./apiClient";
 
 export function listarMiembrosCanal() {
