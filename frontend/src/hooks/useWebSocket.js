@@ -1,7 +1,8 @@
 // src/hooks/useWebSocket.js
 import { useEffect, useRef, useState } from "react";
 
-const API_URL = import.meta.env.VITE_API_URL;
+// Fallback por si falla la variable en Vercel
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 const WS_URL = API_URL.replace(/^http/, "ws");
 
 export function useWebSocket(path, onMessageReceived) {
@@ -19,7 +20,6 @@ export function useWebSocket(path, onMessageReceived) {
       return;
     }
 
-    // NUEVA LÓGICA: Detectar si es canal o directo para armar la URL
     let fullUrl = "";
     if (path.startsWith("canal/")) {
       fullUrl = `${WS_URL}/mensajes/ws/${path}`;
@@ -30,24 +30,42 @@ export function useWebSocket(path, onMessageReceived) {
       return;
     }
 
-    const socket = new WebSocket(fullUrl);
-    ws.current = socket;
+    let reconnectTimer;
+    let isIntentionalClose = false;
 
-    socket.onopen = () => setIsConnected(true);
-    
-    socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (onMessageRef.current) onMessageRef.current(data);
-      } catch (err) {
-        console.error("Error en WebSocket:", err);
-      }
+    const connect = () => {
+      const socket = new WebSocket(fullUrl);
+      ws.current = socket;
+
+      socket.onopen = () => setIsConnected(true);
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (onMessageRef.current) onMessageRef.current(data);
+        } catch (err) {
+          console.error("Error en WebSocket:", err);
+        }
+      };
+
+      socket.onclose = () => {
+        setIsConnected(false);
+        // Si se cierra y no fue porque cambiamos de canal, intentamos reconectar
+        if (!isIntentionalClose) {
+          reconnectTimer = setTimeout(() => {
+            console.log("Reconectando WebSocket...");
+            connect();
+          }, 3000); // Reintenta cada 3 segundos
+        }
+      };
     };
 
-    socket.onclose = () => setIsConnected(false);
+    connect();
 
     return () => {
-      socket.close();
+      isIntentionalClose = true;
+      clearTimeout(reconnectTimer);
+      if (ws.current) ws.current.close();
     };
   }, [path]);
 
