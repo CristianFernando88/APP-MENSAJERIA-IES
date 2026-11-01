@@ -1,4 +1,5 @@
 """Punto de entrada FastAPI."""
+import os  # <-- NUEVO: Importamos os para leer las variables de entorno
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -35,10 +36,17 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS (para que el frontend pueda consumir la API)
+# ============================================
+# CORS (Configuración dinámica)
+# ============================================
+# Lee la variable CORS_ORIGINS de Render. Si no existe (ej. en local), usa localhost:5173.
+origenes_env = os.getenv("CORS_ORIGINS", "http://localhost:5173")
+# Separa los orígenes por coma, por si a futuro agregas más dominios
+origenes_permitidos = [origen.strip() for origen in origenes_env.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite por defecto
+    allow_origins=origenes_permitidos,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
