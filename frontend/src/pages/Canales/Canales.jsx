@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Search, Hash, Megaphone, Plus, Pencil, Trash2, Users, ChevronRight, AlertCircle, Loader2, X
+  Search, Hash, Megaphone, Plus, Pencil, Trash2, Users, ChevronRight, AlertCircle, Loader2, X,
+  ChevronDown, ArrowLeft, Server, Folder
 } from "lucide-react";
 import Button from "../../components/ui/Button/Button";
 import Input from "../../components/ui/Input/Input";
@@ -13,6 +14,9 @@ import { listarUsuarios } from "../../api/usuarios";
 import { listarMiembrosServidor } from "../../api/miembrosServidor";
 import { listarUsuarioRol } from "../../api/usuarioRol";
 import { listarRoles } from "../../api/roles";
+// Solo lectura, para poder mostrar el nombre de servidores y categorías en el filtro visual
+import { listarServidores } from "../../api/servidores";
+import { listarCategoriasPorServidor } from "../../api/categorias";
 import { useAuth } from "../../context/AuthContext";
 import "./Canales.css";
 
@@ -20,7 +24,6 @@ export default function Canales() {
   const navigate = useNavigate();
   const { user, hasRole } = useAuth();
 
-  // --- Datos base ---
   const [canales, setCanales] = useState([]);
   const [todosLosUsuarios, setTodosLosUsuarios] = useState([]);
   const [todosLosRoles, setTodosLosRoles] = useState([]);
@@ -28,20 +31,25 @@ export default function Canales() {
   const [miembrosCanal, setMiembrosCanal] = useState([]);
   const [miembrosServidor, setMiembrosServidor] = useState([]);
 
-  // --- UI ---
   const [busqueda, setBusqueda] = useState("");
   const [canalSeleccionadoId, setCanalSeleccionadoId] = useState(null);
   const [miembroSeleccionado, setMiembroSeleccionado] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // --- Modales ---
   const [modalMiembro, setModalMiembro] = useState(false);
   const [usuarioSeleccionado, setUsuarioSeleccionado] = useState("");
   const [rolEnCanal, setRolEnCanal] = useState("miembro");
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
 
-  // 1. Cargar todo
+  const [filtroServidor, setFiltroServidor] = useState("todos");
+  const [vistaMovil, setVistaMovil] = useState("canales"); 
+  const [mostrarCanales, setMostrarCanales] = useState(true);
+  const [seccionesCerradas, setSeccionesCerradas] = useState({});
+  const [servidoresLista, setServidoresLista] = useState([]);
+  const [categoriasLista, setCategoriasLista] = useState([]);
+
+
   useEffect(() => {
     let cancelado = false;
     async function cargar() {
@@ -72,7 +80,31 @@ export default function Canales() {
     return () => { cancelado = true; };
   }, []);
 
-  // 2. Filtrar canales según membresía
+
+  useEffect(() => {
+    let cancelado = false;
+    (async () => {
+      try {
+        const data = await listarServidores();
+        if (!cancelado) setServidoresLista(data || []);
+      } catch (err) {
+        // si falla, se muestran como "Servidor N"
+      }
+    })();
+    return () => { cancelado = true; };
+  }, []);
+
+
+  useEffect(() => {
+    const ids = [...new Set(canales.map((c) => Number(c.servidor_id)))].filter(Boolean);
+    if (ids.length === 0) return undefined;
+    let cancelado = false;
+    Promise.all(ids.map((id) => listarCategoriasPorServidor(id).catch(() => [])))
+      .then((res) => { if (!cancelado) setCategoriasLista(res.flat()); });
+    return () => { cancelado = true; };
+  }, [canales]);
+
+
   const misCanales = useMemo(() => {
     if (!user) return [];
     if (hasRole(["super_admin", "admin"])) return canales;
@@ -84,7 +116,6 @@ export default function Canales() {
     return canales.filter((c) => misIdsCanal.includes(Number(c.id_canal)));
   }, [canales, miembrosCanal, user, hasRole]);
 
-  // Auto-seleccionar el primer canal
   useEffect(() => {
     if (misCanales.length > 0 && !misCanales.some(c => c.id_canal === canalSeleccionadoId)) {
       setCanalSeleccionadoId(misCanales[0].id_canal);
@@ -96,12 +127,12 @@ export default function Canales() {
   const canalesFiltrados = misCanales.filter(c => (c.nombre || "").toLowerCase().includes(busqueda.toLowerCase()));
   const canalActivo = misCanales.find(c => c.id_canal === canalSeleccionadoId);
 
-  // 3. Permisos (Admin, Director del servidor, Preceptor del servidor)
+
   const puedeGestionar = useMemo(() => {
     if (!user || !canalActivo) return false;
     if (hasRole(["super_admin", "admin"])) return true;
 
-    // Verificamos si es director o preceptor en el servidor de este canal
+
     return todosLosRoles.some((ur) => {
       if (Number(ur.usuario_id) !== Number(user.id_usuario)) return false;
       if (Number(ur.servidor_id) !== Number(canalActivo.servidor_id)) return false;
@@ -110,7 +141,7 @@ export default function Canales() {
     });
   }, [user, canalActivo, hasRole, todosLosRoles, rolesDefinidos]);
 
-  // 4. Miembros del canal activo
+
   const miembrosDelCanal = useMemo(() => {
     if (!canalActivo) return [];
     const ids = miembrosCanal
@@ -119,7 +150,70 @@ export default function Canales() {
     return todosLosUsuarios.filter((u) => ids.includes(Number(u.id_usuario)));
   }, [miembrosCanal, canalActivo, todosLosUsuarios]);
 
-  // 5. Handlers
+
+  const nombreServidor = (id) => {
+    const s = servidoresLista.find((x) => Number(x.id_servidor) === Number(id));
+    return s?.nombre || `Servidor ${id}`;
+  };
+
+  const nombreCategoria = (id) => {
+    if (!id) return "Sin categoría";
+    const cat = categoriasLista.find((x) => Number(x.id_categoria) === Number(id));
+    return cat?.nombre || `Categoría ${id}`;
+  };
+
+  const servidoresDisponibles = useMemo(() => {
+    const ids = [...new Set(misCanales.map((c) => Number(c.servidor_id)))].filter(Boolean);
+    return ids.map((id) => {
+      const s = servidoresLista.find((x) => Number(x.id_servidor) === id);
+      return { id, nombre: s?.nombre || `Servidor ${id}` };
+    });
+  }, [misCanales, servidoresLista]);
+
+  const canalesVisibles = useMemo(
+    () => canalesFiltrados.filter((c) => filtroServidor === "todos" || String(c.servidor_id) === String(filtroServidor)),
+    [canalesFiltrados, filtroServidor]
+  );
+
+  const grupos = useMemo(() => {
+    const porServidor = new Map();
+    canalesVisibles.forEach((c) => {
+      const sid = Number(c.servidor_id);
+      if (!porServidor.has(sid)) {
+        const s = servidoresLista.find((x) => Number(x.id_servidor) === sid);
+        porServidor.set(sid, { id: sid, nombre: s?.nombre || `Servidor ${sid}`, categorias: new Map() });
+      }
+      const g = porServidor.get(sid);
+      const cid = c.categoria_id ? Number(c.categoria_id) : 0;
+      if (!g.categorias.has(cid)) {
+        const cat = categoriasLista.find((x) => Number(x.id_categoria) === cid);
+        g.categorias.set(cid, {
+          id: cid,
+          nombre: cid ? (cat?.nombre || `Categoría ${cid}`) : "Sin categoría",
+          orden: cid ? (cat?.orden ?? 0) : 9999,
+          canales: [],
+        });
+      }
+      g.categorias.get(cid).canales.push(c);
+    });
+    return [...porServidor.values()].map((g) => ({
+      ...g,
+      total: [...g.categorias.values()].reduce((acc, cat) => acc + cat.canales.length, 0),
+      categorias: [...g.categorias.values()].sort((a, b) => a.orden - b.orden),
+    }));
+  }, [canalesVisibles, servidoresLista, categoriasLista]);
+
+  const alternarSeccion = (clave) => {
+    setSeccionesCerradas((prev) => ({ ...prev, [clave]: !prev[clave] }));
+  };
+
+  const elegirCanal = (c) => {
+    setCanalSeleccionadoId(c.id_canal);
+    setMiembroSeleccionado(null);
+    setVistaMovil("miembros");
+  };
+
+
   const nombreDeUsuario = (id) => {
     const u = todosLosUsuarios.find(x => x.id_usuario === id);
     return u ? u.nombre_usuario : `Usuario ${id}`;
@@ -179,159 +273,293 @@ export default function Canales() {
     }
   };
 
+  const renderCanales = (lista) => (
+    <ul className="canales__sublista">
+      {lista.map((c) => (
+        <li key={c.id_canal}>
+          <button
+            type="button"
+            className={`canales__canal${c.id_canal === canalSeleccionadoId ? " canales__canal--activo" : ""}`}
+            onClick={() => elegirCanal(c)}
+          >
+            {c.tipo === "informativo" ? <Megaphone size={16} /> : <Hash size={16} />}
+            <span className="canales__canal-nombre">{c.nombre}</span>
+            <ChevronRight size={14} className="canales__canal-flecha" />
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+
+  const renderCategoria = (g, cat) => {
+    const clave = `c-${g.id}-${cat.id}`;
+    const cerrada = !!seccionesCerradas[clave];
+    return (
+      <li key={clave} className="canales__categoria">
+        <button
+          type="button"
+          className="canales__categoria-head"
+          aria-expanded={!cerrada}
+          onClick={() => alternarSeccion(clave)}
+        >
+          <ChevronDown size={14} className={`canales__chevron${cerrada ? " canales__chevron--cerrado" : ""}`} />
+          <Folder size={14} />
+          <span className="canales__categoria-nombre">{cat.nombre}</span>
+          <span className="canales__contador">{cat.canales.length}</span>
+        </button>
+        {!cerrada && renderCanales(cat.canales)}
+      </li>
+    );
+  };
+
   return (
     <section className="canales">
       <div className="canales__header">
         <h1 className="canales__title">Mis Canales</h1>
+
+        {/* Botón deslizable: en celular alterna Canales / Miembros */}
+        <div className="canales__switch" role="tablist" data-vista={vistaMovil}>
+          <span className="canales__switch-thumb" aria-hidden="true" />
+          <button
+            type="button"
+            role="tab"
+            aria-selected={vistaMovil === "canales"}
+            className="canales__switch-opcion"
+            onClick={() => setVistaMovil("canales")}
+          >
+            <Hash size={14} /> Canales
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={vistaMovil === "miembros"}
+            className="canales__switch-opcion"
+            onClick={() => setVistaMovil("miembros")}
+          >
+            <Users size={14} /> Miembros{canalActivo ? ` · ${miembrosDelCanal.length}` : ""}
+          </button>
+        </div>
+
+        {/* Botón deslizable: en escritorio muestra u oculta el panel de canales */}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={mostrarCanales}
+          className="canales__toggle"
+          onClick={() => setMostrarCanales((v) => !v)}
+        >
+          <span className="canales__toggle-pista">
+            <span className="canales__toggle-perilla" />
+          </span>
+          Panel de canales
+        </button>
       </div>
 
-      <div className="canales__explorer" style={{ display: "flex", gap: "1rem", alignItems: "flex-start", flexWrap: "wrap" }}>
-        
-        {/* BARRA LATERAL */}
-        <aside style={{ width: "280px", flexShrink: 0, background: "var(--color-blanco)", padding: "1rem", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-sm)" }}>
-          <div className="canales__search" style={{ marginBottom: "1rem", margin: 0 }}>
-            <Search size={18} />
-            <input type="text" placeholder="Buscar canal..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
-          </div>
+      <div className="canales__layout">
+        <div className="canales__viewport">
+          <div className="canales__explorer" data-vista={vistaMovil} data-canales={String(mostrarCanales)}>
 
-          {loading && <p className="canales__empty">Cargando...</p>}
-          {!loading && canalesFiltrados.length === 0 && <p className="canales__empty">No estás en ningún canal.</p>}
+            {/* BARRA LATERAL: filtro + canales por servidor y categoría */}
+            <aside className="canales__sidebar">
+              <div className="canales__search canales__search--compacto">
+                <Search size={18} />
+                <input type="text" placeholder="Buscar canal..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+              </div>
 
-          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "4px" }}>
-            {canalesFiltrados.map((c) => (
-              <li key={c.id_canal}>
-                <button
-                  onClick={() => { setCanalSeleccionadoId(c.id_canal); setMiembroSeleccionado(null); }}
-                  style={{
-                    width: "100%", display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", border: "none", borderRadius: "8px", cursor: "pointer", textAlign: "left",
-                    background: c.id_canal === canalSeleccionadoId ? "var(--color-azul-petroleo)" : "transparent",
-                    color: c.id_canal === canalSeleccionadoId ? "white" : "var(--texto-oscuro)",
-                  }}
+              <label className="canales__filtro">
+                <span className="canales__filtro-label"><Server size={14} /> Servidor</span>
+                <select
+                  className="canales__select"
+                  value={filtroServidor}
+                  onChange={(e) => setFiltroServidor(e.target.value)}
                 >
-                  {c.tipo === "informativo" ? <Megaphone size={16} /> : <Hash size={16} />}
-                  <span style={{ flex: 1, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.nombre}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </aside>
+                  <option value="todos">Todos los servidores</option>
+                  {servidoresDisponibles.map((s) => (
+                    <option key={s.id} value={s.id}>{s.nombre}</option>
+                  ))}
+                </select>
+              </label>
 
-        {/* PANEL PRINCIPAL */}
-        <main style={{ flex: 1, minWidth: "300px", background: "var(--color-blanco)", padding: "1.5rem", borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-sm)", minHeight: "400px" }}>
-          {!canalActivo ? (
-            <div style={{ textAlign: "center", padding: "2rem", color: "var(--texto-secundario)" }}>
-              <Hash size={32} style={{ marginBottom: "1rem" }} />
-              <p>Seleccioná un canal para ver sus miembros.</p>
-            </div>
-          ) : (
-            <>
-              <header style={{ borderBottom: "1px solid #ddd", paddingBottom: "1rem", marginBottom: "1rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <h2 style={{ margin: 0, fontSize: "1.2rem", display: "flex", alignItems: "center", gap: "8px" }}>
-                    {canalActivo.tipo === "informativo" ? <Megaphone size={20} /> : <Hash size={20} />} {canalActivo.nombre}
-                  </h2>
-                  <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "var(--texto-secundario)" }}>Canal de {canalActivo.tipo}</p>
-                </div>
-                <Button size="sm" onClick={() => navigate("/mensajes", { state: { canal: canalActivo } })}>
-                  Entrar al chat <ChevronRight size={16} />
-                </Button>
-              </header>
+              {loading && <p className="canales__empty">Cargando...</p>}
+              {!loading && canalesVisibles.length === 0 && <p className="canales__empty">No estás en ningún canal.</p>}
 
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-                  <h3 style={{ margin: 0, fontSize: "1rem" }}>Miembros del canal ({miembrosDelCanal.length})</h3>
-                  {puedeGestionar && (
-                    <Button size="sm" onClick={() => { setUsuarioSeleccionado(""); setRolEnCanal("miembro"); setModalMiembro(true); }}>
-                      <Plus size={16} /> Agregar miembro
-                    </Button>
-                  )}
-                </div>
-
-                {miembrosDelCanal.length === 0 ? (
-                  <p style={{ textAlign: "center", color: "var(--texto-secundario)", padding: "1rem" }}>No hay miembros en este canal.</p>
-                ) : (
-                  <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                    {miembrosDelCanal.map((u) => (
-                      <li key={u.id_usuario} onClick={() => setMiembroSeleccionado(u)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px", background: "var(--color-gris-azulado)", borderRadius: "8px", marginBottom: "8px", cursor: "pointer" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                          <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "var(--color-menta-palido)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", color: "var(--color-azul-petroleo)" }}>
-                            {u.nombre_usuario.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <strong style={{ display: "block", fontSize: "14px" }}>{u.nombre_usuario}</strong>
-                            <span style={{ fontSize: "12px", color: "var(--texto-secundario)" }}>{u.email}</span>
-                          </div>
-                        </div>
-                        
-                        <button onClick={(e) => { e.stopPropagation(); setMiembroSeleccionado(u); }} style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", padding: "6px", color: "var(--texto-secundario)" }}>
-                          <ChevronRight size={20} />
-                        </button>
+              <ul className="canales__grupos">
+                {filtroServidor === "todos"
+                  ? grupos.map((g) => {
+                      const clave = `s-${g.id}`;
+                      const cerrado = !!seccionesCerradas[clave];
+                      return (
+                        <li key={clave} className="canales__grupo">
+                          <button
+                            type="button"
+                            className="canales__grupo-head"
+                            aria-expanded={!cerrado}
+                            onClick={() => alternarSeccion(clave)}
+                          >
+                            <ChevronDown size={16} className={`canales__chevron${cerrado ? " canales__chevron--cerrado" : ""}`} />
+                            <Server size={16} />
+                            <span className="canales__grupo-nombre">{g.nombre}</span>
+                            <span className="canales__contador">{g.total}</span>
+                          </button>
+                          {!cerrado && (
+                            <ul className="canales__categorias">
+                              {g.categorias.map((cat) => renderCategoria(g, cat))}
+                            </ul>
+                          )}
+                        </li>
+                      );
+                    })
+                  : grupos.map((g) => (
+                      <li key={`s-${g.id}`} className="canales__grupo">
+                        <ul className="canales__categorias canales__categorias--plano">
+                          {g.categorias.map((cat) => renderCategoria(g, cat))}
+                        </ul>
                       </li>
                     ))}
-                  </ul>
-                )}
+              </ul>
+            </aside>
+
+            {/* PANEL PRINCIPAL: miembros del canal activo */}
+            <main className="canales__main">
+              <div className="canales__main-barra">
+                <button type="button" className="canales__volver" onClick={() => setVistaMovil("canales")}>
+                  <ArrowLeft size={16} /> Volver
+                </button>
               </div>
-            </>
-          )}
-        </main>
+
+              {!canalActivo ? (
+                <div className="canales__vacio">
+                  <Hash size={32} />
+                  <p>Seleccioná un canal para ver sus miembros.</p>
+                </div>
+              ) : (
+                <>
+                  <header className="canales__main-header">
+                    <div className="canales__main-info">
+                      <h2 className="canales__main-titulo">
+                        {canalActivo.tipo === "informativo" ? <Megaphone size={20} /> : <Hash size={20} />} {canalActivo.nombre}
+                      </h2>
+                      <p className="canales__main-sub">
+                        Canal de {canalActivo.tipo} · {nombreServidor(canalActivo.servidor_id)} · {nombreCategoria(canalActivo.categoria_id)}
+                      </p>
+                    </div>
+                    <Button size="sm" onClick={() => navigate("/mensajes", { state: { canal: canalActivo } })}>
+                      Entrar al chat <ChevronRight size={16} />
+                    </Button>
+                  </header>
+
+                  <div>
+                    <div className="canales__miembros-head">
+                      <h3 className="canales__miembros-titulo">Miembros del canal ({miembrosDelCanal.length})</h3>
+                      {puedeGestionar && (
+                        <Button size="sm" onClick={() => { setUsuarioSeleccionado(""); setRolEnCanal("miembro"); setModalMiembro(true); }}>
+                          <Plus size={16} /> Agregar miembro
+                        </Button>
+                      )}
+                    </div>
+
+                    {miembrosDelCanal.length === 0 ? (
+                      <p className="canales__empty">No hay miembros en este canal.</p>
+                    ) : (
+                      <ul className="canales__miembros">
+                        {miembrosDelCanal.map((u) => (
+                          <li
+                            key={u.id_usuario}
+                            className={`canales__miembro${miembroSeleccionado?.id_usuario === u.id_usuario ? " canales__miembro--activo" : ""}`}
+                            onClick={() => setMiembroSeleccionado(u)}
+                          >
+                            <div className="canales__miembro-datos">
+                              <div className="canales__miembro-avatar">
+                                {u.nombre_usuario.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="canales__miembro-texto">
+                                <strong className="canales__miembro-nombre">{u.nombre_usuario}</strong>
+                                <span className="canales__miembro-email">{u.email}</span>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              className="canales__miembro-ver"
+                              aria-label="Ver detalle del miembro"
+                              onClick={(e) => { e.stopPropagation(); setMiembroSeleccionado(u); }}
+                            >
+                              <ChevronRight size={20} />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </>
+              )}
+            </main>
+          </div>
+        </div>
 
         {miembroSeleccionado && canalActivo && (
-        <aside className="canales__panel-detalle">
-          <div className="canales__panel-detalle-header">
-            <h3 className="canales__panel-detalle-titulo" style={{ color: "#024566" }}>Detalle del miembro</h3>
-            <button
-              className="canales__panel-detalle-cerrar"
-              onClick={() => setMiembroSeleccionado(null)}
-            >
-              <X size={20} />
-            </button>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px", marginBottom: "1.5rem" }}>
-            {miembroSeleccionado.perfil?.foto_perfil ? (
-              <img className="canales__perfil-avatar" src={miembroSeleccionado.perfil.foto_perfil} alt="Foto de perfil" />
-            ) : (
-              <div className="canales__perfil-avatar" style={{ background: "var(--color-menta-palido)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "32px", fontWeight: "bold", color: "var(--color-azul-petroleo)" }}>{(miembroSeleccionado.perfil?.nombres || miembroSeleccionado.nombre_usuario || "?").charAt(0).toUpperCase()}</div>
-            )}
-            <strong className="canales__perfil-nombre">
-              {[miembroSeleccionado.perfil?.nombres, miembroSeleccionado.perfil?.apellidos].filter(Boolean).join(" ") || miembroSeleccionado.nombre_usuario}
-            </strong>
-            <span style={{ fontSize: "13px", color: "var(--texto-secundario)" }}>@{miembroSeleccionado.nombre_usuario}</span>
-            <span style={{ fontSize: "13px", color: "var(--texto-secundario)" }}>{miembroSeleccionado.email}</span>
-            {miembroSeleccionado.perfil?.biografia && (
-              <p style={{ textAlign: "center", fontSize: "14px", margin: "8px 0 0" }}>{miembroSeleccionado.perfil.biografia}</p>
-            )}
-          </div>
+          <>
+            <div className="canales__backdrop" onClick={() => setMiembroSeleccionado(null)} />
+            <aside className="canales__panel-detalle">
+              <div className="canales__panel-detalle-header">
+                <button type="button" className="canales__volver canales__volver--detalle" onClick={() => setMiembroSeleccionado(null)}>
+                  <ArrowLeft size={16} /> Volver
+                </button>
+                <h3 className="canales__panel-detalle-titulo" style={{ color: "#024566" }}>Detalle del miembro</h3>
+                <button
+                  className="canales__panel-detalle-cerrar"
+                  onClick={() => setMiembroSeleccionado(null)}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px", marginBottom: "1.5rem" }}>
+                {miembroSeleccionado.perfil?.foto_perfil ? (
+                  <img className="canales__perfil-avatar" src={miembroSeleccionado.perfil.foto_perfil} alt="Foto de perfil" />
+                ) : (
+                  <div className="canales__perfil-avatar" style={{ background: "var(--color-menta-palido)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "32px", fontWeight: "bold", color: "var(--color-azul-petroleo)" }}>{(miembroSeleccionado.perfil?.nombres || miembroSeleccionado.nombre_usuario || "?").charAt(0).toUpperCase()}</div>
+                )}
+                <strong className="canales__perfil-nombre">
+                  {[miembroSeleccionado.perfil?.nombres, miembroSeleccionado.perfil?.apellidos].filter(Boolean).join(" ") || miembroSeleccionado.nombre_usuario}
+                </strong>
+                <span style={{ fontSize: "13px", color: "var(--texto-secundario)" }}>@{miembroSeleccionado.nombre_usuario}</span>
+                <span style={{ fontSize: "13px", color: "var(--texto-secundario)" }}>{miembroSeleccionado.email}</span>
+                {miembroSeleccionado.perfil?.biografia && (
+                  <p style={{ textAlign: "center", fontSize: "14px", margin: "8px 0 0" }}>{miembroSeleccionado.perfil.biografia}</p>
+                )}
+              </div>
 
-          <div className="canales__perfil-info">
-            <h4 className="canales__perfil-info-titulo">Información de la cuenta</h4>
-            <p className="canales__perfil-dato">
-              <strong>DNI:</strong> {miembroSeleccionado.perfil?.dni || "No informado"}
-            </p>
-            <p className="canales__perfil-dato">
-              <strong>Estado:</strong> {miembroSeleccionado.activo ? "Activo" : "Inactivo"}
-            </p>
-            <p className="canales__perfil-dato">
-              <strong>Fecha de registro:</strong> {miembroSeleccionado.fecha_registro ? new Date(miembroSeleccionado.fecha_registro).toLocaleDateString("es-AR") : "No disponible"}
-            </p>
-          </div>
-          <div style={{ marginBottom: "1rem" }}>
-            <label className="canales__perfil-info-titulo">Rol en el canal</label>
-            {puedeGestionar ? (
-              <select className="canales__perfil-dato" value={rolEnCanalDe(miembroSeleccionado.id_usuario)} onChange={(e) => cambiarRolMiembro(miembroSeleccionado.id_usuario, e.target.value)} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc", background: "white" }}>
-                <option value="admin">Admin</option>
-                <option value="tutor">Tutor</option>
-                <option value="miembro">Miembro</option>
-              </select>
-            ) : (
-              <span>{rolEnCanalDe(miembroSeleccionado.id_usuario)}</span>
-            )}
-          </div>
-          {puedeGestionar && (
-            <button className="canales__perfil-acciones" onClick={() => quitarMiembro(miembroSeleccionado.id_usuario)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "10px", border: "none", borderRadius: "6px", background: "#fee2e2", color: "#b91c1c", cursor: "pointer" }}>
-              <Trash2 size={16} /> Quitar del canal
-            </button>
-          )}
-        </aside>
+              <div className="canales__perfil-info">
+                <h4 className="canales__perfil-info-titulo">Información de la cuenta</h4>
+                <p className="canales__perfil-dato">
+                  <strong>DNI:</strong> {miembroSeleccionado.perfil?.dni || "No informado"}
+                </p>
+                <p className="canales__perfil-dato">
+                  <strong>Estado:</strong> {miembroSeleccionado.activo ? "Activo" : "Inactivo"}
+                </p>
+                <p className="canales__perfil-dato">
+                  <strong>Fecha de registro:</strong> {miembroSeleccionado.fecha_registro ? new Date(miembroSeleccionado.fecha_registro).toLocaleDateString("es-AR") : "No disponible"}
+                </p>
+              </div>
+              <div style={{ marginBottom: "1rem" }}>
+                <label className="canales__perfil-info-titulo">Rol en el canal</label>
+                {puedeGestionar ? (
+                  <select className="canales__perfil-dato" value={rolEnCanalDe(miembroSeleccionado.id_usuario)} onChange={(e) => cambiarRolMiembro(miembroSeleccionado.id_usuario, e.target.value)} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc", background: "white" }}>
+                    <option value="admin">Admin</option>
+                    <option value="tutor">Tutor</option>
+                    <option value="miembro">Miembro</option>
+                  </select>
+                ) : (
+                  <span>{rolEnCanalDe(miembroSeleccionado.id_usuario)}</span>
+                )}
+              </div>
+              {puedeGestionar && (
+                <button className="canales__perfil-acciones" onClick={() => quitarMiembro(miembroSeleccionado.id_usuario)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", padding: "10px", border: "none", borderRadius: "6px", background: "#fee2e2", color: "#b91c1c", cursor: "pointer" }}>
+                  <Trash2 size={16} /> Quitar del canal
+                </button>
+              )}
+            </aside>
+          </>
         )}
       </div>
 
