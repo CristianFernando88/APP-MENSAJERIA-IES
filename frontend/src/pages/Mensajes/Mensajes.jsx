@@ -375,6 +375,7 @@ export default function Mensajes() {
 
   // 2. Cargar historial
   useEffect(() => {
+    let isMounted = true;
     if (!chatActivo) return;
     setMensajes([]);
 
@@ -386,11 +387,12 @@ export default function Mensajes() {
       // CONSERVADO: carga inmediata del rol local para evitar parpadeos
       setMiRolEnCanalActivo(miembroLocal?.rol_en_canal || null);
       miembroCanalDe(chatActivo.id).then((rol) => {
-        if (rol) setMiRolEnCanalActivo(rol);
+        if (isMounted && rol) setMiRolEnCanalActivo(rol);
       });
 
       listarMensajes(chatActivo.id).then(data => {
         const ordenados = data.sort((a, b) => new Date(a.fecha_envio) - new Date(b.fecha_envio));
+        if (!isMounted) return;
         setMensajes(ordenados);
         
         marcarCanalComoVisto(chatActivo.id, ordenados);
@@ -417,6 +419,9 @@ export default function Mensajes() {
       marcarMensajesComoLeidos(chatActivo.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      isMounted = false;
+    };
   }, [chatActivo]);
 
   // --- HOOK 1: WEBSOCKET DE CANALES (Solo activo si hay un canal abierto) ---
@@ -493,7 +498,11 @@ export default function Mensajes() {
     setTexto("");
 
     if (chatActivo.tipo === "canal") {
-      sendCanal({ contenido: textoAEnviar, usuario_id: user.id_usuario });
+      const enviado = sendCanal({ contenido: textoAEnviar, usuario_id: user.id_usuario });
+      if (enviado === false) {
+        mostrarToast("Error de conexión: el mensaje no se pudo enviar", "error");
+        return;
+      }
       
       const mensajeTemporal = {
         id_mensaje: `temp-${Date.now()}`,
@@ -506,7 +515,11 @@ export default function Mensajes() {
       setMensajes(prev => [...prev, mensajeTemporal]);
       
     } else {
-      sendDirecto({ contenido: textoAEnviar, receptor_id: chatActivo.id });
+      const enviado = sendDirecto({ contenido: textoAEnviar, receptor_id: chatActivo.id });
+      if (enviado === false) {
+        mostrarToast("Error de conexión: el mensaje no se pudo enviar", "error");
+        return;
+      }
       
       const mensajeTemporal = {
         id_mensaje_directo: `temp-${Date.now()}`,
