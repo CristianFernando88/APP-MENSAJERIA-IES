@@ -3,12 +3,13 @@ import { useWebSocket } from "../hooks/useWebSocket";
 import { useAuth } from "./AuthContext";
 import { listarCanales } from "../api/canales";
 import { listarMiembrosCanal } from "../api/miembrosCanal";
+import Toast from "../components/ui/Toast/Toast";
 
 const NotificacionesContext = createContext(null);
 
 function CanalListener({ canalId, userId, onNuevoMensaje }) {
   useWebSocket(`canal/${canalId}`, (data) => {
-    if (data.usuario_id !== userId) {
+    if (Number(data.usuario_id) !== Number(userId)) {
       onNuevoMensaje(data);
     }
   });
@@ -19,6 +20,7 @@ export function NotificacionesProvider({ children }) {
   const { user } = useAuth();
   const [totalNoLeidos, setTotalNoLeidos] = useState(0);
   const [canales, setCanales] = useState([]);
+  const [toastActivo, setToastActivo] = useState(null);
   
   // NUEVO: Estado para saber si estamos dentro de la pantalla de mensajes
   const [pausarNotificaciones, setPausarNotificaciones] = useState(false);
@@ -28,6 +30,16 @@ export function NotificacionesProvider({ children }) {
   useEffect(() => {
     pausarRef.current = pausarNotificaciones;
   }, [pausarNotificaciones]);
+
+  useEffect(() => {
+    if (!toastActivo) return undefined;
+    const temporizador = setTimeout(() => setToastActivo(null), 8000);
+    return () => clearTimeout(temporizador);
+  }, [toastActivo]);
+
+  const mostrarToastGlobal = (titulo, detalle, tipo = "info") => {
+    setToastActivo({ titulo, detalle, tipo });
+  };
 
   const reproducirSonido = () => {
     try {
@@ -81,8 +93,9 @@ export function NotificacionesProvider({ children }) {
 
   // WebSocket de Directos
   useWebSocket(`directo/${user?.id_usuario}`, (data) => {
-    if (data && data.emisor_id && data.emisor_id !== user.id_usuario) {
+    if (data && data.emisor_id && Number(data.emisor_id) !== Number(user.id_usuario)) {
       reproducirSonido();
+      mostrarToastGlobal("Nuevo mensaje", "Has recibido un mensaje directo", "mensaje");
       // SOLO sumamos si NO estamos en la pantalla de mensajes
       if (!pausarRef.current) {
         setTotalNoLeidos(prev => prev + 1);
@@ -92,6 +105,7 @@ export function NotificacionesProvider({ children }) {
 
   const handleNuevoMensajeCanal = (data) => {
     reproducirSonido();
+    mostrarToastGlobal("Nuevo mensaje", "Has recibido un mensaje en un canal", "mensaje");
     // SOLO sumamos si NO estamos en la pantalla de mensajes
     if (!pausarRef.current) {
       setTotalNoLeidos(prev => prev + 1);
@@ -107,8 +121,16 @@ export function NotificacionesProvider({ children }) {
       totalNoLeidos, 
       limpiarContador, 
       setTotalNoLeidos,
-      setPausarNotificaciones // NUEVO: Exponemos la función
+      setPausarNotificaciones,
+      mostrarToastGlobal
     }}>
+      {toastActivo && (
+        <Toast
+          titulo={toastActivo.titulo}
+          detalle={toastActivo.detalle}
+          onCerrar={() => setToastActivo(null)}
+        />
+      )}
       {user && canales.map(canal => (
         <CanalListener 
           key={canal.id_canal} 

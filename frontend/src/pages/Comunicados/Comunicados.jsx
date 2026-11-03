@@ -10,7 +10,6 @@ import Button from "../../components/ui/Button/Button";
 import Input from "../../components/ui/Input/Input";
 import Modal from "../../components/ui/Modal/Modal";
 import Overlay from "../../components/ui/Overlay/Overlay";
-import Toast from "../../components/ui/Toast/Toast";
 import {
   listarComunicados, crearComunicado, eliminarComunicado,
   listarPapelera, restaurarComunicado, eliminarDefinitivo,
@@ -28,6 +27,7 @@ import { listarRelaciones } from "../../api/relacionesUsuario";
 import { listarAdjuntos, subirAdjuntos } from "../../api/comunicadosAdjuntos";
 import useConfirmacion from "../../hooks/useConfirmacion";
 import { useAuth } from "../../context/AuthContext";
+import { useNotificaciones } from "../../context/NotificacionesContext";
 import "./Comunicados.css";
 
 const ROLES_PUEDEN_PUBLICAR = ["super_admin", "admin", "director", "profesor", "preceptor"];
@@ -51,7 +51,6 @@ const ALCANCE_ETIQUETA = {
 
 const formVacio = { titulo: "", contenido: "" };
 const DESTINOS_VACIOS = { global: true, servidores: [], canales: [], usuarios: [] };
-const MS_TOAST = 8000;
 
 const EXTENSIONES_OK = [
   "jpg", "jpeg", "png", "webp", "gif",
@@ -106,6 +105,7 @@ const fechaLarga = (iso) =>
 
 export default function Comunicados() {
   const { user, hasRole } = useAuth();
+  const { mostrarToastGlobal } = useNotificaciones();
   const puedePublicar = hasRole(ROLES_PUEDEN_PUBLICAR);
 
   const { pedir, dialogo } = useConfirmacion();
@@ -138,7 +138,6 @@ export default function Comunicados() {
   const [alumnoAbierto, setAlumnoAbierto] = useState(null);
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
-  const [toast, setToast] = useState(null);
 
   const [adjuntosNuevos, setAdjuntosNuevos] = useState([]);
   const [errorAdjuntos, setErrorAdjuntos] = useState("");
@@ -150,13 +149,6 @@ export default function Comunicados() {
 
   const idsConocidos = useRef(new Set());
   const primeraCarga = useRef(true);
-  const temporizadorToast = useRef(null);
-
-  const mostrarToast = (com) => {
-    setToast(com);
-    if (temporizadorToast.current) clearTimeout(temporizadorToast.current);
-    temporizadorToast.current = setTimeout(() => setToast(null), MS_TOAST);
-  };
 
   const cargarAdjuntosDe = async (ids) => {
     const mapa = {};
@@ -211,7 +203,7 @@ export default function Comunicados() {
           const recien = [...nuevos].sort(
             (a, b) => new Date(b.fecha_publicacion) - new Date(a.fecha_publicacion)
           )[0];
-          mostrarToast(recien);
+          mostrarToastGlobal("Nuevo comunicado", recien.titulo, "comunicado");
         }
       }
 
@@ -241,7 +233,6 @@ export default function Comunicados() {
     return () => {
       clearInterval(intervalo);
       document.removeEventListener("visibilitychange", alVolver);
-      if (temporizadorToast.current) clearTimeout(temporizadorToast.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id_usuario]);
@@ -1435,18 +1426,6 @@ export default function Comunicados() {
         </Modal>
       )}
 
-      {toast && (
-        <Toast
-          titulo="Nuevo comunicado"
-          detalle={toast.titulo}
-          onAccion={() => {
-            setPestana("recibidos");
-            handleAbrir(toast);
-            setToast(null);
-          }}
-          onCerrar={() => setToast(null)}
-        />
-      )}
 
       {imagenAmpliada && (
         <>
