@@ -11,7 +11,7 @@ class Servidor(Base):
     nombre = Column(String(100), nullable=False)
     descripcion = Column(Text)
     fecha_creacion = Column(DateTime, default=datetime.utcnow)
-    creador_id = Column(Integer, ForeignKey("usuario.id_usuario"), nullable=False)
+    creador_id = Column(Integer, ForeignKey("usuario.id_usuario", ondelete="SET NULL"), nullable=False)
 
     # Relaciones
     creador = relationship("Usuario")

@@ -10,7 +10,7 @@ class Canal(Base):
     nombre = Column(String(100), nullable=False)
     descripcion = Column(Text)
     servidor_id = Column(Integer, ForeignKey("servidor.id_servidor"), nullable=False)
-    creador_id = Column(Integer, ForeignKey("usuario.id_usuario"), nullable=False)
+    creador_id = Column(Integer, ForeignKey("usuario.id_usuario", ondelete="SET NULL"), nullable=False)
     categoria_id = Column(Integer, ForeignKey("categoria.id_categoria"), nullable=True)
     orden = Column(Integer, default=0)
     tipo = Column(String(20), nullable=False, default="chat")

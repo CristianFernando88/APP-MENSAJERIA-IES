@@ -19,7 +19,7 @@ class MensajeResponse(MensajeBase):
     id_mensaje: int
     fecha_envio: datetime
     editado: bool
-    usuario_id: int
+    usuario_id: int | None = None
     canal_id: int
 
     class Config:

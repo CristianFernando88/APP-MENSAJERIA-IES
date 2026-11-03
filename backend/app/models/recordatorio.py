@@ -16,4 +16,4 @@ class Recordatorio(Base):
     usuario_id = Column(Integer, ForeignKey("usuario.id_usuario"), nullable=False)
 
     # Relaciones
-    usuario = relationship("Usuario")
+    usuario = relationship("Usuario", back_populates="recordatorios")
