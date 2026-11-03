@@ -968,14 +968,14 @@ export default function Servidores() {
   );
 
   return (
-    <div style={{ padding: "24px", height: "100vh", display: "flex", flexDirection: "column", boxSizing: "border-box", backgroundColor: "#f0f4f8" }}>
+    <div className="srv-root" style={{ padding: "24px", height: "100vh", display: "flex", flexDirection: "column", boxSizing: "border-box", backgroundColor: "#f0f4f8" }}>
       {/* HEADER SUPERIOR */}
-      <header style={{ marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+      <header className="srv-header" style={{ marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
         <div>
           <h1 style={{ fontSize: "1.5rem", color: "#0f766e", fontWeight: "700", margin: 0 }}>Mis Servidores</h1>
           <p style={{ fontSize: "13px", color: "#64748b", margin: "2px 0 0 0" }}>Gestión institucional de espacios de comunicación</p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", background: "#ffffff", padding: "6px 14px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
+        <div className="srv-user" style={{ display: "flex", alignItems: "center", gap: "12px", background: "#ffffff", padding: "6px 14px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
           <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "#0f766e", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", fontSize: "13px", overflow: "hidden" }}>
             {perfilActual?.foto_perfil ? (
               <img src={perfilActual.foto_perfil} alt="Foto" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -997,9 +997,9 @@ export default function Servidores() {
       )}
 
       {/* CONTENEDOR PRINCIPAL */}
-      <div style={{ display: "flex", gap: "20px", flex: 1, minHeight: 0, overflow: "hidden" }}>
+      <div className="srv-main" style={{ display: "flex", gap: "20px", flex: 1, minHeight: 0, overflow: "hidden" }}>
         {/* COLUMNA 1: LISTADO DE SERVIDORES */}
-        <div style={{ width: "300px", background: "#ffffff", borderRadius: "16px", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", flexShrink: 0 }}>
+        <div className="srv-col-servidores" style={{ width: "300px", background: "#ffffff", borderRadius: "16px", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", flexShrink: 0 }}>
           <div style={{ padding: "16px", borderBottom: "1px solid #f1f5f9" }}>
             <div style={{ display: "flex", alignItems: "center", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "8px 12px", gap: "8px" }}>
               <IconSearch size={16} className="text-slate-400" />
@@ -1057,7 +1057,7 @@ export default function Servidores() {
         </div>
 
         {/* COLUMNA 2: CONTENIDO CENTRAL */}
-        <div style={{ flex: 1, background: "#ffffff", borderRadius: "16px", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+        <div className="srv-col-contenido" style={{ flex: 1, background: "#ffffff", borderRadius: "16px", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
           <div style={{ padding: "20px 24px", borderBottom: "1px solid #f1f5f9", flexShrink: 0 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
               <div>
@@ -1073,7 +1073,7 @@ export default function Servidores() {
                 </button>
               )}
             </div>
-            <div style={{ display: "flex", gap: "8px", background: "#f1f5f9", padding: "4px", borderRadius: "12px", width: "fit-content" }}>
+            <div className="srv-tabs" style={{ display: "flex", gap: "8px", background: "#f1f5f9", padding: "4px", borderRadius: "12px", width: "fit-content" }}>
               <button
                 onClick={() => { setTabActiva("canales"); setItemSeleccionado(null); }}
                 style={{ padding: "6px 16px", borderRadius: "8px", fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "6px", border: "none", cursor: "pointer", backgroundColor: tabActiva === "canales" ? "#0f766e" : "transparent", color: tabActiva === "canales" ? "#ffffff" : "#475569" }}
@@ -1104,7 +1104,7 @@ export default function Servidores() {
                   </button>
                 </div>
 
-                <div style={{ display: "flex", gap: "10px" }}>
+                <div className="srv-filtros" style={{ display: "flex", gap: "10px" }}>
                   <div style={{ flex: 1, display: "flex", alignItems: "center", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", padding: "6px 10px", gap: "6px" }}>
                     <IconSearch size={14} className="text-slate-400" />
                     <input type="text" placeholder="Filtrar canales por nombre..." value={busquedaCanal} onChange={(e) => setBusquedaCanal(e.target.value)} style={{ border: "none", outline: "none", background: "transparent", fontSize: "12px", width: "100%" }} />
@@ -1195,7 +1195,7 @@ export default function Servidores() {
                     {miembrosSinPerfil.length === 1 ? "1 miembro no tiene perfil creado" : `${miembrosSinPerfil.length} miembros no tienen perfil creado`}: {miembrosSinPerfil.map((m) => m.nombres).join(", ")}.
                   </div>
                 )}
-                <div style={{ display: "flex", gap: "10px" }}>
+                <div className="srv-filtros" style={{ display: "flex", gap: "10px" }}>
                   <div style={{ flex: 1, display: "flex", alignItems: "center", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", padding: "6px 10px", gap: "6px" }}>
                     <IconSearch size={14} className="text-slate-400" />
                     <input type="text" placeholder="Buscar por nombre, apellido o email..." value={busquedaMiembro} onChange={(e) => setBusquedaMiembro(e.target.value)} style={{ border: "none", outline: "none", background: "transparent", fontSize: "12px", width: "100%" }} />
@@ -1238,7 +1238,7 @@ export default function Servidores() {
 
         {/* COLUMNA 3: PANEL LATERAL */}
         {itemSeleccionado && (
-          <div style={{ width: "400px", background: "#ffffff", borderRadius: "16px", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)", flexShrink: 0 }}>
+          <div className="srv-col-detalle" style={{ width: "400px", background: "#ffffff", borderRadius: "16px", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)", flexShrink: 0 }}>
             <div style={{ background: "#0f766e", color: "#ffffff", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
               <span style={{ fontWeight: "700", fontSize: "13px", textTransform: "capitalize" }}>
                 {itemSeleccionado.tipo === "miembro" && "Detalle del miembro"}
