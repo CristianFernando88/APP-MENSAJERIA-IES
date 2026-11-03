@@ -13,8 +13,11 @@ const NotificacionesContext = createContext(null);
 
 function CanalListener({ canalId, userId, onNuevoMensaje }) {
   useWebSocket(`canal/${canalId}`, (data) => {
+    console.log(`[WS CANAL ${canalId}] Mensaje recibido:`, data);
     if (Number(data.usuario_id) !== Number(userId)) {
       onNuevoMensaje(data);
+    } else {
+      console.log(`[WS CANAL ${canalId}] Ignorado: es mi propio mensaje`);
     }
   });
   return null;
@@ -103,6 +106,10 @@ export function NotificacionesProvider({ children }) {
     cargar();
   }, [user?.id_usuario]);
 
+  useEffect(() => {
+    console.log("Canales para notificaciones:", canales);
+  }, [canales]);
+
   // WebSocket de Directos
   useWebSocket(`directo/${user?.id_usuario}`, (data) => {
     if (data && data.emisor_id && Number(data.emisor_id) !== Number(user.id_usuario)) {
@@ -116,10 +123,12 @@ export function NotificacionesProvider({ children }) {
   });
 
   const handleNuevoMensajeCanal = (data) => {
+    console.log("[CONTEXTO] Nuevo mensaje en canal, disparando Toast");
     reproducirSonido();
-    mostrarToastGlobal("Nuevo mensaje", "Has recibido un mensaje en un canal", "mensaje");
-    // SOLO sumamos si NO estamos en la pantalla de mensajes
     if (!pausarRef.current) {
+      if (window.location.pathname !== "/mensajes") {
+        mostrarToastGlobal("Nuevo mensaje", "Has recibido un mensaje en un canal", "mensaje");
+      }
       setTotalNoLeidos(prev => prev + 1);
     }
   };
