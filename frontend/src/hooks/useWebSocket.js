@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 
 // Fallback por si falla la variable en Vercel
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1").replace(/\/$/, "");
 const WS_URL = API_URL.replace(/^http/, "ws");
 
 export function useWebSocket(path, onMessageReceived) {
