@@ -286,3 +286,110 @@
   background-color: #f1f5f9;
   color: #1e293b;
 }
+
+/* ============================================================
+   RESPONSIVE — Servidores (sobrescribe estilos en línea)
+   ============================================================ */
+
+/* ---------- Tablet / celular (<= 900px) ---------- */
+@media (max-width: 900px) {
+  .srv-root {
+    height: auto !important;
+    min-height: 100vh;
+    padding: 12px !important;
+  }
+
+  .srv-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .srv-user {
+    max-width: 100%;
+  }
+
+  /* Las 3 columnas pasan a apilarse verticalmente */
+  .srv-main {
+    flex-direction: column !important;
+    overflow: visible !important;
+    flex: none !important;
+    gap: 14px !important;
+  }
+
+  .srv-col-servidores,
+  .srv-col-contenido {
+    width: 100% !important;
+    flex-shrink: 0 !important;
+    box-sizing: border-box;
+  }
+
+  .srv-col-servidores {
+    max-height: 260px;
+  }
+
+  .srv-col-contenido {
+    flex: none !important;
+    min-height: 360px;
+    max-height: 75vh;
+  }
+
+  /* Panel de detalle: pantalla completa sobre el resto */
+  .srv-col-detalle {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100% !important;
+    height: 100% !important;
+    height: 100dvh !important;
+    z-index: 100;
+    border-radius: 0 !important;
+    box-sizing: border-box;
+  }
+
+  /* Tabs ocupan todo el ancho */
+  .srv-tabs {
+    width: 100% !important;
+    box-sizing: border-box;
+    overflow-x: auto;
+  }
+  .srv-tabs button {
+    flex: 1;
+    justify-content: center;
+    white-space: nowrap;
+  }
+
+  /* Buscador + select en dos filas */
+  .srv-filtros {
+    flex-wrap: wrap;
+  }
+  .srv-filtros > * {
+    flex: 1 1 100%;
+  }
+}
+
+/* ---------- Celular chico (<= 640px) ---------- */
+@media (max-width: 640px) {
+  .srv-header {
+    flex-direction: column;
+    align-items: flex-start !important;
+  }
+
+  .srv-user {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Formularios de 2 columnas → 1 columna */
+  .srv-col-detalle [style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Evita el zoom automático de iOS al enfocar un campo */
+  .srv-root input,
+  .srv-root select,
+  .srv-root textarea {
+    font-size: 16px !important;
+  }
+}
