@@ -3,14 +3,21 @@ import { useWebSocket } from "../hooks/useWebSocket";
 import { useAuth } from "./AuthContext";
 import { listarCanales } from "../api/canales";
 import { listarMiembrosCanal } from "../api/miembrosCanal";
+import { listarMiembrosServidor } from "../api/miembrosServidor";
+import { listarRelaciones } from "../api/relacionesUsuario";
+import { listarComunicados } from "../api/comunicados";
+import { listarDestinatarios } from "../api/comunicadosDestinatarios";
 import Toast from "../components/ui/Toast/Toast";
 
 const NotificacionesContext = createContext(null);
 
 function CanalListener({ canalId, userId, onNuevoMensaje }) {
   useWebSocket(`canal/${canalId}`, (data) => {
+    console.log(`[WS CANAL ${canalId}] Mensaje recibido:`, data);
     if (Number(data.usuario_id) !== Number(userId)) {
       onNuevoMensaje(data);
+    } else {
+      console.log(`[WS CANAL ${canalId}] Ignorado: es mi propio mensaje`);
     }
   });
   return null;
@@ -21,6 +28,10 @@ export function NotificacionesProvider({ children }) {
   const [totalNoLeidos, setTotalNoLeidos] = useState(0);
   const [canales, setCanales] = useState([]);
   const [toastActivo, setToastActivo] = useState(null);
+  const [revisionComunicados, setRevisionComunicados] = useState(0);
+  const idsComunicadosConocidosRef = useRef(new Set());
+  const primeraCargaComunicadosRef = useRef(true);
+  const cargandoComunicadosRef = useRef(false);
   
   // NUEVO: Estado para saber si estamos dentro de la pantalla de mensajes
   const [pausarNotificaciones, setPausarNotificaciones] = useState(false);
@@ -39,6 +50,10 @@ export function NotificacionesProvider({ children }) {
 
   const mostrarToastGlobal = (titulo, detalle, tipo = "info") => {
     setToastActivo({ titulo, detalle, tipo });
+  };
+
+  const refrescarComunicados = () => {
+    setRevisionComunicados((revision) => revision + 1);
   };
 
   const reproducirSonido = () => {
@@ -91,6 +106,10 @@ export function NotificacionesProvider({ children }) {
     cargar();
   }, [user?.id_usuario]);
 
+  useEffect(() => {
+    console.log("Canales para notificaciones:", canales);
+  }, [canales]);
+
   // WebSocket de Directos
   useWebSocket(`directo/${user?.id_usuario}`, (data) => {
     if (data && data.emisor_id && Number(data.emisor_id) !== Number(user.id_usuario)) {
@@ -104,10 +123,12 @@ export function NotificacionesProvider({ children }) {
   });
 
   const handleNuevoMensajeCanal = (data) => {
+    console.log("[CONTEXTO] Nuevo mensaje en canal, disparando Toast");
     reproducirSonido();
-    mostrarToastGlobal("Nuevo mensaje", "Has recibido un mensaje en un canal", "mensaje");
-    // SOLO sumamos si NO estamos en la pantalla de mensajes
     if (!pausarRef.current) {
+      if (window.location.pathname !== "/mensajes") {
+        mostrarToastGlobal("Nuevo mensaje", "Has recibido un mensaje en un canal", "mensaje");
+      }
       setTotalNoLeidos(prev => prev + 1);
     }
   };
@@ -116,13 +137,120 @@ export function NotificacionesProvider({ children }) {
     setTotalNoLeidos(prev => Math.max(0, prev - cantidad));
   };
 
+  useEffect(() => {
+    idsComunicadosConocidosRef.current = new Set();
+    primeraCargaComunicadosRef.current = true;
+
+    if (!user?.id_usuario) return undefined;
+
+    const consultarComunicados = async () => {
+      if (document.visibilityState !== "visible" || cargandoComunicadosRef.current) return;
+      cargandoComunicadosRef.current = true;
+
+      try {
+        const usuarioId = Number(user.id_usuario);
+        const [comunicados, destinatarios, miembrosCanal, miembrosServidor, relaciones] =
+          await Promise.all([
+            listarComunicados(),
+            listarDestinatarios(),
+            listarMiembrosCanal(),
+            listarMiembrosServidor(),
+            listarRelaciones(),
+          ]);
+
+        const hijosIds = new Set();
+        relaciones.forEach((relacion) => {
+          const usuarioRel = Number(relacion.usuario_id);
+          const relacionado = Number(relacion.relacionado_id);
+          const tipo = String(relacion.tipo ?? relacion.tipo_relacion ?? "").toLowerCase();
+          if (tipo && !["tutor", "padre", "madre"].includes(tipo)) return;
+
+          if (usuarioRel === usuarioId && relacionado !== usuarioId) hijosIds.add(relacionado);
+          if (relacionado === usuarioId && usuarioRel !== usuarioId) hijosIds.add(usuarioRel);
+        });
+
+        const canalesAccesibles = new Set();
+        miembrosCanal.forEach((miembro) => {
+          const miembroId = Number(miembro.usuario_id);
+          if (miembroId === usuarioId || hijosIds.has(miembroId)) {
+            canalesAccesibles.add(Number(miembro.canal_id));
+          }
+        });
+
+        const servidoresAccesibles = new Set();
+        miembrosServidor.forEach((miembro) => {
+          const miembroId = Number(miembro.usuario_id);
+          if (miembroId === usuarioId || hijosIds.has(miembroId)) {
+            servidoresAccesibles.add(Number(miembro.servidor_id));
+          }
+        });
+
+        const meCorresponde = (comunicado) => {
+          const comunicadoId = Number(comunicado.id_comunicado);
+          const destinos = destinatarios.filter(
+            (destinatario) => Number(destinatario.comunicado_id) === comunicadoId
+          );
+
+          if (destinos.length === 0) {
+            return String(comunicado.tipo).toLowerCase() === "global";
+          }
+
+          return destinos.some((destinatario) =>
+            (destinatario.usuario_id != null && Number(destinatario.usuario_id) === usuarioId) ||
+            (destinatario.canal_id != null && canalesAccesibles.has(Number(destinatario.canal_id))) ||
+            (destinatario.servidor_id != null && servidoresAccesibles.has(Number(destinatario.servidor_id)))
+          );
+        };
+
+        if (!primeraCargaComunicadosRef.current) {
+          const nuevos = comunicados.filter(
+            (comunicado) => !idsComunicadosConocidosRef.current.has(Number(comunicado.id_comunicado))
+          );
+          const nuevosValidos = nuevos.filter(meCorresponde);
+
+          if (nuevosValidos.length > 0) {
+            const comunicado = [...nuevosValidos].sort(
+              (a, b) => new Date(b.fecha_publicacion) - new Date(a.fecha_publicacion)
+            )[0];
+            mostrarToastGlobal("Nuevo comunicado", comunicado.titulo, "comunicado");
+          }
+        }
+
+        idsComunicadosConocidosRef.current = new Set(
+          comunicados.map((comunicado) => Number(comunicado.id_comunicado))
+        );
+        primeraCargaComunicadosRef.current = false;
+        setRevisionComunicados((revision) => revision + 1);
+      } catch (error) {
+        console.error("Error al detectar nuevos comunicados:", error);
+      } finally {
+        cargandoComunicadosRef.current = false;
+      }
+    };
+
+    consultarComunicados();
+    const intervalo = setInterval(consultarComunicados, 10000);
+    const alVolver = () => {
+      if (document.visibilityState === "visible") consultarComunicados();
+    };
+    document.addEventListener("visibilitychange", alVolver);
+
+    return () => {
+      clearInterval(intervalo);
+      document.removeEventListener("visibilitychange", alVolver);
+      cargandoComunicadosRef.current = false;
+    };
+  }, [user?.id_usuario]);
+
   return (
     <NotificacionesContext.Provider value={{ 
       totalNoLeidos, 
       limpiarContador, 
       setTotalNoLeidos,
       setPausarNotificaciones,
-      mostrarToastGlobal
+      mostrarToastGlobal,
+      refrescarComunicados,
+      revisionComunicados
     }}>
       {toastActivo && (
         <Toast

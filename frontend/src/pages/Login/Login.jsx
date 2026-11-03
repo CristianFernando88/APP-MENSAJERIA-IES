@@ -111,15 +111,6 @@ export default function Login() {
           {enviando ? "Ingresando..." : "Iniciar sesión"}
         </Button>
 
-        <div className="login__demo-hint">
-          <p>Usuarios de prueba</p>
-          <ul>
-            <li><code>admin</code> / admin123</li>
-            <li><code>director</code> / director123</li>
-            <li><code>juanperez</code> / profesor123</li>
-            <li><code>pedrolopez</code> / alumno123</li>
-          </ul>
-        </div>
       </form>
     </div>
   );

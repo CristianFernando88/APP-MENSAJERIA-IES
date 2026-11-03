@@ -1,14 +1,11 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Home, Bell, User, Menu, X } from "lucide-react";
 import UserMenu from "./UserMenu";
 import NotificationsPanel from "./NotificationsPanel";
 import { useAuth } from "../../context/AuthContext";
-import { listarComunicados } from "../../api/comunicados";
-import { listarDestinatarios } from "../../api/comunicadosDestinatarios";
-import { listarVistos, marcarVisto } from "../../api/comunicadosVistos";
-import { listarMiembrosCanal } from "../../api/miembrosCanal";
-import { listarMiembrosServidor } from "../../api/miembrosServidor";
+import { marcarVisto } from "../../api/comunicadosVistos";
+import { useComunicadosNoLeidos } from "../../hooks/useComunicadosNoLeidos";
 import "./Header.css";
 
 export default function Header({ onMenuToggle, menuOpen }) {
@@ -17,84 +14,23 @@ export default function Header({ onMenuToggle, menuOpen }) {
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [loadingComunicados, setLoadingComunicados] = useState(false);
 
   const userMenuRef = useRef(null);
   const notifRef = useRef(null);
 
-  // Solo comunicados SIN LEER para este usuario
-  const [comunicadosNoLeidos, setComunicadosNoLeidos] = useState([]);
+  const {
+    comunicadosNoLeidos: comunicadosFiltrados,
+    loading: loadingComunicados,
+    refrescar: cargarComunicadosNoLeidos,
+  } = useComunicadosNoLeidos();
 
-  const cargarComunicadosNoLeidos = useCallback(async () => {
-    if (!user?.id_usuario) {
-      setComunicadosNoLeidos([]);
-      return;
-    }
-
-    try {
-      setLoadingComunicados(true);
-
-      const [com, dest, vis, mc, ms] = await Promise.all([
-        listarComunicados(),
-        listarDestinatarios(),
-        listarVistos(),
-        listarMiembrosCanal(),
-        listarMiembrosServidor(),
-      ]);
-
-      const misCanales = (mc || [])
-        .filter((m) => Number(m.usuario_id) === Number(user.id_usuario))
-        .map((m) => m.canal_id);
-
-      const misServidores = (ms || [])
-        .filter((m) => Number(m.usuario_id) === Number(user.id_usuario))
-        .map((m) => m.servidor_id);
-
-      const vistosIds = new Set(
-        (vis || [])
-          .filter((v) => Number(v.usuario_id) === Number(user.id_usuario))
-          .map((v) => v.comunicado_id)
-      );
-
-      const meCorresponde = (comunicadoId) => {
-        const destinos = (dest || []).filter(
-          (d) => Number(d.comunicado_id) === Number(comunicadoId)
-        );
-
-        // Sin destinatarios explícitos = global
-        if (destinos.length === 0) return true;
-
-        return destinos.some((d) =>
-          (d.usuario_id && Number(d.usuario_id) === Number(user.id_usuario)) ||
-          (d.canal_id && misCanales.includes(d.canal_id)) ||
-          (d.servidor_id && misServidores.includes(d.servidor_id))
-        );
-      };
-
-      const sinLeer = (com || [])
-        .filter((c) => meCorresponde(c.id_comunicado) && !vistosIds.has(c.id_comunicado))
-        .map((c) => ({
-          id_notificacion: c.id_comunicado,
-          mensaje: c.titulo,                 // título/asunto del comunicado
-          fecha_creacion: c.fecha_publicacion,
-          enlace: `/comunicados?comunicado=${c.id_comunicado}`,
-          leida: false,
-        }));
-
-      setComunicadosNoLeidos(sinLeer);
-    } catch (error) {
-      console.error("Error al cargar comunicados no leídos:", error);
-      setComunicadosNoLeidos([]);
-    } finally {
-      setLoadingComunicados(false);
-    }
-  }, [user?.id_usuario]);
-
-  useEffect(() => {
-    cargarComunicadosNoLeidos();
-    const timer = setInterval(cargarComunicadosNoLeidos, 30000);
-    return () => clearInterval(timer);
-  }, [cargarComunicadosNoLeidos]);
+  const comunicadosNoLeidos = comunicadosFiltrados.map((c) => ({
+    id_notificacion: Number(c.id_comunicado),
+    mensaje: c.titulo,
+    fecha_creacion: c.fecha_publicacion,
+    enlace: `/comunicados?comunicado=${c.id_comunicado}`,
+    leida: false,
+  }));
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -114,9 +50,7 @@ export default function Header({ onMenuToggle, menuOpen }) {
 
     try {
       await marcarVisto(comunicadoId, user.id_usuario);
-      setComunicadosNoLeidos((prev) =>
-        prev.filter((c) => c.id_notificacion !== comunicadoId)
-      );
+      await cargarComunicadosNoLeidos();
     } catch (error) {
       console.error("Error al marcar comunicado como leído:", error);
     }
