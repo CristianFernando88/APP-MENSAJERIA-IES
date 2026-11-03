@@ -40,7 +40,7 @@ export default function Dashboard() {
       .catch(() => setFotoPerfil(""));
   }, [user?.id_usuario]);
 
-  const { totalNoLeidos, setTotalNoLeidos } = useNotificaciones();
+  const { totalNoLeidos, setTotalNoLeidos, revisionComunicados } = useNotificaciones();
 
   const noLeidos = useComunicadosNoLeidos();
 
@@ -109,7 +109,9 @@ export default function Dashboard() {
           const destinos = destinatarios.filter(
             (d) => Number(d.comunicado_id) === Number(comunicado.id_comunicado)
           );
-          if (destinos.length === 0) return true;
+          if (destinos.length === 0) {
+            return String(comunicado.tipo).toLowerCase() === "global";
+          }
 
           return destinos.some((d) =>
             (d.usuario_id != null && Number(d.usuario_id) === usuarioId) ||
@@ -135,7 +137,7 @@ export default function Dashboard() {
     return () => {
       vivo = false;
     };
-  }, [user?.id_usuario]);
+  }, [user?.id_usuario, revisionComunicados]);
 
   const pendientes = recordatorios.filter((r) => !r.completado);
   const completados = recordatorios.filter((r) => r.completado);
