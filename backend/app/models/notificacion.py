@@ -16,4 +16,4 @@ class Notificacion(Base):
     enlace = Column(String(255), nullable=True)
 
     # Relaciones
-    usuario = relationship("Usuario")
+    usuario = relationship("Usuario", back_populates="notificaciones")

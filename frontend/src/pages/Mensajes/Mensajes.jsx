@@ -12,6 +12,7 @@ import { listarUsuarios } from "../../api/usuarios";
 import { getMiembrosCanal, getMiembrosDisponibles, listarCanales } from "../../api/canales";
 import { crearMiembroCanal, eliminarMiembroCanal, listarMiembrosCanal } from "../../api/miembrosCanal";
 import { listarRelaciones } from "../../api/relacionesUsuario";
+import { listarServidores } from "../../api/servidores";
 import Modal from "../../components/ui/Modal/Modal";
 import "./Mensajes.css";
 
@@ -85,6 +86,7 @@ export default function Mensajes() {
   const [usuarios, setUsuarios] = useState([]);
   const [miembrosCanal, setMiembrosCanal] = useState([]);
   const [mensajesDirectos, setMensajesDirectos] = useState([]);
+  const [servidores, setServidores] = useState([]);
   
   const [chatActivo, setChatActivo] = useState(null); 
   const [mensajes, setMensajes] = useState([]);
@@ -100,6 +102,7 @@ export default function Mensajes() {
   const [pestanaNuevoChat, setPestanaNuevoChat] = useState("canal");
   const [destinoNuevoChat, setDestinoNuevoChat] = useState(null);
   const [alumnoExpandido, setAlumnoExpandido] = useState(null);
+  const [cursoExpandido, setCursoExpandido] = useState(null);
 
   // NUEVO: permisos, contactos, gestión de miembros y avisos locales
   const [contactosPermitidosBackend, setContactosPermitidosBackend] = useState([]);
@@ -149,6 +152,10 @@ export default function Mensajes() {
 
     return mapa;
   }, [usuarioRoles, rolesCatalogo]);
+
+  const servidoresPorId = useMemo(() => new Map(
+    servidores.map((servidor) => [Number(servidor.id_servidor), servidor])
+  ), [servidores]);
 
   const esAlumno = nombresRoles.includes("alumno") &&
     !["super_admin", "admin", "director", "profesor", "tutor"].some((rol) => nombresRoles.includes(rol));
@@ -270,7 +277,7 @@ export default function Mensajes() {
   useEffect(() => {
     async function cargarDatos() {
       try {
-        const [resCanales, resUsuarios, resMiembros, resDMs, resVistos, resContactos, resRelaciones, resUsuarioRoles, resRoles] = await Promise.all([
+        const [resCanales, resUsuarios, resMiembros, resDMs, resVistos, resContactos, resRelaciones, resUsuarioRoles, resRoles, resServidores] = await Promise.all([
           listarCanales(),
           listarUsuarios(),
           listarMiembrosCanal(),
@@ -288,12 +295,17 @@ export default function Mensajes() {
           listarRoles().catch((error) => {
             console.error("Error al cargar roles:", error);
             return [];
+          }),
+          listarServidores().catch((error) => {
+            console.error("Error al cargar servidores:", error);
+            return [];
           })
         ]);
         setContactosPermitidosBackend(Array.isArray(resContactos) ? resContactos : []);
         setRelaciones(Array.isArray(resRelaciones) ? resRelaciones : []);
         setUsuarioRoles(Array.isArray(resUsuarioRoles) ? resUsuarioRoles : []);
         setRolesCatalogo(Array.isArray(resRoles) ? resRoles : []);
+        setServidores(Array.isArray(resServidores) ? resServidores : []);
 
         let misCanales = resCanales;
         if (!hasRole(["super_admin", "admin"])) {
@@ -375,6 +387,7 @@ export default function Mensajes() {
 
   // 2. Cargar historial
   useEffect(() => {
+    let isMounted = true;
     if (!chatActivo) return;
     setMensajes([]);
 
@@ -386,11 +399,12 @@ export default function Mensajes() {
       // CONSERVADO: carga inmediata del rol local para evitar parpadeos
       setMiRolEnCanalActivo(miembroLocal?.rol_en_canal || null);
       miembroCanalDe(chatActivo.id).then((rol) => {
-        if (rol) setMiRolEnCanalActivo(rol);
+        if (isMounted && rol) setMiRolEnCanalActivo(rol);
       });
 
       listarMensajes(chatActivo.id).then(data => {
         const ordenados = data.sort((a, b) => new Date(a.fecha_envio) - new Date(b.fecha_envio));
+        if (!isMounted) return;
         setMensajes(ordenados);
         
         marcarCanalComoVisto(chatActivo.id, ordenados);
@@ -417,6 +431,9 @@ export default function Mensajes() {
       marcarMensajesComoLeidos(chatActivo.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      isMounted = false;
+    };
   }, [chatActivo]);
 
   // --- HOOK 1: WEBSOCKET DE CANALES (Solo activo si hay un canal abierto) ---
@@ -493,7 +510,11 @@ export default function Mensajes() {
     setTexto("");
 
     if (chatActivo.tipo === "canal") {
-      sendCanal({ contenido: textoAEnviar, usuario_id: user.id_usuario });
+      const enviado = sendCanal({ contenido: textoAEnviar, usuario_id: user.id_usuario });
+      if (enviado === false) {
+        mostrarToast("Error de conexión: el mensaje no se pudo enviar", "error");
+        return;
+      }
       
       const mensajeTemporal = {
         id_mensaje: `temp-${Date.now()}`,
@@ -506,7 +527,11 @@ export default function Mensajes() {
       setMensajes(prev => [...prev, mensajeTemporal]);
       
     } else {
-      sendDirecto({ contenido: textoAEnviar, receptor_id: chatActivo.id });
+      const enviado = sendDirecto({ contenido: textoAEnviar, receptor_id: chatActivo.id });
+      if (enviado === false) {
+        mostrarToast("Error de conexión: el mensaje no se pudo enviar", "error");
+        return;
+      }
       
       const mensajeTemporal = {
         id_mensaje_directo: `temp-${Date.now()}`,
@@ -522,8 +547,12 @@ export default function Mensajes() {
   };
 
   const getNombre = (id) => {
-    const u = usuarios.find(x => x.id_usuario === id);
-    return u?.perfil ? `${u.perfil.nombres} ${u.perfil.apellidos}` : u?.nombre_usuario || "Desconocido";
+    if (id == null) return "Usuario eliminado";
+
+    const u = usuarios.find(x => Number(x.id_usuario) === Number(id));
+    return u?.perfil
+      ? `${u.perfil.nombres} ${u.perfil.apellidos}`
+      : u?.nombre_usuario || "Desconocido";
   };
 
   const getFotoPerfil = (id) => {
@@ -532,6 +561,62 @@ export default function Mensajes() {
     );
     
     return usuario?.perfil?.foto_perfil || "";
+  };
+
+  function nombresRolesUsuario(usuarioObj) {
+    const roles = [];
+    const extras = rolesPorUsuario.get(Number(usuarioObj?.id_usuario)) || [];
+    [...(usuarioObj?.roles || []), ...(usuarioObj?.asignaciones || []), ...extras].forEach((item) => {
+      const nombre = typeof item === "string" ? item : item?.rol?.nombre || item?.nombre || item?.nombre_rol || item?.rol;
+      if (typeof nombre === "string" && nombre.trim()) roles.push(nombre.toLowerCase());
+    });
+    return [...new Set(roles)];
+  }
+
+  const obtenerAlumnosDeTutor = (tutorId) => {
+    const tipoTutorValido = (tipo) => ["tutor", "padre", "madre"].includes(
+      String(tipo || "tutor").trim().toLowerCase()
+    );
+    const tutorIdNumero = Number(tutorId);
+
+    const alumnos = relaciones
+      .filter((relacion) => tipoTutorValido(relacion.tipo))
+      .map((relacion) => {
+        const usuarioId = Number(relacion.usuario_id);
+        const relacionadoId = Number(relacion.relacionado_id);
+        let alumnoId = null;
+
+        if (usuarioId === tutorIdNumero) alumnoId = relacionadoId;
+        else if (relacionadoId === tutorIdNumero) alumnoId = usuarioId;
+        if (alumnoId === null || alumnoId === tutorIdNumero) return null;
+
+        return usuarios.find((usuario) => Number(usuario.id_usuario) === alumnoId);
+      })
+      .filter(Boolean);
+
+    return [...new Map(alumnos.map((alumno) => [Number(alumno.id_usuario), alumno])).values()]
+      .map((alumno) => getNombre(alumno.id_usuario));
+  };
+
+  const agruparContactosPorRol = (usuariosAMapear) => {
+    const grupos = { profesores: [], alumnos: [], tutores: [], administrativos: [] };
+
+    usuariosAMapear.forEach((usuario) => {
+      const rolesUsuario = nombresRolesUsuario(usuario);
+      if (rolesUsuario.some((rol) => ["admin", "super_admin", "director", "vicedirector", "administrativo", "administrativos"].includes(rol))) {
+        grupos.administrativos.push(usuario);
+      } else if (rolesUsuario.includes("tutor")) {
+        grupos.tutores.push(usuario);
+      } else if (rolesUsuario.includes("alumno")) {
+        grupos.alumnos.push(usuario);
+      } else if (rolesUsuario.includes("profesor")) {
+        grupos.profesores.push(usuario);
+      } else {
+        grupos.administrativos.push(usuario);
+      }
+    });
+
+    return grupos;
   };
 
   const canalesFiltrados = canales.filter(c => c.nombre.toLowerCase().includes(busqueda.toLowerCase()));
@@ -548,6 +633,25 @@ export default function Mensajes() {
       getNombre(u.id_usuario).toLowerCase().includes(busqueda.toLowerCase())
     );
   }, [usuarios, mensajesDirectos, user.id_usuario, busqueda]);
+
+  const canalesPorServidor = useMemo(() => {
+    const grupos = new Map();
+
+    canalesFiltrados.forEach((canal) => {
+      const servidor = servidoresPorId.get(Number(canal.servidor_id));
+      const nombreServidor = servidor?.nombre || "Otros";
+      const key = servidor?.id_servidor != null ? String(servidor.id_servidor) : "otros";
+      if (!grupos.has(key)) grupos.set(key, { servidor: { nombre: nombreServidor }, canales: [] });
+      grupos.get(key).canales.push(canal);
+    });
+
+    return [...grupos.values()].sort((a, b) => a.servidor.nombre.localeCompare(b.servidor.nombre));
+  }, [canalesFiltrados, servidoresPorId]);
+
+  const contactosPorRol = useMemo(
+    () => agruparContactosPorRol(usuariosFiltrados),
+    [usuariosFiltrados, rolesPorUsuario, relaciones]
+  );
 
   const getUltimoMensaje = (usuarioId) => {
     const msjs = mensajesDirectos.filter(dm => 
@@ -572,6 +676,23 @@ export default function Mensajes() {
       nombresRoles,
     });
   }), [canales, miembrosCanal, user, esTutorPuroFlag, nombresRoles]);
+
+  const canalesModalPorServidor = useMemo(() => {
+    const texto = busquedaUsuario.trim().toLowerCase();
+    const grupos = new Map();
+
+    canalesParaNuevoChat
+      .filter((canal) => !texto || canal.nombre.toLowerCase().includes(texto))
+      .forEach((canal) => {
+        const servidor = servidoresPorId.get(Number(canal.servidor_id));
+        const nombreServidor = servidor?.nombre || "Otros";
+        const key = servidor?.id_servidor != null ? String(servidor.id_servidor) : "otros";
+        if (!grupos.has(key)) grupos.set(key, { servidor: { nombre: nombreServidor }, canales: [] });
+        grupos.get(key).canales.push(canal);
+      });
+
+    return [...grupos.values()].sort((a, b) => a.servidor.nombre.localeCompare(b.servidor.nombre));
+  }, [canalesParaNuevoChat, busquedaUsuario, servidoresPorId]);
 
   const contactosParaNuevoChat = useMemo(() => {
     const idsHistorial = new Set();
@@ -688,12 +809,12 @@ export default function Mensajes() {
           let tutorId = null;
 
           if (usuarioId === alumnoId) tutorId = relacionadoId;
-          if (relacionadoId === alumnoId) tutorId = usuarioId;
-          if (tutorId === null) return;
+          else if (relacionadoId === alumnoId) tutorId = usuarioId;
+          if (tutorId === null || tutorId === alumnoId) return;
 
-          const tutor = usuarios.find((item) => Number(item.id_usuario) === Number(tutorId));
-          if (tutor && nombresRolesUsuario(tutor).includes("tutor")) {
-            tutoresPorId.set(Number(tutorId), { tutor, tipo });
+          const tutor = usuarios.find((item) => Number(item.id_usuario) === tutorId);
+          if (tutor) {
+            tutoresPorId.set(tutorId, { tutor, tipo });
           }
         });
 
@@ -718,15 +839,62 @@ export default function Mensajes() {
     );
   }, [contactosParaNuevoChat]);
 
-  function nombresRolesUsuario(usuarioObj) {
-    const roles = [];
-    const extras = rolesPorUsuario.get(Number(usuarioObj?.id_usuario)) || [];
-    [...(usuarioObj?.roles || []), ...(usuarioObj?.asignaciones || []), ...extras].forEach((item) => {
-      const nombre = typeof item === "string" ? item : item?.rol?.nombre || item?.nombre || item?.nombre_rol || item?.rol;
-      if (typeof nombre === "string" && nombre.trim()) roles.push(nombre.toLowerCase());
+  const contactosPorCurso = useMemo(() => {
+    const texto = busquedaUsuario.trim().toLowerCase();
+    const coincideBusqueda = (usuario) => !texto ||
+      getNombre(usuario.id_usuario).toLowerCase().includes(texto) ||
+      String(usuario.nombre_usuario || "").toLowerCase().includes(texto);
+
+    const personasFiltradas = personasParaNuevoChat.filter(coincideBusqueda);
+    const idsConCanal = new Set();
+    const cursos = [];
+
+    canales.forEach((canal) => {
+      const miembrosIds = new Set(
+        miembrosCanal
+          .filter((miembro) => Number(miembro.canal_id) === Number(canal.id_canal))
+          .map((miembro) => Number(miembro.usuario_id))
+      );
+
+      const profesores = [];
+      const alumnos = [];
+
+      personasFiltradas.forEach((usuario) => {
+        const usuarioId = Number(usuario.id_usuario);
+        if (!miembrosIds.has(usuarioId)) return;
+
+        idsConCanal.add(usuarioId);
+        const rolesUsuario = nombresRolesUsuario(usuario);
+
+        if (rolesUsuario.includes("profesor")) {
+          profesores.push(usuario);
+        } else if (rolesUsuario.includes("alumno")) {
+          const agrupado = alumnosConTutores.find(({ alumno }) => Number(alumno.id_usuario) === usuarioId);
+          const tutores = agrupado?.tutores || [];
+          alumnos.push({ alumno: usuario, tutores });
+        }
+      });
+
+      profesores.sort((a, b) => getNombre(a.id_usuario).localeCompare(getNombre(b.id_usuario)));
+      alumnos.sort((a, b) => getNombre(a.alumno.id_usuario).localeCompare(getNombre(b.alumno.id_usuario)));
+
+      if (profesores.length > 0 || alumnos.length > 0) {
+        cursos.push({ canal, profesores, alumnos });
+      }
     });
-    return [...new Set(roles)];
-  }
+
+    const idsVinculados = new Set();
+    alumnosConTutores.forEach(({ tutores }) => {
+      tutores.forEach(({ tutor }) => idsVinculados.add(Number(tutor.id_usuario)));
+    });
+
+    const otros = personasFiltradas.filter((usuario) => {
+      const usuarioId = Number(usuario.id_usuario);
+      return !idsConCanal.has(usuarioId) && !idsVinculados.has(usuarioId);
+    }).sort((a, b) => getNombre(a.id_usuario).localeCompare(getNombre(b.id_usuario)));
+
+    return { cursos, otros };
+  }, [personasParaNuevoChat, miembrosCanal, canales, alumnosConTutores, busquedaUsuario, rolesPorUsuario, relaciones, usuarios]);
 
   const mostrarToast = (msg, tipo = "success") => {
     setToast({ msg, tipo });
@@ -829,21 +997,26 @@ export default function Mensajes() {
             {canalesFiltrados.length > 0 && (
               <>
                 <p className="mensajes__section-title">Canales</p>
-                {canalesFiltrados.map((canal) => (
-                  <button key={`c-${canal.id_canal}`} className={`mensajes__item ${chatActivo?.tipo === "canal" && chatActivo?.id === canal.id_canal ? "mensajes__item--active" : ""}`} onClick={() => setChatActivo({ tipo: "canal", id: canal.id_canal, nombre: canal.nombre })}>
-                    <div className="mensajes__avatar mensajes__avatar--canal"><Hash size={20} /></div>
-                    <div className="mensajes__item-content">
-                      <div className="mensajes__item-top">
-                        <span className="mensajes__item-name">{canal.nombre}</span>
-                        {noLeidos[`canal-${canal.id_canal}`] > 0 && (
-                          <span style={{ backgroundColor: "var(--color-turquesa-claro)", color: "white", borderRadius: "50%", padding: "2px 6px", fontSize: "0.7rem", fontWeight: "bold" }}>
-                            {noLeidos[`canal-${canal.id_canal}`]}
-                          </span>
-                        )}
-                      </div>
-                      <p className="mensajes__item-snippet">Canal de {canal.tipo}</p>
-                    </div>
-                  </button>
+                {canalesPorServidor.map((grupo) => (
+                  <div key={`servidor-canal-${grupo.servidor.nombre}`}>
+                    <p className="mensajes__server-title">{grupo.servidor.nombre}</p>
+                    {grupo.canales.map((canal) => (
+                      <button key={`c-${canal.id_canal}`} className={`mensajes__item ${chatActivo?.tipo === "canal" && chatActivo?.id === canal.id_canal ? "mensajes__item--active" : ""}`} onClick={() => setChatActivo({ tipo: "canal", id: canal.id_canal, nombre: canal.nombre })}>
+                        <div className="mensajes__avatar mensajes__avatar--canal"><Hash size={20} /></div>
+                        <div className="mensajes__item-content">
+                          <div className="mensajes__item-top">
+                            <span className="mensajes__item-name">{canal.nombre}</span>
+                            {noLeidos[`canal-${canal.id_canal}`] > 0 && (
+                              <span style={{ backgroundColor: "var(--color-turquesa-claro)", color: "white", borderRadius: "50%", padding: "2px 6px", fontSize: "0.7rem", fontWeight: "bold" }}>
+                                {noLeidos[`canal-${canal.id_canal}`]}
+                              </span>
+                            )}
+                          </div>
+                          <p className="mensajes__item-snippet">Canal de {canal.tipo}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 ))}
               </>
             )}
@@ -851,22 +1024,41 @@ export default function Mensajes() {
             {usuariosFiltrados.length > 0 && (
               <>
                 <p className="mensajes__section-title">Mensajes Directos</p>
-                {usuariosFiltrados.map((u) => (
-                  <button key={`u-${u.id_usuario}`} className={`mensajes__item ${chatActivo?.tipo === "directo" && chatActivo?.id === u.id_usuario ? "mensajes__item--active" : ""}`} onClick={() => setChatActivo({ tipo: "directo", id: u.id_usuario, nombre: getNombre(u.id_usuario) })}>
-                    <div className="mensajes__avatar">{u.perfil?.foto_perfil ? <img src={u.perfil.foto_perfil} alt={`Foto de ${getNombre(u.id_usuario)}`} /> : getNombre(u.id_usuario).charAt(0).toUpperCase()}</div>
-                    <div className="mensajes__item-content">
-                      <div className="mensajes__item-top">
-                        <span className="mensajes__item-name">{getNombre(u.id_usuario)}</span>
-                        {noLeidos[`directo-${u.id_usuario}`] > 0 && (
-                          <span style={{ backgroundColor: "var(--color-turquesa-claro)", color: "white", borderRadius: "50%", padding: "2px 6px", fontSize: "0.7rem", fontWeight: "bold" }}>
-                            {noLeidos[`directo-${u.id_usuario}`]}
-                          </span>
-                        )}
-                      </div>
-                      <p className="mensajes__item-snippet">{getUltimoMensaje(u.id_usuario)}</p>
+                {[{ clave: "profesores", titulo: "Profesores" }, { clave: "alumnos", titulo: "Alumnos" }, { clave: "tutores", titulo: "Tutores" }, { clave: "administrativos", titulo: "Administrativos" }].map((grupo) =>
+                  contactosPorRol[grupo.clave].length > 0 && (
+                    <div key={`directos-${grupo.clave}`}>
+                      <p className="mensajes__server-title">{grupo.titulo}</p>
+                      {contactosPorRol[grupo.clave].map((u) => {
+                        const rolesUsuario = nombresRolesUsuario(u);
+                        const alumnosDeTutor = rolesUsuario.includes("tutor") ? obtenerAlumnosDeTutor(u.id_usuario) : [];
+                        const cargo = rolesUsuario.includes("tutor")
+                          ? alumnosDeTutor.length === 1
+                            ? `Tutor de ${alumnosDeTutor[0]}`
+                            : alumnosDeTutor.length > 1
+                              ? `Tutor de ${alumnosDeTutor[0]} y ${alumnosDeTutor.length - 1} más`
+                              : "Tutor"
+                          : rolPrincipalDe(u, rolesPorUsuario.get(u.id_usuario) || []) || (rolesUsuario.includes("alumno") ? "Alumno" : rolesUsuario.includes("profesor") ? "Profesor" : "Usuario");
+                        return (
+                          <button key={`u-${u.id_usuario}`} className={`mensajes__item ${chatActivo?.tipo === "directo" && chatActivo?.id === u.id_usuario ? "mensajes__item--active" : ""}`} onClick={() => setChatActivo({ tipo: "directo", id: u.id_usuario, nombre: getNombre(u.id_usuario) })}>
+                            <div className="mensajes__avatar">{u.perfil?.foto_perfil ? <img src={u.perfil.foto_perfil} alt={`Foto de ${getNombre(u.id_usuario)}`} /> : getNombre(u.id_usuario).charAt(0).toUpperCase()}</div>
+                            <div className="mensajes__item-content">
+                              <div className="mensajes__item-top">
+                                <span className="mensajes__item-name">{getNombre(u.id_usuario)}</span>
+                                {noLeidos[`directo-${u.id_usuario}`] > 0 && (
+                                  <span style={{ backgroundColor: "var(--color-turquesa-claro)", color: "white", borderRadius: "50%", padding: "2px 6px", fontSize: "0.7rem", fontWeight: "bold" }}>
+                                    {noLeidos[`directo-${u.id_usuario}`]}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mensajes__item-snippet">{getUltimoMensaje(u.id_usuario)}</p>
+                              <p className="mensajes__contact-cargo">{cargo}</p>
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
-                  </button>
-                ))}
+                  )
+                )}
               </>
             )}
 
@@ -987,209 +1179,166 @@ export default function Mensajes() {
             </div>
 
             <div className="mensajes__new-message-list">
-              {pestanaNuevoChat === "canal" && canalesParaNuevoChat
-                .filter((canal) => canal.nombre.toLowerCase().includes(busquedaUsuario.toLowerCase()))
-                .map((canal) => {
-                  const seleccionado = destinoNuevoChat?.tipo === "canal" &&
-                    Number(destinoNuevoChat.id) === Number(canal.id_canal);
-                  const tipoCanal = String(canal.tipo || "chat").toLowerCase() === "informativo"
-                    ? "📢 Informativo"
-                    : "💬 Chat";
-                  return (
-                    <button
-                      key={`nuevo-canal-${canal.id_canal}`}
-                      type="button"
-                      className={`mensajes__new-message-item${seleccionado ? " mensajes__new-message-item--selected" : ""}`}
-                      onClick={() => setDestinoNuevoChat({ tipo: "canal", id: canal.id_canal, nombre: canal.nombre })}
-                    >
-                      <div className="mensajes__avatar mensajes__avatar--canal"><Hash size={18} /></div>
-                      <div>
-                        <p className="mensajes__contact-name">{canal.nombre}</p>
-                        <p className="mensajes__contact-cargo">{tipoCanal}</p>
-                      </div>
-                    </button>
-                  );
-                })}
+              {pestanaNuevoChat === "canal" && canalesModalPorServidor.map((grupo) => (
+                <div key={`modal-servidor-canal-${grupo.servidor.nombre}`}>
+                  <p className="mensajes__server-title">{grupo.servidor.nombre}</p>
+                  {grupo.canales.map((canal) => {
+                    const seleccionado = destinoNuevoChat?.tipo === "canal" &&
+                      Number(destinoNuevoChat.id) === Number(canal.id_canal);
+                    const tipoCanal = String(canal.tipo || "chat").toLowerCase() === "informativo"
+                      ? "📢 Informativo"
+                      : "💬 Chat";
+                    return (
+                      <button
+                        key={`nuevo-canal-${canal.id_canal}`}
+                        type="button"
+                        className={`mensajes__new-message-item${seleccionado ? " mensajes__new-message-item--selected" : ""}`}
+                        onClick={() => setDestinoNuevoChat({ tipo: "canal", id: canal.id_canal, nombre: canal.nombre })}
+                      >
+                        <div className="mensajes__avatar mensajes__avatar--canal"><Hash size={18} /></div>
+                        <div>
+                          <p className="mensajes__contact-name">{canal.nombre}</p>
+                          <p className="mensajes__contact-cargo">{tipoCanal}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
 
-              {pestanaNuevoChat === "persona" && puedeAgruparAlumnos && (
+              {pestanaNuevoChat === "persona" && (
                 <>
-                  <div className="mensajes__alumnos-seccion">
-                    <p className="mensajes__alumnos-seccion-titulo">Alumnos</p>
-                    {alumnosConTutores
-                      .filter(({ alumno, tutores }) => {
-                        const texto = busquedaUsuario.trim().toLowerCase();
-                        if (!texto) return true;
-                        const coincideAlumno = getNombre(alumno.id_usuario).toLowerCase().includes(texto) ||
-                          String(alumno.nombre_usuario || "").toLowerCase().includes(texto);
-                        const coincideTutor = tutores.some(({ tutor }) =>
-                          getNombre(tutor.id_usuario).toLowerCase().includes(texto) ||
-                          String(tutor.nombre_usuario || "").toLowerCase().includes(texto)
-                        );
-                        return coincideAlumno || coincideTutor;
-                      })
-                      .map(({ alumno, tutores }) => {
-                        const seleccionadoAlumno = destinoNuevoChat?.tipo === "directo" &&
-                          Number(destinoNuevoChat.id) === Number(alumno.id_usuario);
-                        const abierto = Number(alumnoExpandido) === Number(alumno.id_usuario);
-                        return (
-                          <div className="mensajes__alumno-grupo" key={`alumno-grupo-${alumno.id_usuario}`}>
-                            <button
-                              type="button"
-                              className={`mensajes__alumno-fila mensajes__new-message-item${seleccionadoAlumno ? " mensajes__new-message-item--selected" : ""}${abierto ? " mensajes__alumno-fila--open" : ""}`}
-                              onClick={() => {
-                                setChatActivo({ tipo: "directo", id: alumno.id_usuario, nombre: getNombre(alumno.id_usuario) });
-                                setModalNuevoChat(false);
-                              }}
-                            >
-                              <div className="mensajes__avatar">
-                                {alumno.perfil?.foto_perfil
-                                  ? <img src={alumno.perfil.foto_perfil} alt={`Foto de ${getNombre(alumno.id_usuario)}`} />
-                                  : getNombre(alumno.id_usuario).charAt(0).toUpperCase()}
-                              </div>
-                              <div>
-                                <p className="mensajes__contact-name">{getNombre(alumno.id_usuario)}</p>
-                                <div className="mensajes__contact-meta">
-                                  <span className="mensajes__contact-username">@{alumno.nombre_usuario}</span>
-                                  <span className="mensajes__contact-roles"> · {rolPrincipalDe(alumno, rolesPorUsuario.get(alumno.id_usuario) || []) || "Alumno"}</span>
+                  {contactosPorCurso.cursos.map((grupoCurso) => {
+                    const cursoId = Number(grupoCurso.canal.id_canal);
+                    const cursoAbierto = cursoExpandido === cursoId;
+                    return (
+                    <div key={`nuevo-mensaje-curso-${cursoId}`}>
+                      <button
+                        type="button"
+                        className="mensajes__curso-header"
+                        onClick={() => setCursoExpandido((prev) => Number(prev) === cursoId ? null : cursoId)}
+                        aria-expanded={cursoAbierto}
+                      >
+                        <span>{grupoCurso.canal.nombre}</span>
+                        <ChevronDown className={`mensajes__chev${cursoAbierto ? " mensajes__chev--abierto" : ""}`} size={16} />
+                      </button>
+                      {cursoAbierto && (
+                        <>
+                      {grupoCurso.profesores.length > 0 && (
+                        <div>
+                          <p className="mensajes__alumnos-seccion-titulo">Profesores</p>
+                          {grupoCurso.profesores.map((usuario) => {
+                            const usuarioId = Number(usuario.id_usuario);
+                            const seleccionado = destinoNuevoChat?.tipo === "directo" && Number(destinoNuevoChat.id) === usuarioId;
+                            const cargo = rolPrincipalDe(usuario, rolesPorUsuario.get(usuarioId) || []) || "Profesor";
+                            return (
+                              <button key={`curso-${grupoCurso.canal.id_canal}-profesor-${usuarioId}`} type="button"
+                                className={`mensajes__new-message-item${seleccionado ? " mensajes__new-message-item--selected" : ""}`}
+                                onClick={() => { setChatActivo({ tipo: "directo", id: usuarioId, nombre: getNombre(usuarioId) }); setModalNuevoChat(false); }}>
+                                <div className="mensajes__avatar">
+                                  {usuario.perfil?.foto_perfil
+                                    ? <img src={usuario.perfil.foto_perfil} alt={`Foto de ${getNombre(usuarioId)}`} />
+                                    : getNombre(usuarioId).charAt(0).toUpperCase()}
                                 </div>
-                              </div>
-                            </button>
-
-                            {tutores.length > 0 && (
-                              <button
-                                type="button"
-                                className="mensajes__alumno-tutores-btn"
-                                onClick={() => setAlumnoExpandido(abierto ? null : alumno.id_usuario)}
-                                aria-label="Ver tutores"
-                              >
-                                <span>{tutores.length} tutor{tutores.length === 1 ? "" : "es"}</span>
-                                <ChevronDown size={16} className={abierto ? "mensajes__chev--abierto" : "mensajes__chev"} />
+                                <div><p className="mensajes__contact-name">{getNombre(usuarioId)}</p><p className="mensajes__contact-cargo">{cargo}</p></div>
                               </button>
-                            )}
-
-                            {abierto && (
-                              <div className="mensajes__tutor-sublista">
-                                {tutores
-                                  .filter(({ tutor }) => {
-                                    const texto = busquedaUsuario.trim().toLowerCase();
-                                    if (!texto) return true;
-                                    return getNombre(tutor.id_usuario).toLowerCase().includes(texto) ||
-                                      String(tutor.nombre_usuario || "").toLowerCase().includes(texto);
-                                  })
-                                  .map(({ tutor, tipo }) => {
-                                    const seleccionadoTutor = destinoNuevoChat?.tipo === "directo" &&
-                                      Number(destinoNuevoChat.id) === Number(tutor.id_usuario);
-                                    const tipoTutor = tipo ? tipo.charAt(0).toUpperCase() + tipo.slice(1) : "Tutor";
-                                    return (
-                                      <button
-                                        type="button"
-                                        key={`tutor-${tutor.id_usuario}`}
-                                        className={`mensajes__tutor-fila mensajes__new-message-item${seleccionadoTutor ? " mensajes__new-message-item--selected" : ""}`}
-                                        onClick={() => {
-                                          setChatActivo({ tipo: "directo", id: tutor.id_usuario, nombre: getNombre(tutor.id_usuario) });
-                                          setModalNuevoChat(false);
-                                        }}
-                                      >
-                                        <div className="mensajes__avatar">
-                                          {tutor.perfil?.foto_perfil
-                                            ? <img src={tutor.perfil.foto_perfil} alt={`Foto de ${getNombre(tutor.id_usuario)}`} />
-                                            : getNombre(tutor.id_usuario).charAt(0).toUpperCase()}
-                                        </div>
-                                        <div>
-                                          <p className="mensajes__contact-name">{getNombre(tutor.id_usuario)}</p>
-                                          <div className="mensajes__contact-meta">
-                                            <span className="mensajes__contact-username">@{tutor.nombre_usuario}</span>
-                                            <span className="mensajes__contact-roles"> · {rolPrincipalDe(tutor, rolesPorUsuario.get(tutor.id_usuario) || []) || "Tutor"} ({tipoTutor})</span>
-                                          </div>
-                                        </div>
-                                      </button>
-                                    );
-                                  })}
+                            );
+                          })}
+                        </div>
+                      )}
+                      {grupoCurso.alumnos.length > 0 && (
+                        <div className="mensajes__alumnos-seccion">
+                          <p className="mensajes__alumnos-seccion-titulo">Alumnos</p>
+                          {grupoCurso.alumnos.map(({ alumno, tutores }) => {
+                            const alumnoId = Number(alumno.id_usuario);
+                            const key = `curso-${cursoId}-alumno-${alumnoId}`;
+                            const abierto = alumnoExpandido === key;
+                            const seleccionado = destinoNuevoChat?.tipo === "directo" && Number(destinoNuevoChat.id) === alumnoId;
+                            return (
+                              <div key={`curso-${grupoCurso.canal.id_canal}-alumno-${alumnoId}`} className="mensajes__alumno-grupo">
+                                <button type="button"
+                                  className={`mensajes__new-message-item mensajes__alumno-fila${abierto ? " mensajes__alumno-fila--open" : ""}${seleccionado ? " mensajes__new-message-item--selected" : ""}`}
+                                  onClick={() => { setChatActivo({ tipo: "directo", id: alumnoId, nombre: getNombre(alumnoId) }); setModalNuevoChat(false); }}>
+                                  <div className="mensajes__avatar">
+                                    {alumno.perfil?.foto_perfil
+                                      ? <img src={alumno.perfil.foto_perfil} alt={`Foto de ${getNombre(alumnoId)}`} />
+                                      : getNombre(alumnoId).charAt(0).toUpperCase()}
+                                  </div>
+                                  <div><p className="mensajes__contact-name">{getNombre(alumnoId)}</p><p className="mensajes__contact-cargo">Alumno</p></div>
+                                </button>
+                                {puedeAgruparAlumnos && tutores.length > 0 && (
+                                  <>
+                                    <button type="button" className="mensajes__alumno-tutores-btn"
+                                      onClick={() => setAlumnoExpandido((prev) => prev === key ? null : key)} aria-expanded={abierto}>
+                                      <span>{abierto ? "Ocultar" : "Ver"} tutores ({tutores.length})</span>
+                                      <ChevronDown className={`mensajes__chev${abierto ? " mensajes__chev--abierto" : ""}`} size={15} />
+                                    </button>
+                                    {abierto && (
+                                      <div className="mensajes__tutor-sublista">
+                                        {tutores.map(({ tutor }) => {
+                                          const tutorId = Number(tutor.id_usuario);
+                                          const tutorSeleccionado = destinoNuevoChat?.tipo === "directo" && Number(destinoNuevoChat.id) === tutorId;
+                                          const alumnosDeTutor = obtenerAlumnosDeTutor(tutorId);
+                                          const cargo = alumnosDeTutor.length === 1 ? `Tutor de ${alumnosDeTutor[0]}` : alumnosDeTutor.length > 1 ? `Tutor de ${alumnosDeTutor[0]} y ${alumnosDeTutor.length - 1} más` : "Tutor";
+                                          return (
+                                            <button key={`curso-${grupoCurso.canal.id_canal}-alumno-${alumnoId}-tutor-${tutorId}`} type="button"
+                                              className={`mensajes__new-message-item mensajes__tutor-fila${tutorSeleccionado ? " mensajes__new-message-item--selected" : ""}`}
+                                              onClick={() => { setChatActivo({ tipo: "directo", id: tutorId, nombre: getNombre(tutorId) }); setModalNuevoChat(false); }}>
+                                              <div className="mensajes__avatar">
+                                                {tutor.perfil?.foto_perfil
+                                                  ? <img src={tutor.perfil.foto_perfil} alt={`Foto de ${getNombre(tutorId)}`} />
+                                                  : getNombre(tutorId).charAt(0).toUpperCase()}
+                                              </div>
+                                              <div><p className="mensajes__contact-name">{getNombre(tutorId)}</p><p className="mensajes__contact-cargo">{cargo}</p></div>
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </>
+                                )}
                               </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                  </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                        </>
+                      )}
+                    </div>
+                    );
+                  })}
 
-                  <div className="mensajes__otros-contactos-seccion">
-                    <p className="mensajes__alumnos-seccion-titulo">Otros contactos</p>
-                    {personasParaNuevoChat
-                      .filter((usuario) => {
-                        const texto = busquedaUsuario.trim().toLowerCase();
-                        const idsAgrupados = new Set(alumnosConTutores.flatMap(({ alumno, tutores }) => [
-                          Number(alumno.id_usuario),
-                          ...tutores.map(({ tutor }) => Number(tutor.id_usuario)),
-                        ]));
-                        if (idsAgrupados.has(Number(usuario.id_usuario))) return false;
-                        return !texto || getNombre(usuario.id_usuario).toLowerCase().includes(texto) ||
-                          String(usuario.nombre_usuario || "").toLowerCase().includes(texto);
-                      })
-                      .map((usuario) => {
-                        const seleccionado = destinoNuevoChat?.tipo === "directo" &&
-                          Number(destinoNuevoChat.id) === Number(usuario.id_usuario);
+                  {contactosPorCurso.otros.length > 0 && (
+                    <div>
+                      <p className="mensajes__server-title">Otros contactos</p>
+                      {contactosPorCurso.otros.map((usuario) => {
+                        const usuarioId = Number(usuario.id_usuario);
+                        const seleccionado = destinoNuevoChat?.tipo === "directo" && Number(destinoNuevoChat.id) === usuarioId;
+                        const rolesUsuario = nombresRolesUsuario(usuario);
+                        const alumnosDeTutor = rolesUsuario.includes("tutor") ? obtenerAlumnosDeTutor(usuarioId) : [];
+                        const cargo = rolesUsuario.includes("tutor")
+                          ? alumnosDeTutor.length === 1 ? `Tutor de ${alumnosDeTutor[0]}` : alumnosDeTutor.length > 1 ? `Tutor de ${alumnosDeTutor[0]} y ${alumnosDeTutor.length - 1} más` : "Tutor"
+                          : rolPrincipalDe(usuario, rolesPorUsuario.get(usuarioId) || []) || "Usuario";
                         return (
-                          <button
-                            key={`nuevo-contacto-${usuario.id_usuario}`}
-                            type="button"
+                          <button key={`nuevo-contacto-otro-${usuarioId}`} type="button"
                             className={`mensajes__new-message-item${seleccionado ? " mensajes__new-message-item--selected" : ""}`}
-                            onClick={() => {
-                              setChatActivo({ tipo: "directo", id: usuario.id_usuario, nombre: getNombre(usuario.id_usuario) });
-                              setModalNuevoChat(false);
-                            }}
-                          >
+                            onClick={() => { setChatActivo({ tipo: "directo", id: usuarioId, nombre: getNombre(usuarioId) }); setModalNuevoChat(false); }}>
                             <div className="mensajes__avatar">
                               {usuario.perfil?.foto_perfil
-                                ? <img src={usuario.perfil.foto_perfil} alt={`Foto de ${getNombre(usuario.id_usuario)}`} />
-                                : getNombre(usuario.id_usuario).charAt(0).toUpperCase()}
+                                ? <img src={usuario.perfil.foto_perfil} alt={`Foto de ${getNombre(usuarioId)}`} />
+                                : getNombre(usuarioId).charAt(0).toUpperCase()}
                             </div>
-                            <div>
-                              <p className="mensajes__contact-name">{getNombre(usuario.id_usuario)}</p>
-                              <div className="mensajes__contact-meta">
-                                <span className="mensajes__contact-username">@{usuario.nombre_usuario}</span>
-                                <span className="mensajes__contact-roles"> · {rolPrincipalDe(usuario, rolesPorUsuario.get(usuario.id_usuario) || []) || "Usuario"}</span>
-                              </div>
-                            </div>
+                            <div><p className="mensajes__contact-name">{getNombre(usuarioId)}</p><p className="mensajes__contact-cargo">{cargo}</p></div>
                           </button>
                         );
                       })}
-                  </div>
+                    </div>
+                  )}
+                  {contactosPorCurso.cursos.length === 0 && contactosPorCurso.otros.length === 0 && (
+                    <p className="mensajes__new-message-hint">No se encontraron contactos.</p>
+                  )}
                 </>
               )}
-
-              {pestanaNuevoChat === "persona" && !puedeAgruparAlumnos && personasParaNuevoChat
-                .filter((usuario) =>
-                  getNombre(usuario.id_usuario).toLowerCase().includes(busquedaUsuario.toLowerCase()) ||
-                  String(usuario.nombre_usuario || "").toLowerCase().includes(busquedaUsuario.toLowerCase())
-                )
-                .map((usuario) => {
-                  const seleccionado = destinoNuevoChat?.tipo === "directo" &&
-                    Number(destinoNuevoChat.id) === Number(usuario.id_usuario);
-                  return (
-                    <button
-                      key={`nuevo-contacto-${usuario.id_usuario}`}
-                      type="button"
-                      className={`mensajes__new-message-item${seleccionado ? " mensajes__new-message-item--selected" : ""}`}
-                      onClick={() => {
-                        setChatActivo({ tipo: "directo", id: usuario.id_usuario, nombre: getNombre(usuario.id_usuario) });
-                        setModalNuevoChat(false);
-                      }}
-                    >
-                      <div className="mensajes__avatar">
-                        {usuario.perfil?.foto_perfil
-                          ? <img src={usuario.perfil.foto_perfil} alt={`Foto de ${getNombre(usuario.id_usuario)}`} />
-                          : getNombre(usuario.id_usuario).charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="mensajes__contact-name">{getNombre(usuario.id_usuario)}</p>
-                        <div className="mensajes__contact-meta">
-                          <span className="mensajes__contact-username">@{usuario.nombre_usuario}</span>
-                          <span className="mensajes__contact-roles"> · {rolPrincipalDe(usuario, rolesPorUsuario.get(usuario.id_usuario) || []) || "Usuario"}</span>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
 
               {pestanaNuevoChat === "canal" && canalesParaNuevoChat
                 .filter((canal) => canal.nombre.toLowerCase().includes(busquedaUsuario.toLowerCase())).length === 0 && (

@@ -12,11 +12,11 @@ class Comunicado(Base):
     contenido = Column(Text, nullable=False)
     fecha_publicacion = Column(DateTime, default=datetime.utcnow)
     fecha_evento = Column(DateTime, nullable=True)
-    publicado_por = Column(Integer, ForeignKey("usuario.id_usuario"), nullable=False)
+    publicado_por = Column(Integer, ForeignKey("usuario.id_usuario", ondelete="SET NULL"), nullable=False)
     tipo = Column(String(20), nullable=False, default="global")
     eliminado = Column(Boolean, nullable=False, default=False, server_default="false")
 
-    autor = relationship("Usuario", foreign_keys=[publicado_por])
+    autor = relationship("Usuario", foreign_keys=[publicado_por], back_populates="comunicados")
 
     destinatarios = relationship(
         "ComunicadoDestinatario",

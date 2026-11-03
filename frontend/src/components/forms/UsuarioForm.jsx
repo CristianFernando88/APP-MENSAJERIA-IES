@@ -7,6 +7,7 @@ import Button from "../ui/Button/Button";
 export default function UsuarioForm({
   usuarioInicial = null,
   rolesDisponibles = [],
+  servidoresDisponibles = [],
   mostrarServidores = false,
   mostrarRolesGlobales = false,
   onSubmit,
@@ -68,10 +69,10 @@ export default function UsuarioForm({
     
     // Si es nuevo, la contraseña es obligatoria. Si es edición, es opcional.
     if (!usuarioInicial) {
-      if (!form.password || form.password.length < 6) return setError("La contraseña debe tener al menos 6 caracteres.");
+      if (!form.password || form.password.length < 8) return setError("La contraseña debe tener al menos 8 caracteres.");
       if (form.password !== form.confirmar_password) return setError("Las contraseñas no coinciden.");
     } else if (form.password) {
-      if (form.password.length < 6) return setError("La nueva contraseña debe tener al menos 6 caracteres.");
+      if (form.password.length < 8) return setError("La nueva contraseña debe tener al menos 8 caracteres.");
       if (form.password !== form.confirmar_password) return setError("Las contraseñas no coinciden.");
     }
 
@@ -108,7 +109,7 @@ export default function UsuarioForm({
             type={verClave ? "text" : "password"} 
             value={form.password} 
             onChange={handleChange} 
-            placeholder={usuarioInicial ? "Dejar vacío para no cambiar" : "Mínimo 6 caracteres"} 
+            placeholder={usuarioInicial ? "Dejar vacío para no cambiar" : "Mínimo 8 caracteres"} 
             style={{ width: "100%" }}
           />
           <button type="button" onClick={() => setVerClave(!verClave)}>
@@ -143,7 +144,7 @@ export default function UsuarioForm({
         <div className="admin-grupo" style={{ marginTop: "1rem" }}>
           <span className="admin-grupo-label" style={{ fontWeight: "bold", fontSize: "14px", display: "block", marginBottom: "8px" }}>Servidores a los que pertenece</span>
           <div className="admin-checks" style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-            {usuarioInicial?.servidores_disponibles?.map((s) => (
+            {servidoresDisponibles.map((s) => (
               <label key={s.id_servidor} className="admin-check" style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 10px", background: "var(--color-gris-azulado)", borderRadius: "6px", cursor: "pointer" }}>
                 <input type="checkbox" checked={form.servidores_ids.includes(s.id_servidor)} onChange={() => toggleServidor(s.id_servidor)} />
                 <span style={{ fontSize: "13px" }}>{s.nombre}</span>
