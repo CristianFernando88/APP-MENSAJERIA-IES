@@ -1,9 +1,10 @@
 """Punto de entrada FastAPI."""
 import os  # <-- NUEVO: Importamos os para leer las variables de entorno
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.db import engine
+from app.core.deps import get_usuario_actual
 from app import models  # noqa: F401 — registra los modelos en Base.metadata
 from app import cloudinary_config
 
@@ -57,25 +58,25 @@ app.add_middleware(
 
 # Aca van los routers
 app.include_router(auth_router, prefix="/api/v1")
-app.include_router(usuarios_router, prefix="/api/v1")
-app.include_router(perfiles_router, prefix="/api/v1")
-app.include_router(servidores_router, prefix="/api/v1")
-app.include_router(categorias_router, prefix="/api/v1")
-app.include_router(canales_router, prefix="/api/v1")
-app.include_router(mensajes_router, prefix="/api/v1")
-app.include_router(miembro_servidor_router, prefix="/api/v1")
-app.include_router(mensaje_directo_router, prefix="/api/v1")
-app.include_router(miembro_canal_router, prefix="/api/v1")
-app.include_router(roles_router, prefix="/api/v1")
-app.include_router(usuario_rol_router, prefix="/api/v1")
-app.include_router(comunicados_router, prefix="/api/v1")
-app.include_router(comunicado_destinatario_router, prefix="/api/v1")
-app.include_router(recordatorios_router, prefix="/api/v1")
-app.include_router(notificaciones_router, prefix="/api/v1")
-app.include_router(comunicado_visto_router, prefix="/api/v1")
-app.include_router(comunicado_adjunto_router, prefix="/api/v1")
-app.include_router(mensaje_visto_router, prefix="/api/v1")
-app.include_router(relacion_usuario_router, prefix="/api/v1")
+app.include_router(usuarios_router, prefix="/api/v1", dependencies=[Depends(get_usuario_actual)])
+app.include_router(perfiles_router, prefix="/api/v1", dependencies=[Depends(get_usuario_actual)])
+app.include_router(servidores_router, prefix="/api/v1", dependencies=[Depends(get_usuario_actual)])
+app.include_router(categorias_router, prefix="/api/v1", dependencies=[Depends(get_usuario_actual)])
+app.include_router(canales_router, prefix="/api/v1", dependencies=[Depends(get_usuario_actual)])
+app.include_router(mensajes_router, prefix="/api/v1", dependencies=[Depends(get_usuario_actual)])
+app.include_router(miembro_servidor_router, prefix="/api/v1", dependencies=[Depends(get_usuario_actual)])
+app.include_router(mensaje_directo_router, prefix="/api/v1", dependencies=[Depends(get_usuario_actual)])
+app.include_router(miembro_canal_router, prefix="/api/v1", dependencies=[Depends(get_usuario_actual)])
+app.include_router(roles_router, prefix="/api/v1", dependencies=[Depends(get_usuario_actual)])
+app.include_router(usuario_rol_router, prefix="/api/v1", dependencies=[Depends(get_usuario_actual)])
+app.include_router(comunicados_router, prefix="/api/v1", dependencies=[Depends(get_usuario_actual)])
+app.include_router(comunicado_destinatario_router, prefix="/api/v1", dependencies=[Depends(get_usuario_actual)])
+app.include_router(recordatorios_router, prefix="/api/v1", dependencies=[Depends(get_usuario_actual)])
+app.include_router(notificaciones_router, prefix="/api/v1", dependencies=[Depends(get_usuario_actual)])
+app.include_router(comunicado_visto_router, prefix="/api/v1", dependencies=[Depends(get_usuario_actual)])
+app.include_router(comunicado_adjunto_router, prefix="/api/v1", dependencies=[Depends(get_usuario_actual)])
+app.include_router(mensaje_visto_router, prefix="/api/v1", dependencies=[Depends(get_usuario_actual)])
+app.include_router(relacion_usuario_router, prefix="/api/v1", dependencies=[Depends(get_usuario_actual)])
 
 
 # ============================================
