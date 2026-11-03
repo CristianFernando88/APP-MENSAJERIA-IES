@@ -27,11 +27,18 @@ function CanalListener({ canalId, userId, onNuevoMensaje }) {
 
 // NUEVO: permisos por rol institucional y rol dentro del canal
 function puedeEscribirEnCanal({ user, canal, miRolEnCanal, esTutorPuroFlag, nombresRoles }) {
-  if (!user || !canal || !miRolEnCanal || miRolEnCanal === "observador" || esTutorPuroFlag) return false;
+  if (!user || !canal) return false;
+
+  const tipo = String(canal.tipo || "chat").toLowerCase();
+
+  if (esTutorPuroFlag) {
+    return tipo !== "informativo";
+  }
+
+  if (!miRolEnCanal || miRolEnCanal === "observador") return false;
   if (!["admin", "miembro"].includes(miRolEnCanal)) return false;
 
   const rolInstitucional = nombresRoles || [];
-  const tipo = String(canal.tipo || "chat").toLowerCase();
   const puedeEscribirInformativo = rolInstitucional.includes("super_admin") ||
     rolInstitucional.includes("admin") || rolInstitucional.includes("director") ||
     (rolInstitucional.includes("profesor") && miRolEnCanal === "admin");
@@ -41,7 +48,10 @@ function puedeEscribirEnCanal({ user, canal, miRolEnCanal, esTutorPuroFlag, nomb
 }
 
 function motivoSoloLectura({ user, canal, miRolEnCanal, esTutorPuroFlag }) {
-  if (esTutorPuroFlag) return "los tutores tienen acceso de lectura";
+  if (esTutorPuroFlag && String(canal?.tipo || "chat").toLowerCase() === "informativo") {
+    return "los tutores solo pueden leer en canales informativos";
+  }
+  if (esTutorPuroFlag) return "los tutores solo pueden escribir en canales de chat";
   if (miRolEnCanal === "observador") return "tu rol en el canal es observador";
   if (String(canal?.tipo || "chat").toLowerCase() === "informativo" && miRolEnCanal !== "admin") {
     return "solo los administradores pueden escribir en canales informativos";
@@ -293,6 +303,37 @@ export default function Mensajes() {
           misCanales = resCanales.filter(c => misIdsCanales.includes(Number(c.id_canal)));
         }
 
+        if (esTutorPuroFlag) {
+          const tutorId = Number(user.id_usuario);
+          const idsHijos = new Set();
+
+          (Array.isArray(resRelaciones) ? resRelaciones : []).forEach((relacion) => {
+            const tipo = String(relacion.tipo || "").trim().toLowerCase();
+            if (!["tutor", "padre", "madre"].includes(tipo)) return;
+
+            const usuarioId = Number(relacion.usuario_id);
+            const relacionadoId = Number(relacion.relacionado_id);
+            if (usuarioId === tutorId) idsHijos.add(relacionadoId);
+            if (relacionadoId === tutorId) idsHijos.add(usuarioId);
+          });
+
+          const idsCanalesIndirectos = new Set();
+          resMiembros.forEach((miembro) => {
+            if (idsHijos.has(Number(miembro.usuario_id))) {
+              idsCanalesIndirectos.add(Number(miembro.canal_id));
+            }
+          });
+
+          const canalesExistentes = new Set(misCanales.map((canal) => Number(canal.id_canal)));
+          resCanales.forEach((canal) => {
+            const canalId = Number(canal.id_canal);
+            if (idsCanalesIndirectos.has(canalId) && !canalesExistentes.has(canalId)) {
+              misCanales = [...misCanales, canal];
+              canalesExistentes.add(canalId);
+            }
+          });
+        }
+
         setCanales(misCanales);
         setUsuarios(resUsuarios);
         setMiembrosCanal(resMiembros);
@@ -539,6 +580,46 @@ export default function Mensajes() {
       if (Number(dm.receptor_id) === Number(user.id_usuario)) idsHistorial.add(Number(dm.emisor_id));
     });
 
+    if (esTutorPuroFlag) {
+      const tutorId = Number(user.id_usuario);
+      const idsHijos = new Set();
+
+      relaciones.forEach((relacion) => {
+        const tipo = String(relacion.tipo || "").trim().toLowerCase();
+        if (!["tutor", "padre", "madre"].includes(tipo)) return;
+
+        const usuarioId = Number(relacion.usuario_id);
+        const relacionadoId = Number(relacion.relacionado_id);
+        if (usuarioId === tutorId) idsHijos.add(relacionadoId);
+        if (relacionadoId === tutorId) idsHijos.add(usuarioId);
+      });
+
+      const idsCanalesIndirectos = new Set();
+      miembrosCanal.forEach((miembro) => {
+        if (idsHijos.has(Number(miembro.usuario_id))) {
+          idsCanalesIndirectos.add(Number(miembro.canal_id));
+        }
+      });
+
+      const idsAdminsPermitidos = new Set();
+      miembrosCanal.forEach((miembro) => {
+        if (
+          idsCanalesIndirectos.has(Number(miembro.canal_id)) &&
+          String(miembro.rol_en_canal || "").toLowerCase() === "admin"
+        ) {
+          idsAdminsPermitidos.add(Number(miembro.usuario_id));
+        }
+      });
+
+      return usuarios
+        .filter((usuario) => {
+          const usuarioId = Number(usuario.id_usuario);
+          return usuarioId !== tutorId && idsAdminsPermitidos.has(usuarioId);
+        })
+        .filter((usuario) => getNombre(usuario.id_usuario).toLowerCase().includes(busquedaUsuario.toLowerCase()))
+        .sort((a, b) => getNombre(a.id_usuario).localeCompare(getNombre(b.id_usuario)));
+    }
+
     const misCanalesIds = miembrosCanal
       .filter((m) => Number(m.usuario_id) === Number(user.id_usuario))
       .map((m) => Number(m.canal_id));
@@ -560,12 +641,11 @@ export default function Mensajes() {
       if (Number(u.id_usuario) === Number(user.id_usuario)) return false;
       const rolesUsuario = nombresRolesUsuario(u);
       if (esAlumno) return idsHistorial.has(Number(u.id_usuario));
-      if (esTutorPuroFlag) return !rolesUsuario.includes("alumno") && !rolesUsuario.includes("tutor");
       if (rolesUsuario.includes("alumno") && !nombresRoles.includes("admin") && !nombresRoles.includes("super_admin") && !nombresRoles.includes("director") && !nombresRoles.includes("profesor")) return false;
       if (nombresRoles.includes("profesor") && rolesUsuario.includes("alumno")) return false;
       return getNombre(u.id_usuario).toLowerCase().includes(busquedaUsuario.toLowerCase());
     }).sort((a, b) => getNombre(a.id_usuario).localeCompare(getNombre(b.id_usuario)));
-  }, [usuarios, miembrosCanal, mensajesDirectos, contactosPermitidosBackend, user, busquedaUsuario, esAlumno, esTutorPuroFlag, nombresRoles]);
+  }, [usuarios, miembrosCanal, mensajesDirectos, contactosPermitidosBackend, relaciones, user, busquedaUsuario, esAlumno, esTutorPuroFlag, nombresRoles]);
 
   const puedeAgruparAlumnos = nombresRoles.some((rol) =>
     ["super_admin", "admin", "director", "profesor"].includes(rol)
@@ -813,7 +893,9 @@ export default function Mensajes() {
                     </span>
                   )}
                   {chatActivo.tipo === "canal" && esTutorPuroFlag && (
-                    <span className="mensajes__rol-badge mensajes__rol-badge--observador">Tutor (lectura)</span>
+                    <span className="mensajes__rol-badge mensajes__rol-badge--observador">
+                      {String(canalActivo?.tipo || "chat").toLowerCase() === "informativo" ? "Tutor (lectura)" : "Tutor"}
+                    </span>
                   )}
                 </div>
                 {chatActivo.tipo === "canal" && miRolEnCanalActivo === "admin" && (
