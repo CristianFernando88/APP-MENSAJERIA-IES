@@ -30,6 +30,14 @@ export function useWebSocket(path, onMessageReceived) {
       return;
     }
 
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      console.error("No hay token disponible para abrir el WebSocket");
+      setIsConnected(false);
+      return;
+    }
+    fullUrl += `?token=${encodeURIComponent(token)}`;
+
     let reconnectTimer;
     let isIntentionalClose = false;
 

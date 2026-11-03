@@ -1,8 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
-from sqlalchemy.orm import Session
 import json
 
+import jwt
+from fastapi import APIRouter, Depends, HTTPException, Query, status, WebSocket, WebSocketDisconnect
+from sqlalchemy.orm import Session
+
 from app.core.db import get_db, SessionLocal
+from app.core.security import decodificar_token
+from app.core.deps import get_usuario_actual
 from app.core.ws_manager import manager  # Importamos el manager global
 from . import repository as repo
 from .schemas import (
@@ -21,13 +25,17 @@ router = APIRouter(
 # ==========================================
 
 @router.get("/", response_model=list[MensajeDirectoResponse])
-def listar(db: Session = Depends(get_db)):
+def listar(
+    db: Session = Depends(get_db),
+    _: object = Depends(get_usuario_actual),
+):
     return repo.list_mensajes_directos(db)
 
 @router.get("/{mensaje_directo_id}", response_model=MensajeDirectoResponse)
 def obtener(
     mensaje_directo_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: object = Depends(get_usuario_actual),
 ):
     mensaje = repo.get_by_id(db, mensaje_directo_id)
 
@@ -46,7 +54,8 @@ def obtener(
 )
 def crear(
     data: MensajeDirectoCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: object = Depends(get_usuario_actual),
 ):
     ok, error = repo.ensure_usuario(db, data.emisor_id)
     if not ok:
@@ -65,7 +74,8 @@ def crear(
 def actualizar(
     mensaje_directo_id: int,
     data: MensajeDirectoUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: object = Depends(get_usuario_actual),
 ):
     updated = repo.update(db, mensaje_directo_id, data)
 
@@ -83,7 +93,8 @@ def actualizar(
 )
 def eliminar(
     mensaje_directo_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: object = Depends(get_usuario_actual),
 ):
     if not repo.delete(db, mensaje_directo_id):
         raise HTTPException(
@@ -98,8 +109,23 @@ def eliminar(
 # ==========================================
 
 @router.websocket("/ws/directo/{usuario_id}")
-async def websocket_directo(websocket: WebSocket, usuario_id: int):
-    await manager.connect_directo(websocket, usuario_id)
+async def websocket_directo(
+    websocket: WebSocket,
+    usuario_id: int,
+    token: str | None = Query(default=None),
+):
+    try:
+        payload = decodificar_token(token) if token else None
+        usuario_autenticado_id = int(payload["sub"])
+    except (jwt.PyJWTError, KeyError, TypeError, ValueError):
+        await websocket.close(code=1008)
+        return
+
+    if usuario_autenticado_id != usuario_id:
+        await websocket.close(code=1008)
+        return
+
+    await manager.connect_directo(websocket, usuario_autenticado_id)
     db = SessionLocal()
     try:
         while True:
@@ -108,7 +134,7 @@ async def websocket_directo(websocket: WebSocket, usuario_id: int):
             
             mensaje_data = MensajeDirectoCreate(
                 contenido=data["contenido"],
-                emisor_id=usuario_id,
+                emisor_id=usuario_autenticado_id,
                 receptor_id=data["receptor_id"]
             )
             nuevo = repo.create(db, mensaje_data)
@@ -128,11 +154,11 @@ async def websocket_directo(websocket: WebSocket, usuario_id: int):
                     await ws.send_json(payload)
                 
             # Enviamos al emisor (a TODAS sus conexiones activas)
-            if usuario_id in manager.directos:
-                for ws in manager.directos[usuario_id]:
+            if usuario_autenticado_id in manager.directos:
+                for ws in manager.directos[usuario_autenticado_id]:
                     await ws.send_json(payload)
 
     except WebSocketDisconnect:
-        manager.disconnect_directo(websocket, usuario_id)
+        manager.disconnect_directo(websocket, usuario_autenticado_id)
     finally:
         db.close()
