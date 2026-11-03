@@ -522,8 +522,12 @@ export default function Mensajes() {
   };
 
   const getNombre = (id) => {
-    const u = usuarios.find(x => x.id_usuario === id);
-    return u?.perfil ? `${u.perfil.nombres} ${u.perfil.apellidos}` : u?.nombre_usuario || "Desconocido";
+    if (id == null) return "Usuario eliminado";
+
+    const u = usuarios.find(x => Number(x.id_usuario) === Number(id));
+    return u?.perfil
+      ? `${u.perfil.nombres} ${u.perfil.apellidos}`
+      : u?.nombre_usuario || "Desconocido";
   };
 
   const getFotoPerfil = (id) => {

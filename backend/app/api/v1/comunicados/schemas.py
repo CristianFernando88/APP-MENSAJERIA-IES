@@ -25,7 +25,7 @@ class ComunicadoResponse(ComunicadoBase):
     id_comunicado: int
     fecha_publicacion: datetime
     fecha_evento: datetime | None = None
-    publicado_por: int
+    publicado_por: int | None = None
 
     class Config:
         from_attributes = True

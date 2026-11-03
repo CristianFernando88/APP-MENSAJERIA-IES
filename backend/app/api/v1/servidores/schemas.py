@@ -18,7 +18,7 @@ class ServidorUpdate(BaseModel):
 class ServidorResponse(ServidorBase):
     id_servidor: int
     fecha_creacion: datetime
-    creador_id: int
+    creador_id: int | None = None
 
     class Config:
         from_attributes = True

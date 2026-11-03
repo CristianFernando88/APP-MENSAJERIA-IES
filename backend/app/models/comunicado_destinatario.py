@@ -10,7 +10,7 @@ class ComunicadoDestinatario(Base):
     comunicado_id = Column(Integer,ForeignKey("comunicado.id_comunicado", ondelete="CASCADE"),nullable=False)
     servidor_id = Column(Integer, ForeignKey("servidor.id_servidor"), nullable=True)
     canal_id = Column(Integer, ForeignKey("canal.id_canal"), nullable=True)
-    usuario_id = Column(Integer, ForeignKey("usuario.id_usuario"), nullable=True)
+    usuario_id = Column(Integer, ForeignKey("usuario.id_usuario", ondelete="CASCADE"), nullable=True)
 
     comunicado = relationship("Comunicado", back_populates="destinatarios")
     servidor = relationship("Servidor")

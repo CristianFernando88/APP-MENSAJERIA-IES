@@ -26,7 +26,7 @@ class CanalUpdate(BaseModel):
 class CanalResponse(CanalBase):
     id_canal: int
     servidor_id: int
-    creador_id: int
+    creador_id: int | None = None
     categoria_id: int | None = None
 
     class Config:

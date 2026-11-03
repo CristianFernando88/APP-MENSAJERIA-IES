@@ -386,6 +386,7 @@ export default function UsuariosTab({
           <UsuarioForm 
             usuarioInicial={datosUsuarioInicial}
             rolesDisponibles={roles}
+            servidoresDisponibles={servidores}
             mostrarServidores={true}
             mostrarRolesGlobales={true}
             guardando={guardando}

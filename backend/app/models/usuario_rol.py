@@ -12,7 +12,7 @@ class UsuarioRol(Base):
     rol_id = Column(Integer, ForeignKey("rol.id_rol"), nullable=False)
     servidor_id = Column(Integer, ForeignKey("servidor.id_servidor"), nullable=True)
     fecha_asignacion = Column(DateTime, default=datetime.utcnow)
-    asignado_por = Column(Integer, ForeignKey("usuario.id_usuario"), nullable=True)
+    asignado_por = Column(Integer, ForeignKey("usuario.id_usuario", ondelete="SET NULL"), nullable=True)
 
     # Relaciones
     usuario = relationship("Usuario", foreign_keys=[usuario_id], back_populates="roles")
