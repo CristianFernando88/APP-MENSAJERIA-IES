@@ -4,6 +4,7 @@ import { listarDestinatarios } from "../api/comunicadosDestinatarios";
 import { listarVistos } from "../api/comunicadosVistos";
 import { listarMiembrosCanal } from "../api/miembrosCanal";
 import { listarMiembrosServidor } from "../api/miembrosServidor";
+import { listarRelaciones } from "../api/relacionesUsuario";
 import { useAuth } from "../context/AuthContext";
 
 export default function useComunicadosNoLeidos() {
@@ -20,35 +21,62 @@ export default function useComunicadosNoLeidos() {
       }
 
       try {
-        const [com, dest, vis, mc, ms] = await Promise.all([
+        const [com, dest, vis, mc, ms, relaciones] = await Promise.all([
           listarComunicados(),
           listarDestinatarios(),
           listarVistos(),
           listarMiembrosCanal(),
           listarMiembrosServidor(),
+          listarRelaciones(),
         ]);
         if (!vivo) return;
 
-        const misCanales = mc.filter((m) => m.usuario_id === user.id_usuario).map((m) => m.canal_id);
-        const misServidores = ms.filter((m) => m.usuario_id === user.id_usuario).map((m) => m.servidor_id);
+        const usuarioId = Number(user.id_usuario);
+        const hijosIds = new Set();
+
+        relaciones.forEach((r) => {
+          const usuarioRel = Number(r.usuario_id);
+          const relacionado = Number(r.relacionado_id);
+          const tipo = String(r.tipo ?? r.tipo_relacion ?? "").toLowerCase();
+          if (tipo && !["tutor", "padre", "madre"].includes(tipo)) return;
+
+          if (usuarioRel === usuarioId && relacionado !== usuarioId) hijosIds.add(relacionado);
+          if (relacionado === usuarioId && usuarioRel !== usuarioId) hijosIds.add(usuarioRel);
+        });
+
+        const misCanales = new Set();
+        mc.forEach((m) => {
+          if (Number(m.usuario_id) === usuarioId || hijosIds.has(Number(m.usuario_id))) {
+            misCanales.add(Number(m.canal_id));
+          }
+        });
+
+        const misServidores = new Set();
+        ms.forEach((m) => {
+          if (Number(m.usuario_id) === usuarioId || hijosIds.has(Number(m.usuario_id))) {
+            misServidores.add(Number(m.servidor_id));
+          }
+        });
 
         const vistosIds = new Set(
-          vis.filter((v) => v.usuario_id === user.id_usuario).map((v) => v.comunicado_id)
+          vis
+            .filter((v) => Number(v.usuario_id) === usuarioId)
+            .map((v) => Number(v.comunicado_id))
         );
 
         const meCorresponde = (comunicadoId) => {
-          const destinos = dest.filter((d) => d.comunicado_id === comunicadoId);
+          const destinoId = Number(comunicadoId);
+          const destinos = dest.filter((d) => Number(d.comunicado_id) === destinoId);
           if (destinos.length === 0) return true;
-          return destinos.some(
-            (d) =>
-              d.usuario_id === user.id_usuario ||
-              (d.canal_id && misCanales.includes(d.canal_id)) ||
-              (d.servidor_id && misServidores.includes(d.servidor_id))
+          return destinos.some((d) =>
+            (d.usuario_id != null && Number(d.usuario_id) === usuarioId) ||
+            (d.canal_id != null && misCanales.has(Number(d.canal_id))) ||
+            (d.servidor_id != null && misServidores.has(Number(d.servidor_id)))
           );
         };
 
         const count = com.filter(
-          (c) => meCorresponde(c.id_comunicado) && !vistosIds.has(c.id_comunicado)
+          (c) => meCorresponde(c.id_comunicado) && !vistosIds.has(Number(c.id_comunicado))
         ).length;
 
         setNoLeidos(count);

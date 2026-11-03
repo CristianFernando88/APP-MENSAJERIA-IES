@@ -120,6 +120,8 @@ export default function Comunicados() {
   const [roles, setRoles] = useState([]);
   const [usuarioRoles, setUsuarioRoles] = useState([]);
   const [relaciones, setRelaciones] = useState([]);
+  const [miembrosCanal, setMiembrosCanal] = useState([]);
+  const [miembrosServidor, setMiembrosServidor] = useState([]);
   const [misCanales, setMisCanales] = useState([]);
   const [misServidores, setMisServidores] = useState([]);
 
@@ -190,8 +192,10 @@ export default function Comunicados() {
       setRoles(ro);
       setUsuarioRoles(ur);
       setRelaciones(re);
-      setMisCanales(mc.filter((m) => m.usuario_id === user?.id_usuario).map((m) => m.canal_id));
-      setMisServidores(ms.filter((m) => m.usuario_id === user?.id_usuario).map((m) => m.servidor_id));
+      setMiembrosCanal(mc);
+      setMiembrosServidor(ms);
+      setMisCanales(mc.filter((m) => Number(m.usuario_id) === Number(user?.id_usuario)).map((m) => Number(m.canal_id)));
+      setMisServidores(ms.filter((m) => Number(m.usuario_id) === Number(user?.id_usuario)).map((m) => Number(m.servidor_id)));
 
       if (!silencioso) {
         setAdjuntosPorComunicado(await cargarAdjuntosDe(c.map((x) => x.id_comunicado)));
@@ -335,30 +339,81 @@ export default function Comunicados() {
     return { nombre: "Toda la institución", icono: Globe };
   };
 
+  const misCanalesYHijos = useMemo(() => {
+    const usuarioId = Number(user?.id_usuario);
+    const accesos = new Set();
+
+    miembrosCanal.forEach((m) => {
+      if (Number(m.usuario_id) === usuarioId) accesos.add(Number(m.canal_id));
+    });
+
+    const hijosIds = new Set();
+    relaciones.forEach((r) => {
+      const usuarioRel = Number(r.usuario_id);
+      const relacionado = Number(r.relacionado_id);
+      const tipo = String(r.tipo ?? r.tipo_relacion ?? "").toLowerCase();
+      if (tipo && !["tutor", "padre", "madre"].includes(tipo)) return;
+
+      if (usuarioRel === usuarioId && relacionado !== usuarioId) hijosIds.add(relacionado);
+      if (relacionado === usuarioId && usuarioRel !== usuarioId) hijosIds.add(usuarioRel);
+    });
+
+    miembrosCanal.forEach((m) => {
+      if (hijosIds.has(Number(m.usuario_id))) accesos.add(Number(m.canal_id));
+    });
+
+    return accesos;
+  }, [user?.id_usuario, relaciones, miembrosCanal]);
+
+  const misServidoresYHijos = useMemo(() => {
+    const usuarioId = Number(user?.id_usuario);
+    const accesos = new Set();
+
+    miembrosServidor.forEach((m) => {
+      if (Number(m.usuario_id) === usuarioId) accesos.add(Number(m.servidor_id));
+    });
+
+    const hijosIds = new Set();
+    relaciones.forEach((r) => {
+      const usuarioRel = Number(r.usuario_id);
+      const relacionado = Number(r.relacionado_id);
+      const tipo = String(r.tipo ?? r.tipo_relacion ?? "").toLowerCase();
+      if (tipo && !["tutor", "padre", "madre"].includes(tipo)) return;
+
+      if (usuarioRel === usuarioId && relacionado !== usuarioId) hijosIds.add(relacionado);
+      if (relacionado === usuarioId && usuarioRel !== usuarioId) hijosIds.add(usuarioRel);
+    });
+
+    miembrosServidor.forEach((m) => {
+      if (hijosIds.has(Number(m.usuario_id))) accesos.add(Number(m.servidor_id));
+    });
+
+    return accesos;
+  }, [user?.id_usuario, relaciones, miembrosServidor]);
+
   const meCorresponde = (comunicadoId) => {
     const destinosCom = destinosPorComunicado[comunicadoId] ?? [];
     if (destinosCom.length === 0) return true;
 
-    return destinosCom.some(
-      (d) =>
-        d.usuario_id === user?.id_usuario ||
-        (d.canal_id && misCanales.includes(d.canal_id)) ||
-        (d.servidor_id && misServidores.includes(d.servidor_id))
+    return destinosCom.some((d) =>
+      (d.usuario_id != null && Number(d.usuario_id) === Number(user?.id_usuario)) ||
+      (d.canal_id != null && misCanalesYHijos.has(Number(d.canal_id))) ||
+      (d.servidor_id != null && misServidoresYHijos.has(Number(d.servidor_id)))
     );
   };
 
   const vistosIds = useMemo(
-    () => new Set(vistos.filter((v) => v.usuario_id === user?.id_usuario).map((v) => v.comunicado_id)),
+    () => new Set(vistos.filter((v) => Number(v.usuario_id) === Number(user?.id_usuario)).map((v) => Number(v.comunicado_id))),
     [vistos, user?.id_usuario]
   );
 
-  const enviados = comunicados.filter((c) => c.publicado_por === user?.id_usuario);
+  const enviados = comunicados.filter((c) => Number(c.publicado_por) === Number(user?.id_usuario));
   const recibidos = comunicados.filter((c) => meCorresponde(c.id_comunicado));
 
   const porFechaDesc = (a, b) =>
     new Date(b.fecha_publicacion) - new Date(a.fecha_publicacion);
 
-  const enPapelera = papelera.filter((c) => c.publicado_por === user?.id_usuario);
+  const enPapelera = papelera.filter((c) => Number(c.publicado_por) === Number(user?.id_usuario));
 
   const listaBase = useMemo(() => {
     if (pestana === "papelera") return [...enPapelera].sort(porFechaDesc);

@@ -7,6 +7,9 @@ import { listarRecordatorios, crearRecordatorio, actualizarRecordatorio, elimina
 import { listarComunicados } from "../../api/comunicados";
 import { listarMiembrosServidor } from "../../api/miembrosServidor";
 import { listarServidores } from "../../api/servidores";
+import { listarDestinatarios } from "../../api/comunicadosDestinatarios";
+import { listarMiembrosCanal } from "../../api/miembrosCanal";
+import { listarRelaciones } from "../../api/relacionesUsuario";
 import useComunicadosNoLeidos from "../../hooks/useComunicadosNoLeidos";
 import { useAuth } from "../../context/AuthContext";
 import { useNotificaciones } from "../../context/NotificacionesContext";
@@ -56,23 +59,67 @@ export default function Dashboard() {
       try {
         setError("");
 
-        const [todosRec, todosCom, miembros, servidores] = await Promise.all([
+        const [todosRec, todosCom, miembrosServidor, servidores, destinatarios, miembrosCanal, relaciones] = await Promise.all([
           listarRecordatorios(),
           listarComunicados(),
           listarMiembrosServidor(),
           listarServidores(),
+          listarDestinatarios(),
+          listarMiembrosCanal(),
+          listarRelaciones(),
         ]);
         if (!vivo) return;
 
-        setRecordatorios(todosRec.filter((r) => r.usuario_id === user?.id_usuario));
+        const usuarioId = Number(user?.id_usuario);
+        setRecordatorios(todosRec.filter((r) => Number(r.usuario_id) === usuarioId));
 
-        const miServidorId = miembros.find((m) => m.usuario_id === user?.id_usuario)?.servidor_id;
-        if (miServidorId) {
-          setServidor(servidores.find((s) => s.id_servidor === miServidorId) ?? null);
+        const miServidorId = miembrosServidor.find((m) => Number(m.usuario_id) === usuarioId)?.servidor_id;
+        if (miServidorId != null) {
+          setServidor(servidores.find((s) => Number(s.id_servidor) === Number(miServidorId)) ?? null);
         }
 
+        const hijosIds = new Set();
+        relaciones.forEach((r) => {
+          const usuarioRel = Number(r.usuario_id);
+          const relacionado = Number(r.relacionado_id);
+          const tipo = String(r.tipo ?? r.tipo_relacion ?? "").toLowerCase();
+          if (tipo && !["tutor", "padre", "madre"].includes(tipo)) return;
+
+          if (usuarioRel === usuarioId && relacionado !== usuarioId) hijosIds.add(relacionado);
+          if (relacionado === usuarioId && usuarioRel !== usuarioId) hijosIds.add(usuarioRel);
+        });
+
+        const canalesAccesibles = new Set();
+        miembrosCanal.forEach((m) => {
+          const miembroId = Number(m.usuario_id);
+          if (miembroId === usuarioId || hijosIds.has(miembroId)) {
+            canalesAccesibles.add(Number(m.canal_id));
+          }
+        });
+
+        const servidoresAccesibles = new Set();
+        miembrosServidor.forEach((m) => {
+          const miembroId = Number(m.usuario_id);
+          if (miembroId === usuarioId || hijosIds.has(miembroId)) {
+            servidoresAccesibles.add(Number(m.servidor_id));
+          }
+        });
+
+        const comunicadosCorrespondientes = todosCom.filter((comunicado) => {
+          const destinos = destinatarios.filter(
+            (d) => Number(d.comunicado_id) === Number(comunicado.id_comunicado)
+          );
+          if (destinos.length === 0) return true;
+
+          return destinos.some((d) =>
+            (d.usuario_id != null && Number(d.usuario_id) === usuarioId) ||
+            (d.canal_id != null && canalesAccesibles.has(Number(d.canal_id))) ||
+            (d.servidor_id != null && servidoresAccesibles.has(Number(d.servidor_id)))
+          );
+        });
+
         setComunicados(
-          [...todosCom]
+          comunicadosCorrespondientes
             .sort((a, b) => new Date(b.fecha_publicacion) - new Date(a.fecha_publicacion))
             .slice(0, 4)
         );
