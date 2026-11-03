@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import "./servidores.css";
-import { listarServidores } from "../../api/servidores";
+import { listarServidores, listarMisServidores } from "../../api/servidores";
 import { listarCategoriasPorServidor, crearCategoria, actualizarCategoria, eliminarCategoria } from "../../api/categorias";
 import { listarCanales, crearCanal, actualizarCanal, eliminarCanal } from "../../api/canales";
 import { listarMiembrosServidor, crearMiembroServidor, actualizarMiembroServidor, eliminarMiembroServidor } from "../../api/miembrosServidor";
@@ -14,7 +14,6 @@ import * as miembrosCanalApi from "../../api/miembrosCanal";
 import * as usuariosApi from "../../api/usuarios";
 import * as relacionesApi from "../../api/relacionesUsuario";
 
-const SOLO_MIS_SERVIDORES = true;
 
 const ROLES_QUE_VEN_TODO = ["administrador"];
 const TAMANO_VISTA = 10;
@@ -164,7 +163,7 @@ const IconArrowLeft = ({ size = 16, className = "" }) => (
 );
 
 export default function Servidores() {
-  const { user } = useAuth();
+  const { user, accesos } = useAuth();
   const [servidores, setServidores] = useState([]);
   const [servidorActivo, setServidorActivo] = useState(null);
   const [busquedaServidor, setBusquedaServidor] = useState("");
@@ -243,46 +242,62 @@ export default function Servidores() {
     cargarPerfilActual();
   }, [user]);
 
-  useEffect(() => {
-    if (!user?.id_usuario) return undefined;
+    useEffect(() => {
+    if (!user?.id_usuario) {
+      setServidores([]);
+      setServidorActivo(null);
+      setCargandoServidores(false);
+      setErrorCarga(null);
+      return undefined;
+    }
     let cancelado = false;
+
+    const aplicar = (listaServidores) => {
+      if (cancelado) return;
+      const normalizados = (listaServidores ?? []).map((s) => ({ ...s, id: s.id_servidor }));
+      setServidores(normalizados);
+      setServidorActivo((anterior) =>
+        anterior && normalizados.some((s) => s.id === anterior.id) ? anterior : normalizados[0] ?? null
+      );
+      setCargandoServidores(false);
+    };
+
     const cargarServidores = async () => {
       setCargandoServidores(true);
       setErrorCarga(null);
       try {
-        const [todos, membresias] = await Promise.all([
-          listarServidores(),
-          SOLO_MIS_SERVIDORES ? listarMiembrosServidor() : Promise.resolve([]),
-        ]);
-        const veTodo = (user.roles || []).some((r) => ROLES_QUE_VEN_TODO.includes(String(r.nombre || "").toLowerCase()));
-        let visibles = todos;
-        if (SOLO_MIS_SERVIDORES && !veTodo) {
-          const idsMios = new Set(
-            membresias
-              .filter((m) => Number(m.usuario_id) === Number(user.id_usuario) && m.activo !== false)
-              .map((m) => Number(m.servidor_id))
-          );
-          visibles = todos.filter(
-            (s) => idsMios.has(Number(s.id_servidor)) || Number(s.creador_id) === Number(user.id_usuario)
-          );
-        }
+        
+        const misAccesos = accesos ?? (await listarMisServidores());
         if (cancelado) return;
-        const normalizados = visibles.map((s) => ({ ...s, id: s.id_servidor }));
-        setServidores(normalizados);
-        setServidorActivo((anterior) =>
-          anterior && normalizados.some((s) => s.id === anterior.id) ? anterior : normalizados[0] ?? null
+
+        let visibles = misAccesos?.servidores ?? [];
+
+        const veTodo = (user.roles || []).some((r) =>
+          ROLES_QUE_VEN_TODO.includes(String(r.nombre || "").toLowerCase())
         );
+        if (veTodo) {
+          const todos = await listarServidores();
+          if (cancelado) return;
+          const porId = new Map();
+          todos.forEach((s) => porId.set(Number(s.id_servidor), s));
+          visibles.forEach((s) => porId.set(Number(s.id_servidor), s));
+          visibles = [...porId.values()];
+        }
+
+        aplicar(visibles);
       } catch (error) {
-        if (!cancelado) setErrorCarga(mensajeError(error, "No se pudieron cargar los servidores"));
-      } finally {
-        if (!cancelado) setCargandoServidores(false);
+        if (!cancelado) {
+          setErrorCarga(mensajeError(error, "No se pudieron cargar los servidores"));
+          setCargandoServidores(false);
+        }
       }
     };
+
     cargarServidores();
     return () => {
       cancelado = true;
     };
-  }, [user?.id_usuario]);
+  }, [user?.id_usuario, accesos]);
 
   const cargarCanales = useCallback(async () => {
     if (!servidorActivo) return [];

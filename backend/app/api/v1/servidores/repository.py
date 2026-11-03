@@ -1,7 +1,10 @@
 from sqlalchemy.orm import Session
 from app.models.servidor import Servidor
+from app.models.canal import Canal
 from app.models.usuario import Usuario
 from app.models.miembro_servidor import MiembroServidor
+from app.models.miembro_canal import MiembroCanal
+from app.models.relacion_usuario import RelacionUsuario
 from .schemas import ServidorCreate, ServidorUpdate
 
 
@@ -87,3 +90,66 @@ def delete(db: Session, servidor_id: int) -> bool:
     db.delete(servidor)
     db.commit()
     return True
+
+def listar_hijos(db: Session, usuario_id: int) -> list[int]:
+    """Ids de los alumnos de los que soy tutor.
+
+    Convención de la tabla `relacion_usuario` (según seed.py):
+    usuario_id = tutor, relacionado_id = hijo/alumno.
+    Busco las filas donde yo soy el usuario y me quedo con los relacionados."""
+    filas = (
+        db.query(RelacionUsuario.relacionado_id)
+        .filter(RelacionUsuario.usuario_id == usuario_id)
+        .distinct()
+        .all()
+    )
+    return [fila[0] for fila in filas]
+
+
+def listar_accesos(db: Session, usuario_id: int) -> dict:
+    """Servidores y canales que puede ver el usuario logueado.
+
+    - Directos: soy miembro del servidor/canal.
+    - Vía hijos: si soy tutor, heredo las membresías de cada hijo.
+    """
+    hijos = listar_hijos(db, usuario_id)
+    ids_relacionados = [usuario_id, *hijos]
+
+    membresias = (
+        db.query(MiembroServidor)
+        .filter(MiembroServidor.usuario_id.in_(ids_relacionados))
+        .all()
+    )
+    ids_servidores = sorted({m.servidor_id for m in membresias})
+
+    servidores = (
+        db.query(Servidor)
+        .filter(Servidor.id_servidor.in_(ids_servidores))
+        .order_by(Servidor.nombre)
+        .all()
+        if ids_servidores
+        else []
+    )
+
+    membresias_canal = (
+        db.query(MiembroCanal)
+        .filter(MiembroCanal.usuario_id.in_(ids_relacionados))
+        .all()
+    )
+    ids_canales = sorted({mc.canal_id for mc in membresias_canal})
+
+    canales = (
+        db.query(Canal)
+        .filter(Canal.id_canal.in_(ids_canales))
+        .order_by(Canal.servidor_id, Canal.orden, Canal.nombre)
+        .all()
+        if ids_canales
+        else []
+    )
+
+    return {
+        "es_tutor": len(hijos) > 0,
+        "hijos": hijos,
+        "servidores": servidores,
+        "canales": canales,
+    }
