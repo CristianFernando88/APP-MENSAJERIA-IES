@@ -1,17 +1,31 @@
 import { createContext, useContext, useState, useEffect, useRef } from "react";
 import { apiGet } from "../api/apiClient";
+import { listarMisServidores } from "../api/servidores"; // NUEVO
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [accesos, setAccesos] = useState(null); 
   const miembroCanalCacheRef = useRef(new Map());
 
   const asignaciones = Array.isArray(user?.asignaciones) ? user.asignaciones : [];
 
   const limpiarCacheMiembrosCanal = () => {
     miembroCanalCacheRef.current.clear();
+  };
+
+  const cargarAccesos = async () => {
+    try {
+      const data = await listarMisServidores();
+      setAccesos(data);
+      return data;
+    } catch (error) {
+      console.error("No se pudieron cargar tus servidores:", error);
+      setAccesos(null);
+      return null;
+    }
   };
 
   const rolesEnServidor = (servidorId) => {
@@ -81,6 +95,7 @@ export function AuthProvider({ children }) {
         try {
           const userData = await apiGet("/auth/me");
           setUser(userData);
+          cargarAccesos(); 
         } catch (error) {
           console.error("Error al recargar la sesión:", error);
           localStorage.removeItem("access_token");
@@ -116,12 +131,14 @@ export function AuthProvider({ children }) {
     localStorage.setItem("access_token", data.access_token);
     setUser(data.usuario);
     limpiarCacheMiembrosCanal();
+    cargarAccesos(); 
     return data.usuario;
   };
 
   const logout = () => {
     localStorage.removeItem("access_token");
     setUser(null);
+    setAccesos(null); 
     limpiarCacheMiembrosCanal();
   };
 
@@ -144,6 +161,8 @@ export function AuthProvider({ children }) {
       esTutorPuro,
       miembroCanalDe,
       invalidarMiembroCanal,
+      accesos,          
+      cargarAccesos,    
     }}>
       {children}
     </AuthContext.Provider>

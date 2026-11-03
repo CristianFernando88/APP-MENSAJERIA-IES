@@ -109,7 +109,7 @@ export function NotificacionesProvider({ children }) {
       setTotalNoLeidos,
       setPausarNotificaciones // NUEVO: Exponemos la función
     }}>
-      {canales.map(canal => (
+      {user && canales.map(canal => (
         <CanalListener 
           key={canal.id_canal} 
           canalId={canal.id_canal} 

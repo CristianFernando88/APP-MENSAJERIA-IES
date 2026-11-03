@@ -1,4 +1,3 @@
-// src/api/servidores.js
 import { apiGet, apiPost, apiPut, apiDelete } from "./apiClient";
 import { listarCategorias } from "./categorias";
 import { listarCanales } from "./canales";
@@ -60,4 +59,8 @@ export async function obtenerJerarquiaServidor(servidorId) {
   );
 
   return { servidor, categorias: resultadoCategorias, sinCategoria };
+}
+
+export function listarMisServidores() {
+  return apiGet("/servidores/mis-servidores");
 }

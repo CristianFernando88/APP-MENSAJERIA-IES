@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+from app.core.deps import get_usuario_actual
+from app.models.usuario import Usuario
 
 from app.core.db import get_db
 from . import repository as repo
-from .schemas import ServidorCreate, ServidorUpdate, ServidorResponse
+from .schemas import ServidorCreate, ServidorUpdate, ServidorResponse, MisServidoresResponse
 
 router = APIRouter(prefix="/servidores", tags=["Servidores"])
 
@@ -19,6 +21,17 @@ def listar(
         resultado = repo.search_by_nombre(db, query)
 
     return resultado
+
+@router.get("/mis-servidores", response_model=MisServidoresResponse)
+def mis_servidores(
+    usuario: Usuario = Depends(get_usuario_actual),
+    db: Session = Depends(get_db),
+):
+    """Servidores y canales del usuario logueado.
+
+    Incluye los accesos que hereda un tutor a través de sus hijos.
+    """
+    return repo.listar_accesos(db, usuario.id_usuario)
 
 
 @router.get("/{servidor_id}", response_model=ServidorResponse)

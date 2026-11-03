@@ -22,3 +22,26 @@ class ServidorResponse(ServidorBase):
 
     class Config:
         from_attributes = True
+
+
+class CanalAcceso(BaseModel):
+    """Canal al que el usuario tiene acceso (directo o vía sus hijos)."""
+    id_canal: int
+    servidor_id: int
+    nombre: str
+    descripcion: str | None = None
+    tipo: str
+    categoria_id: int | None = None
+    orden: int | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class MisServidoresResponse(BaseModel):
+    """Todo lo que el usuario logueado puede ver: sus servidores y canales.
+    Si es tutor, incluye los accesos heredados de sus hijos."""
+    es_tutor: bool
+    hijos: list[int]
+    servidores: list[ServidorResponse]
+    canales: list[CanalAcceso]
