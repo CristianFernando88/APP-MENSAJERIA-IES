@@ -14,6 +14,7 @@ class UsuarioMeOut(BaseModel):
     nombre_usuario: str
     email: EmailStr
     activo: bool
+    debe_cambiar_password: bool
     roles: list[RolResponse] = []
 
     class Config:

@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.usuario import Usuario
 from app.core.security import hashear_password
 from .schemas import UsuarioCreate, UsuarioUpdate
+import secrets
+import string
 
 
 # ---------- operaciones que consume el router ----------
@@ -65,17 +67,41 @@ def ensure_unique(db: Session, email: str, nombre_usuario: str, exclude_id: int 
 
 
 def create(db: Session, data: UsuarioCreate) -> Usuario:
-    """Crea un nuevo usuario."""
+    caracteres = string.ascii_letters + string.digits + "!@#$%&*"
+    password_inicial = "".join(
+        secrets.choice(caracteres) for _ in range(32)
+    )
+
     nuevo = Usuario(
         nombre_usuario=data.nombre_usuario,
         email=data.email,
-        contrasena_hash=hashear_password(data.password),  # Hashear la contraseña
+        contrasena_hash=hashear_password(password_inicial),
         activo=data.activo,
+        debe_cambiar_password=True,
     )
+
     db.add(nuevo)
     db.commit()
     db.refresh(nuevo)
+
     return nuevo
+
+
+def preparar_nuevas_credenciales(db: Session, usuario_id: int) -> tuple[Usuario, str] | None:
+    usuario = get_by_id(db, usuario_id)
+
+    if usuario is None:
+        return None
+
+    caracteres = string.ascii_letters + string.digits + "!@#$%&*"
+    password_temporal = "".join(
+        secrets.choice(caracteres) for _ in range(14)
+    )
+
+    usuario.contrasena_hash = hashear_password(password_temporal)
+    usuario.debe_cambiar_password = True
+
+    return usuario, password_temporal
 
 
 def update(db: Session, usuario_id: int, data: UsuarioUpdate) -> Usuario | None:

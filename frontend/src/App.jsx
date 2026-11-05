@@ -16,6 +16,7 @@ import PanelAdmin from "./pages/PanelAdmin/PanelAdmin";
 import Login from "./pages/Login/Login";
 import NotFound from "./pages/NotFound/NotFound";
 import NoAutorizado from "./pages/NoAutorizado/NoAutorizado";
+import CambiarPasswordInicial from "./pages/CambiarPasswordInicial/CambiarPasswordInicial";
 
 export default function App() {
   return (
@@ -28,6 +29,14 @@ export default function App() {
       {/* Provider único para todas las rutas protegidas */}
       <NotificacionesProvider>
         <Routes>
+          <Route
+            path="/cambiar-password-inicial"
+            element={
+              <RequireAuth>
+                <CambiarPasswordInicial />
+              </RequireAuth>
+            }
+          />
           {/* Rutas protegidas - Todos los usuarios logueados */}
           <Route
             path="/"

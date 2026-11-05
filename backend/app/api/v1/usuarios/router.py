@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from app.core.db import get_db
 from . import repository as repo
 from .schemas import UsuarioCreate, UsuarioUpdate, UsuarioResponse
+from app.services.email import enviar_credenciales
+from app.core.deps import requiere_rol
 
 router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
 
@@ -37,11 +39,47 @@ def obtener(usuario_id: int, db: Session = Depends(get_db)):
 
 @router.post("/", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
 def crear(data: UsuarioCreate, db: Session = Depends(get_db)):
-    """Crea un nuevo usuario."""
+    """Crea un usuario sin enviar automáticamente sus credenciales."""
     ok, error = repo.ensure_unique(db, data.email, data.nombre_usuario)
     if not ok:
         raise HTTPException(status_code=400, detail=error)
+
     return repo.create(db, data)
+
+
+@router.post("/{usuario_id}/enviar-credenciales")
+def enviar_credenciales_usuario(
+    usuario_id: int,
+    db: Session = Depends(get_db),
+    usuario_actual = Depends(requiere_rol("admin", "super_admin")),
+):
+    """Genera y envía las credenciales de acceso al usuario."""
+    resultado = repo.preparar_nuevas_credenciales(db, usuario_id)
+
+    if resultado is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Usuario no encontrado",
+        )
+
+    usuario, password_temporal = resultado
+
+    try:
+        enviar_credenciales(
+            destinatario=usuario.email,
+            nombre_usuario=usuario.nombre_usuario,
+            password_temporal=password_temporal,
+        )
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=503,
+            detail="No se pudieron enviar las credenciales. Podés intentarlo nuevamente.",
+        )
+
+    return {"mensaje": "Credenciales enviadas correctamente."}
 
 
 @router.put("/{usuario_id}", response_model=UsuarioResponse)

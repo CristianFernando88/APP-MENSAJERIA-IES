@@ -21,3 +21,7 @@ export function actualizarUsuario(usuarioId, data) {
 export function eliminarUsuario(usuarioId) {
   return apiDelete(`/usuarios/${usuarioId}`);
 }
+
+export function enviarCredenciales(usuarioId) {
+  return apiPost(`/usuarios/${usuarioId}/enviar-credenciales`, {});
+}
