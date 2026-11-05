@@ -43,6 +43,10 @@ export default function Login() {
 
     try {
       const usuario = await login(form.email, form.password);
+      if (usuario.debe_cambiar_password) {
+        navigate("/cambiar-password-inicial", { replace: true });
+        return;
+      }
       const destino = getHomeByRoles(usuario.roles);
       navigate(destino, { replace: true });
     } catch (err) {

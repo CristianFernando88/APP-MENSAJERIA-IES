@@ -4,6 +4,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from pydantic import BaseModel, Field
+from app.core.security import hashear_password
 
 from app.core.db import get_db
 from app.core.deps import get_usuario_actual
@@ -25,6 +27,7 @@ def _usuario_a_me_out(usuario: Usuario) -> dict:
         "nombre_usuario": usuario.nombre_usuario,
         "email": usuario.email,
         "activo": usuario.activo,
+        "debe_cambiar_password": usuario.debe_cambiar_password,
         "roles": [ur.rol for ur in usuario.roles],  # ← Extraer solo el Rol
     }
 
@@ -78,3 +81,27 @@ def login(
 def quien_soy(usuario: Usuario = Depends(get_usuario_actual)):
     """Devuelve el dueño del token (para recargar la sesión)."""
     return _usuario_a_me_out(usuario)
+
+
+class CambiarPasswordInicial(BaseModel):
+    nueva_password: str = Field(min_length=8, max_length=50)
+
+
+@router.put("/cambiar-password-inicial")
+def cambiar_password_inicial(
+    data: CambiarPasswordInicial,
+    usuario: Usuario = Depends(get_usuario_actual),
+    db: Session = Depends(get_db),
+):
+    if not usuario.debe_cambiar_password:
+        raise HTTPException(
+            status_code=400,
+            detail="El usuario no necesita cambiar su contraseña.",
+        )
+
+    usuario.contrasena_hash = hashear_password(data.nueva_password)
+    usuario.debe_cambiar_password = False
+
+    db.commit()
+
+    return {"mensaje": "Contraseña actualizada correctamente."}

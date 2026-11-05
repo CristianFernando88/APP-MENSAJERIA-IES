@@ -1,6 +1,6 @@
 """deps.py — Dependencias: ¿quién está logueado? ¿tiene el rol correcto?"""
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -16,6 +16,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 # AUTENTICACIÓN: ¿QUIÉN ES?
 # ============================================
 def get_usuario_actual(
+    request: Request,
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> Usuario:
@@ -25,6 +26,7 @@ def get_usuario_actual(
         detail="Token inválido o vencido",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
     try:
         payload = decodificar_token(token)
         usuario_id = int(payload["sub"])
@@ -32,8 +34,24 @@ def get_usuario_actual(
         raise error_401
 
     usuario = db.get(Usuario, usuario_id)
+
     if usuario is None or not usuario.activo:
         raise error_401
+
+    rutas_permitidas = {
+        "/api/v1/auth/me",
+        "/api/v1/auth/cambiar-password-inicial",
+    }
+
+    if (
+        usuario.debe_cambiar_password
+        and request.url.path not in rutas_permitidas
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Debés cambiar tu contraseña antes de acceder a la aplicación.",
+        )
+
     return usuario
 
 

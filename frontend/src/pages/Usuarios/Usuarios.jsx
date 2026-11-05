@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   Search, Plus, Pencil, Trash2, Loader2, Eye, EyeOff,
-  Power, KeyRound, ChevronLeft, ChevronRight, X,
+  Power, KeyRound, Mail, ChevronLeft, ChevronRight, X,
 } from "lucide-react";
 import Badge from "../../components/ui/Badge/Badge";
 import Button from "../../components/ui/Button/Button";
@@ -9,7 +9,7 @@ import Input from "../../components/ui/Input/Input";
 import Select from "../../components/ui/Select/Select";
 import Modal from "../../components/ui/Modal/Modal";
 import {
-  listarUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario,
+  listarUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario, enviarCredenciales,
 } from "../../api/usuarios";
 import { listarRoles } from "../../api/roles";
 import { listarUsuarioRol, crearUsuarioRol, eliminarUsuarioRol } from "../../api/usuarioRol";
@@ -43,8 +43,6 @@ const OPCIONES_ORDEN = [
 const formVacio = {
   nombre_usuario: "",
   email: "",
-  contrasena: "",
-  contrasena2: "",
   activo: "true",
   roles: [],
   servidor_id: "",
@@ -207,8 +205,6 @@ export default function Usuarios() {
     setForm({
       nombre_usuario: u.nombre_usuario,
       email: u.email,
-      contrasena: "",
-      contrasena2: "",
       activo: String(u.activo),
       roles: asignaciones.filter((a) => a.usuario_id === u.id_usuario).map((a) => a.rol_id),
       servidor_id: miembrosServidor.find((m) => m.usuario_id === u.id_usuario)?.servidor_id ?? "",
@@ -268,6 +264,24 @@ export default function Usuarios() {
       setError("");
       await eliminarUsuario(u.id_usuario);
       await cargarUsuarios(busqueda);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleEnviarCredenciales = async (u) => {
+    const ok = await pedir({
+      titulo: "Enviar credenciales",
+      mensaje: `¿Enviar las credenciales de acceso a ${u.nombre_usuario} (${u.email})?`,
+      textoConfirmar: "Enviar",
+    });
+
+    if (!ok) return;
+
+    try {
+      setError("");
+      await enviarCredenciales(u.id_usuario);
+      window.alert("Las credenciales se enviaron correctamente.");
     } catch (err) {
       setError(err.message);
     }
@@ -378,20 +392,6 @@ export default function Usuarios() {
       setError("El DNI debe tener 7 u 8 dígitos");
       return;
     }
-    if (!editandoId) {
-      if (!form.contrasena) {
-        setError("La contraseña es obligatoria");
-        return;
-      }
-      if (form.contrasena.length < 6) {
-        setError("La contraseña debe tener al menos 6 caracteres");
-        return;
-      }
-      if (form.contrasena !== form.contrasena2) {
-        setError("Las contraseñas no coinciden");
-        return;
-      }
-    }
 
     const ok = await pedir({
       titulo: editandoId ? "Guardar cambios" : "Crear usuario",
@@ -419,7 +419,6 @@ export default function Usuarios() {
           nombre_usuario: form.nombre_usuario,
           email: form.email,
           activo: form.activo === "true",
-          password: form.contrasena,
         });
         usuarioId = nuevo.id_usuario;
 
@@ -619,6 +618,15 @@ export default function Usuarios() {
                         >
                           <Pencil size={15} />
                         </button>
+
+                        <button
+                          className="usuarios__icon-btn usuarios__icon-btn--key"
+                          onClick={() => handleEnviarCredenciales(u)}
+                          title="Enviar credenciales"
+                        >
+                          <Mail size={15} />
+                        </button>
+
                         <button
                           className="usuarios__icon-btn usuarios__icon-btn--key"
                           onClick={() => abrirCambiarClave(u)}
@@ -754,46 +762,6 @@ export default function Usuarios() {
                 placeholder="Ej: juan@colegio.com"
               />
 
-              {!editandoId && (
-                <>
-                  <div className="usuarios__clave">
-                    <label className="usuarios__clave-label" htmlFor="contrasena">
-                      Contraseña
-                    </label>
-                    <div className="usuarios__clave-caja">
-                      <input
-                        id="contrasena"
-                        name="contrasena"
-                        type={verClave ? "text" : "password"}
-                        value={form.contrasena}
-                        onChange={handleChange}
-                        placeholder="Mínimo 6 caracteres"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setVerClave((v) => !v)}
-                        aria-label={verClave ? "Ocultar contraseña" : "Ver contraseña"}
-                      >
-                        {verClave ? <EyeOff size={17} /> : <Eye size={17} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <Input
-                    label="Repetir contraseña"
-                    name="contrasena2"
-                    type={verClave ? "text" : "password"}
-                    value={form.contrasena2}
-                    onChange={handleChange}
-                    placeholder="Volvé a escribirla"
-                    error={
-                      form.contrasena2 && form.contrasena !== form.contrasena2
-                        ? "No coinciden"
-                        : ""
-                    }
-                  />
-                </>
-              )}
 
               <Select
                 label="Estado"

@@ -95,7 +95,9 @@ export function AuthProvider({ children }) {
         try {
           const userData = await apiGet("/auth/me");
           setUser(userData);
-          cargarAccesos(); 
+          if (!userData.debe_cambiar_password) {
+            cargarAccesos();
+          } 
         } catch (error) {
           console.error("Error al recargar la sesión:", error);
           localStorage.removeItem("access_token");
@@ -131,7 +133,10 @@ export function AuthProvider({ children }) {
     localStorage.setItem("access_token", data.access_token);
     setUser(data.usuario);
     limpiarCacheMiembrosCanal();
-    cargarAccesos(); 
+    if (!data.usuario.debe_cambiar_password) {
+      cargarAccesos();
+    }
+
     return data.usuario;
   };
 
@@ -140,6 +145,13 @@ export function AuthProvider({ children }) {
     setUser(null);
     setAccesos(null); 
     limpiarCacheMiembrosCanal();
+  };
+
+  const actualizarUsuario = (datos) => {
+    setUser((usuarioActual) => ({
+      ...usuarioActual,
+      ...datos,
+    }));
   };
 
   const hasRole = (rolesPermitidos) => {
@@ -153,6 +165,7 @@ export function AuthProvider({ children }) {
       user,
       login,
       logout,
+      actualizarUsuario,
       loading,
       hasRole,
       asignaciones,

@@ -20,11 +20,7 @@ class UsuarioBase(BaseModel):
 
 class UsuarioCreate(UsuarioBase):
     """Body para CREAR un usuario."""
-    password: str = Field(
-        min_length=8,
-        max_length=50,
-        description="Contraseña del usuario en texto plano",
-    )
+    pass
 
 
 class UsuarioUpdate(BaseModel):

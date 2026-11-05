@@ -15,7 +15,8 @@ class Usuario(Base):
     contrasena_hash = Column(String(255), nullable=False)
     
     fecha_registro = Column(DateTime, default=datetime.utcnow)
-    activo = Column(Boolean, default=True)
+    activo = Column(Boolean, default=True, nullable=False)
+    debe_cambiar_password = Column(Boolean, default=False, nullable=False)
 
     # Relaciones
     perfil = relationship("Perfil", back_populates="usuario", uselist=False, cascade="all, delete-orphan")

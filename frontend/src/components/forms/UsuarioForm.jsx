@@ -68,10 +68,7 @@ export default function UsuarioForm({
     if (!form.nombres.trim() || !form.apellidos.trim()) return setError("Nombre y apellido son obligatorios.");
     
     // Si es nuevo, la contraseña es obligatoria. Si es edición, es opcional.
-    if (!usuarioInicial) {
-      if (!form.password || form.password.length < 8) return setError("La contraseña debe tener al menos 8 caracteres.");
-      if (form.password !== form.confirmar_password) return setError("Las contraseñas no coinciden.");
-    } else if (form.password) {
+    if (usuarioInicial && form.password) {
       if (form.password.length < 8) return setError("La nueva contraseña debe tener al menos 8 caracteres.");
       if (form.password !== form.confirmar_password) return setError("Las contraseñas no coinciden.");
     }
@@ -101,24 +98,35 @@ export default function UsuarioForm({
       <Input label="Nombre de usuario" name="nombre_usuario" value={form.nombre_usuario} onChange={handleChange} placeholder="Ej: jperez" />
       <Input label="Email" name="email" type="email" value={form.email} onChange={handleChange} placeholder="Ej: juan@email.com" />
       
-      <div className="admin-clave">
-        <label className="admin-clave-label">{usuarioInicial ? "Nueva contraseña (opcional)" : "Contraseña"}</label>
-        <div className="admin-clave-caja">
-          <input 
-            name="password" 
-            type={verClave ? "text" : "password"} 
-            value={form.password} 
-            onChange={handleChange} 
-            placeholder={usuarioInicial ? "Dejar vacío para no cambiar" : "Mínimo 8 caracteres"} 
-            style={{ width: "100%" }}
+      {usuarioInicial && (
+        <>
+          <div className="admin-clave">
+            <label className="admin-clave-label">Nueva contraseña (opcional)</label>
+            <div className="admin-clave-caja">
+              <input
+                name="password"
+                type={verClave ? "text" : "password"}
+                value={form.password}
+                onChange={handleChange}
+                placeholder="Dejar vacío para no cambiar"
+                style={{ width: "100%" }}
+              />
+              <button type="button" onClick={() => setVerClave(!verClave)}>
+                {verClave ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+
+          <Input
+            label="Repetir contraseña"
+            name="confirmar_password"
+            type={verClave ? "text" : "password"}
+            value={form.confirmar_password}
+            onChange={handleChange}
+            placeholder="Volvé a escribirla"
           />
-          <button type="button" onClick={() => setVerClave(!verClave)}>
-            {verClave ? <EyeOff size={16} /> : <Eye size={16} />}
-          </button>
-        </div>
-      </div>
-      
-      <Input label="Repetir contraseña" name="confirmar_password" type={verClave ? "text" : "password"} value={form.confirmar_password} onChange={handleChange} placeholder="Volvé a escribirla" />
+        </>
+      )}
 
       <Select label="Estado" name="activo" value={form.activo} onChange={handleChange} options={[{ value: "true", label: "Activo" }, { value: "false", label: "Inactivo" }]} />
 
