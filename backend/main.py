@@ -41,7 +41,7 @@ app = FastAPI(
 # CORS (Configuración dinámica)
 # ============================================
 # Lee la variable CORS_ORIGINS de Render. Si no existe (ej. en local), usa localhost:5173.
-origenes_env = os.getenv("CORS_ORIGINS", "http://localhost:5173")
+origenes_env = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:4173")
 # Separa los orígenes por coma, por si a futuro agregas más dominios
 origenes_permitidos = [origen.strip() for origen in origenes_env.split(",")]
 
