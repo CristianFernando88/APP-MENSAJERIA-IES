@@ -104,9 +104,10 @@ const fechaLarga = (iso) =>
   });
 
 export default function Comunicados() {
-  const { user, hasRole } = useAuth();
+  const { user, hasRole, accesos } = useAuth();
   const { revisionComunicados } = useNotificaciones();
   const puedePublicar = hasRole(ROLES_PUEDEN_PUBLICAR);
+  const esAdminGlobal = hasRole(["admin", "super_admin"]);
 
   const { pedir, dialogo } = useConfirmacion();
 
@@ -302,15 +303,65 @@ export default function Comunicados() {
 
   const rolNombreDe = (rolId) => roles.find((r) => r.id_rol === rolId)?.nombre;
 
+  // Conjuntos de servidores/canales a los que el usuario tiene acceso (para acotar el
+  // formulario de destinatarios: solo lo propio + heredado por tutoría; admin ve todo).
+  const accesibles = useMemo(() => {
+    const servidoresSet = new Set();
+    const canalesSet = new Set();
+
+    if (esAdminGlobal) {
+      servidores.forEach((s) => servidoresSet.add(Number(s.id_servidor)));
+      canales.forEach((c) => canalesSet.add(Number(c.id_canal)));
+      return { servidores: servidoresSet, canales: canalesSet, esAdmin: true };
+    }
+
+    (accesos?.servidores || []).forEach((s) => servidoresSet.add(Number(s.id_servidor ?? s)));
+    (accesos?.canales || []).forEach((c) => canalesSet.add(Number(c.id_canal ?? c)));
+
+    // Membresía directa (por si /mis-servidores no incluyó algún canal/servidor)
+    misServidores.forEach((id) => servidoresSet.add(Number(id)));
+    misCanales.forEach((id) => canalesSet.add(Number(id)));
+
+    return { servidores: servidoresSet, canales: canalesSet, esAdmin: false };
+  }, [esAdminGlobal, accesos, servidores, canales, misServidores, misCanales]);
+
+  const esAlumnoAccesible = (alumno) => {
+    if (accesibles.esAdmin) return true;
+    // Tutores: solo sus hijos
+    const hijosIds = new Set((accesos?.hijos || []).map((h) => Number(h)));
+    if (hijosIds.has(Number(alumno.id_usuario))) return true;
+    // Comparte servidor o canal con el publicador
+    const enServidor = miembrosServidor.some(
+      (m) => Number(m.usuario_id) === Number(alumno.id_usuario) && accesibles.servidores.has(Number(m.servidor_id))
+    );
+    if (enServidor) return true;
+    const enCanal = miembrosCanal.some(
+      (m) => Number(m.usuario_id) === Number(alumno.id_usuario) && accesibles.canales.has(Number(m.canal_id))
+    );
+    return enCanal;
+  };
+
+  const esPersonalAccesible = (p) => {
+    if (accesibles.esAdmin) return true;
+    const enServidor = miembrosServidor.some(
+      (m) => Number(m.usuario_id) === Number(p.id_usuario) && accesibles.servidores.has(Number(m.servidor_id))
+    );
+    if (enServidor) return true;
+    const enCanal = miembrosCanal.some(
+      (m) => Number(m.usuario_id) === Number(p.id_usuario) && accesibles.canales.has(Number(m.canal_id))
+    );
+    return enCanal;
+  };
+
   const alumnos = useMemo(() => {
     const ids = new Set(
       usuarioRoles
         .filter((ur) => rolNombreDe(ur.rol_id) === "alumno")
         .map((ur) => ur.usuario_id)
     );
-    return usuarios.filter((u) => ids.has(u.id_usuario));
+    return usuarios.filter((u) => ids.has(u.id_usuario) && esAlumnoAccesible(u));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [usuarios, usuarioRoles, roles]);
+  }, [usuarios, usuarioRoles, roles, accesibles, miembrosServidor, miembrosCanal]);
 
   const personal = useMemo(() => {
     const ids = new Set(
@@ -318,9 +369,9 @@ export default function Comunicados() {
         .filter((ur) => ROLES_PERSONAL.includes(rolNombreDe(ur.rol_id)))
         .map((ur) => ur.usuario_id)
     );
-    return usuarios.filter((u) => ids.has(u.id_usuario));
+    return usuarios.filter((u) => ids.has(u.id_usuario) && esPersonalAccesible(u));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [usuarios, usuarioRoles, roles]);
+  }, [usuarios, usuarioRoles, roles, accesibles, miembrosServidor, miembrosCanal]);
 
   const tutoresDe = (alumnoId) => {
     const otros = new Map();
@@ -677,7 +728,7 @@ export default function Comunicados() {
   );
 
   const canalesDelServidor = (servidorId) =>
-    canales.filter((c) => c.servidor_id === servidorId);
+    canales.filter((c) => c.servidor_id === servidorId && accesibles.canales.has(Number(c.id_canal)));
 
   const totalDestinos =
     destinos.servidores.length + destinos.canales.length + destinos.usuarios.length;
@@ -1328,7 +1379,9 @@ export default function Comunicados() {
               {/* --- Pestaña Servidores --- */}
               {pestanaDest === "servidores" && (
                 <div className="comunicados__lista-dest">
-                  {servidores.map((s) => (
+                  {servidores
+                    .filter((s) => accesibles.servidores.has(Number(s.id_servidor)))
+                    .map((s) => (
                     <div className="comunicados__destino-fila" key={s.id_servidor}>
                       <label className="comunicados__destino-op">
                         <input
@@ -1373,7 +1426,7 @@ export default function Comunicados() {
                       )}
                     </div>
                   ))}
-                  {servidores.length === 0 && (
+                  {servidores.filter((s) => accesibles.servidores.has(Number(s.id_servidor))).length === 0 && (
                     <p className="comunicados__hint">No hay servidores cargados.</p>
                   )}
                 </div>
