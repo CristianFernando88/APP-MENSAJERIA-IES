@@ -55,3 +55,54 @@
   text-align: center;
   color: var(--texto-secundario);
 }
+
+.notif-panel__seccion {
+  border-bottom: 1px solid var(--color-gris-azulado);
+}
+
+.notif-panel__seccion:last-child {
+  border-bottom: none;
+}
+
+.notif-panel__seccion-titulo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-sm) var(--space-md) 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--texto-secundario);
+}
+
+.notif-panel__vacio-chico {
+  padding: var(--space-sm) var(--space-md);
+  font-size: 0.8rem;
+  color: var(--texto-secundario);
+}
+
+.notif-panel__col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.notif-panel__detalle {
+  font-size: 0.75rem;
+  color: var(--texto-secundario);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.notif-panel__item {
+  background: none;
+  text-align: left;
+  width: 100%;
+}
+
+button.notif-panel__item--clickable:hover {
+  background-color: var(--color-gris-azulado);
+}

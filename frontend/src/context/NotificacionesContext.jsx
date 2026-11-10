@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { useAuth } from "./AuthContext";
 import { listarCanales } from "../api/canales";
@@ -25,19 +26,22 @@ function CanalListener({ canalId, userId, onNuevoMensaje }) {
 
 export function NotificacionesProvider({ children }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [totalNoLeidos, setTotalNoLeidos] = useState(0);
   const [canales, setCanales] = useState([]);
   const [toastActivo, setToastActivo] = useState(null);
+  const [avisosMensajes, setAvisosMensajes] = useState([]);
   const [revisionComunicados, setRevisionComunicados] = useState(0);
   const idsComunicadosConocidosRef = useRef(new Set());
   const primeraCargaComunicadosRef = useRef(true);
   const cargandoComunicadosRef = useRef(false);
   
-  // NUEVO: Estado para saber si estamos dentro de la pantalla de mensajes
+  
   const [pausarNotificaciones, setPausarNotificaciones] = useState(false);
   
-  // Ref para leer el valor actual dentro del WebSocket sin re-renderizar
+  
   const pausarRef = useRef(pausarNotificaciones);
+  const idsAvisosMensajesRef = useRef(new Set());
   useEffect(() => {
     pausarRef.current = pausarNotificaciones;
   }, [pausarNotificaciones]);
@@ -48,8 +52,23 @@ export function NotificacionesProvider({ children }) {
     return () => clearTimeout(temporizador);
   }, [toastActivo]);
 
-  const mostrarToastGlobal = (titulo, detalle, tipo = "info") => {
-    setToastActivo({ titulo, detalle, tipo });
+  const mostrarToastGlobal = (titulo, detalle, tipo = "info", accion = null) => {
+    setToastActivo({ titulo, detalle, tipo, accion });
+  };
+
+  const registrarAvisoMensaje = (titulo, data) => {
+    const id = data?.id_mensaje_directo ?? data?.id_mensaje;
+    const clave = String(id ?? `${Date.now()}-${Math.random()}`);
+    if (idsAvisosMensajesRef.current.has(clave)) return;
+    idsAvisosMensajesRef.current.add(clave);
+    const detalle = data?.contenido ? `"${String(data.contenido).slice(0, 80)}"` : undefined;
+    setAvisosMensajes((prev) =>
+      [{ id: clave, titulo, detalle, fecha: data?.fecha_envio }, ...prev].slice(0, 8)
+    );
+  };
+
+  const limpiarAvisosMensajes = () => {
+    setAvisosMensajes([]);
   };
 
   const refrescarComunicados = () => {
@@ -110,27 +129,28 @@ export function NotificacionesProvider({ children }) {
     console.log("Canales para notificaciones:", canales);
   }, [canales]);
 
-  // WebSocket de Directos
-  useWebSocket(`directo/${user?.id_usuario}`, (data) => {
+
+  useWebSocket(user?.id_usuario ? `directo/${user.id_usuario}` : null, (data) => {
     if (data && data.emisor_id && Number(data.emisor_id) !== Number(user.id_usuario)) {
-      reproducirSonido();
-      mostrarToastGlobal("Nuevo mensaje", "Has recibido un mensaje directo", "mensaje");
-      // SOLO sumamos si NO estamos en la pantalla de mensajes
+      
       if (!pausarRef.current) {
+        reproducirSonido();
+        mostrarToastGlobal("Nuevo mensaje", "Has recibido un mensaje directo", "mensaje", "/mensajes");
+        registrarAvisoMensaje("Nuevo mensaje", data);
         setTotalNoLeidos(prev => prev + 1);
       }
     }
   });
 
   const handleNuevoMensajeCanal = (data) => {
+    if (pausarRef.current) return; 
     console.log("[CONTEXTO] Nuevo mensaje en canal, disparando Toast");
     reproducirSonido();
-    if (!pausarRef.current) {
-      if (window.location.pathname !== "/mensajes") {
-        mostrarToastGlobal("Nuevo mensaje", "Has recibido un mensaje en un canal", "mensaje");
-      }
-      setTotalNoLeidos(prev => prev + 1);
+    if (window.location.pathname !== "/mensajes") {
+      mostrarToastGlobal("Nuevo mensaje", "Has recibido un mensaje en un canal", "mensaje", "/mensajes");
     }
+    setTotalNoLeidos(prev => prev + 1);
+    registrarAvisoMensaje("Nuevo mensaje en un canal", data);
   };
 
   const limpiarContador = (cantidad = 1) => {
@@ -212,7 +232,7 @@ export function NotificacionesProvider({ children }) {
             const comunicado = [...nuevosValidos].sort(
               (a, b) => new Date(b.fecha_publicacion) - new Date(a.fecha_publicacion)
             )[0];
-            mostrarToastGlobal("Nuevo comunicado", comunicado.titulo, "comunicado");
+            mostrarToastGlobal("Nuevo comunicado", comunicado.titulo, "comunicado", "/comunicados");
           }
         }
 
@@ -250,12 +270,15 @@ export function NotificacionesProvider({ children }) {
       setPausarNotificaciones,
       mostrarToastGlobal,
       refrescarComunicados,
-      revisionComunicados
+      revisionComunicados,
+      avisosMensajes,
+      limpiarAvisosMensajes
     }}>
       {toastActivo && (
         <Toast
           titulo={toastActivo.titulo}
           detalle={toastActivo.detalle}
+          onAccion={toastActivo.accion ? () => { navigate(toastActivo.accion); setToastActivo(null); } : undefined}
           onCerrar={() => setToastActivo(null)}
         />
       )}
