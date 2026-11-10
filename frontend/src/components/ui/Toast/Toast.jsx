@@ -3,7 +3,12 @@ import "./Toast.css";
 
 export default function Toast({ titulo, detalle, onAccion, onCerrar }) {
   return (
-    <div className="toast" role="status">
+    <div
+      className="toast"
+      role="status"
+      onClick={onAccion ? onAccion : undefined}
+      style={onAccion ? { cursor: "pointer" } : undefined}
+    >
       <span className="toast__icon">
         <Megaphone size={18} />
       </span>
@@ -14,12 +19,19 @@ export default function Toast({ titulo, detalle, onAccion, onCerrar }) {
       </div>
 
       {onAccion && (
-        <button className="toast__accion" onClick={onAccion}>
+        <button
+          className="toast__accion"
+          onClick={(e) => { e.stopPropagation(); onAccion(); }}
+        >
           Ver
         </button>
       )}
 
-      <button className="toast__cerrar" onClick={onCerrar} aria-label="Cerrar">
+      <button
+        className="toast__cerrar"
+        onClick={(e) => { e.stopPropagation(); onCerrar?.(); }}
+        aria-label="Cerrar"
+      >
         <X size={15} />
       </button>
     </div>

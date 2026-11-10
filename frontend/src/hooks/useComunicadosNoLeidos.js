@@ -65,7 +65,8 @@ export function useComunicadosNoLeidos() {
         const destinoId = Number(comunicadoId);
         const destinos = dest.filter((d) => Number(d.comunicado_id) === destinoId);
         if (destinos.length === 0) {
-          return String(comunicado.tipo).toLowerCase() === "global";
+          const comunicado = com.find((c) => Number(c.id_comunicado) === destinoId);
+          return String(comunicado?.tipo ?? "").toLowerCase() === "global";
         }
         return destinos.some((d) =>
           (d.usuario_id != null && Number(d.usuario_id) === usuarioId) ||

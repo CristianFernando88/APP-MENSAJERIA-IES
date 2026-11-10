@@ -6,11 +6,13 @@ import NotificationsPanel from "./NotificationsPanel";
 import { useAuth } from "../../context/AuthContext";
 import { marcarVisto } from "../../api/comunicadosVistos";
 import { useComunicadosNoLeidos } from "../../hooks/useComunicadosNoLeidos";
+import { useNotificaciones } from "../../context/NotificacionesContext";
 import "./Header.css";
 
 export default function Header({ onMenuToggle, menuOpen }) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { avisosMensajes, limpiarAvisosMensajes } = useNotificaciones();
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -62,6 +64,12 @@ export default function Header({ onMenuToggle, menuOpen }) {
     navigate(`/comunicados?comunicado=${comunicadoId}`);
   };
 
+  const abrirMensajes = () => {
+    limpiarAvisosMensajes();
+    setNotifOpen(false);
+    navigate("/mensajes");
+  };
+
   return (
     <header className="header">
       <div className="header__left">
@@ -105,9 +113,11 @@ export default function Header({ onMenuToggle, menuOpen }) {
           {notifOpen && (
             <NotificationsPanel
               notificaciones={comunicadosNoLeidos}
+              mensajes={avisosMensajes}
               loading={loadingComunicados}
               onMarcarLeida={abrirComunicado}
               onRefrescar={cargarComunicadosNoLeidos}
+              onAbrirMensajes={abrirMensajes}
             />
           )}
         </div>
