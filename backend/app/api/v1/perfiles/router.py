@@ -97,3 +97,20 @@ def subir_foto_perfil(
     finally:
         archivo.file.close()
 
+
+@router.delete("/usuario/{usuario_id}/foto", response_model=PerfilResponse)
+def quitar_foto_perfil(
+    usuario_id: int,
+    db: Session = Depends(get_db),
+):
+    perfil = repo.get_by_usuario(db, usuario_id)
+    if perfil is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Perfil no encontrado",
+        )
+    perfil.foto_perfil = None
+    db.commit()
+    db.refresh(perfil)
+    return perfil
+

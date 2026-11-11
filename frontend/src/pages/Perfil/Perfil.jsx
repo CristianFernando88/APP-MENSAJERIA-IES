@@ -5,7 +5,7 @@ import Input from "../../components/ui/Input/Input";
 import Button from "../../components/ui/Button/Button";
 import Badge from "../../components/ui/Badge/Badge";
 import "./Perfil.css";
-import { obtenerPerfil, actualizarPerfil, subirFotoPerfil } from "../../api/perfiles";
+import { obtenerPerfil, actualizarPerfil, subirFotoPerfil, eliminarFotoPerfil } from "../../api/perfiles";
 
 export default function Perfil() {
   const { user } = useAuth();
@@ -117,6 +117,24 @@ export default function Perfil() {
       setMensaje("Foto de perfil actualizada correctamente.");
     } catch (err) {
       setError(err?.message || "No se pudo subir la foto.");
+    } finally {
+      setSubiendoFoto(false);
+    }
+  };
+
+  const handleQuitarFoto = async () => {
+    if (!user?.id_usuario) return;
+    setSubiendoFoto(true);
+    setMensaje("");
+    setError("");
+    try {
+      const actualizado = await eliminarFotoPerfil(user.id_usuario);
+      setDatosPerfil(actualizado);
+      setFotoPreview("");
+      setArchivoFoto(null);
+      setMensaje("Foto de perfil eliminada correctamente.");
+    } catch (err) {
+      setError(err?.message || "No se pudo quitar la foto.");
     } finally {
       setSubiendoFoto(false);
     }
@@ -242,6 +260,17 @@ export default function Perfil() {
             disabled={subiendoFoto}
           >
             {subiendoFoto ? "Subiendo..." : "Guardar foto"}
+          </button>
+        )}
+
+        {(fotoPreview || datosPerfil?.foto_perfil) && !archivoFoto && (
+          <button
+            type="button"
+            className="perfil__foto-boton"
+            onClick={handleQuitarFoto}
+            disabled={subiendoFoto}
+          >
+            {subiendoFoto ? "Quitando..." : "Quitar foto"}
           </button>
         )}
       </div>
