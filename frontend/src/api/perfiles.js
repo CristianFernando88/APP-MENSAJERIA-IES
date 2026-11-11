@@ -16,3 +16,7 @@ export function actualizarPerfil(usuarioId, data) {
 export function subirFotoPerfil(usuarioId, archivo) {
   return apiUpload(`/perfiles/usuario/${usuarioId}/foto`, archivo);
 }
+
+export function eliminarFotoPerfil(usuarioId) {
+  return apiDelete(`/perfiles/usuario/${usuarioId}/foto`);
+}

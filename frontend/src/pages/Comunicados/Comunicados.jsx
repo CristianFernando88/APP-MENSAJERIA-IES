@@ -269,13 +269,12 @@ export default function Comunicados() {
   useEffect(() => {
     cargandoRef.current = false;
     cargarTodo();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id_usuario]);
 
   useEffect(() => {
     if (!user?.id_usuario) return;
     cargarTodo({ silencioso: true });
-    // eslint-disable-next-line react-hooks-exhaustive-deps
+   
   }, [revisionComunicados, user?.id_usuario]);
 
 
@@ -303,8 +302,7 @@ export default function Comunicados() {
 
   const rolNombreDe = (rolId) => roles.find((r) => r.id_rol === rolId)?.nombre;
 
-  // Conjuntos de servidores/canales a los que el usuario tiene acceso (para acotar el
-  // formulario de destinatarios: solo lo propio + heredado por tutoría; admin ve todo).
+
   const accesibles = useMemo(() => {
     const servidoresSet = new Set();
     const canalesSet = new Set();
@@ -318,7 +316,7 @@ export default function Comunicados() {
     (accesos?.servidores || []).forEach((s) => servidoresSet.add(Number(s.id_servidor ?? s)));
     (accesos?.canales || []).forEach((c) => canalesSet.add(Number(c.id_canal ?? c)));
 
-    // Membresía directa (por si /mis-servidores no incluyó algún canal/servidor)
+  
     misServidores.forEach((id) => servidoresSet.add(Number(id)));
     misCanales.forEach((id) => canalesSet.add(Number(id)));
 
@@ -360,7 +358,7 @@ export default function Comunicados() {
         .map((ur) => ur.usuario_id)
     );
     return usuarios.filter((u) => ids.has(u.id_usuario) && esAlumnoAccesible(u));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
   }, [usuarios, usuarioRoles, roles, accesibles, miembrosServidor, miembrosCanal]);
 
   const personal = useMemo(() => {
@@ -370,7 +368,7 @@ export default function Comunicados() {
         .map((ur) => ur.usuario_id)
     );
     return usuarios.filter((u) => ids.has(u.id_usuario) && esPersonalAccesible(u));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
   }, [usuarios, usuarioRoles, roles, accesibles, miembrosServidor, miembrosCanal]);
 
   const tutoresDe = (alumnoId) => {
@@ -484,7 +482,7 @@ export default function Comunicados() {
   );
 
   const enviados = comunicados.filter((c) => Number(c.publicado_por) === Number(user?.id_usuario));
-  const recibidos = comunicados.filter((c) => meCorresponde(c.id_comunicado));
+  const recibidos = comunicados.filter((c) => Number(c.publicado_por) !== Number(user?.id_usuario) && meCorresponde(c.id_comunicado));
 
   const porFechaDesc = (a, b) =>
     new Date(b.fecha_publicacion) - new Date(a.fecha_publicacion);
@@ -495,7 +493,7 @@ export default function Comunicados() {
     if (pestana === "papelera") return [...enPapelera].sort(porFechaDesc);
     const base = pestana === "enviados" ? enviados : pestana === "todos" ? comunicados : recibidos;
     return [...base].sort(porFechaDesc);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
   }, [pestana, enviados, recibidos, comunicados, enPapelera]);
 
   const noLeidosCount = recibidos.filter((c) => !vistosIds.has(c.id_comunicado)).length;
@@ -619,7 +617,7 @@ export default function Comunicados() {
     }
   };
 
-  // ---------- Adjuntos: agregar / quitar ----------
+  
   const agregarAdjuntos = (lista) => {
     setErrorAdjuntos("");
     const entrada = Array.from(lista ?? []);
@@ -1144,7 +1142,7 @@ export default function Comunicados() {
                       )}
                     </div>
 
-                    {puedePublicar && (
+                    {(Number(comunicadoSeleccionado?.publicado_por) === Number(user?.id_usuario) || hasRole(["admin", "super_admin"])) && (
                       <div className="comunicados__acciones-detalle">
                         {enPapeleraActual ? (
                           <>

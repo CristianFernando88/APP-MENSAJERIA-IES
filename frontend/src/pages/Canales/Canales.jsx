@@ -36,6 +36,7 @@ export default function Canales() {
 
   const [busqueda, setBusqueda] = useState("");
   const [canalSeleccionadoId, setCanalSeleccionadoId] = useState(null);
+  const [canalDeseleccionadoManual, setCanalDeseleccionadoManual] = useState(false);
   const [miembroSeleccionado, setMiembroSeleccionado] = useState(null);
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState("");
@@ -131,12 +132,13 @@ export default function Canales() {
 
 
   useEffect(() => {
+    if (canalDeseleccionadoManual) return;
     if (misCanales.length > 0 && !misCanales.some(c => c.id_canal === canalSeleccionadoId)) {
       setCanalSeleccionadoId(misCanales[0].id_canal);
     } else if (misCanales.length === 0) {
       setCanalSeleccionadoId(null);
     }
-  }, [misCanales, canalSeleccionadoId]);
+  }, [misCanales, canalSeleccionadoId, canalDeseleccionadoManual]);
 
   const canalesFiltrados = misCanales.filter(c => (c.nombre || "").toLowerCase().includes(busqueda.toLowerCase()));
   const canalActivo = misCanales.find(c => c.id_canal === canalSeleccionadoId);
@@ -221,6 +223,7 @@ export default function Canales() {
   };
 
   const elegirCanal = (c) => {
+    setCanalDeseleccionadoManual(false);
     setCanalSeleccionadoId(c.id_canal);
     setMiembroSeleccionado(null);
     setTabActiva("info");
@@ -549,8 +552,11 @@ export default function Canales() {
                     type="button"
                     className="canales__btn-volver"
                     onClick={() => {
+                      setCanalDeseleccionadoManual(true);
+                      setCanalSeleccionadoId(null);
                       setMiembroSeleccionado(null);
                       setFeedback("");
+                      setVistaMovil("lista");
                     }}
                   >
                     <ArrowLeft size={14} /> Volver

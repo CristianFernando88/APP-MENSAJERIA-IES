@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { listarRecordatorios, crearRecordatorio, actualizarRecordatorio, eliminarRecordatorio } from "../../api/recordatorios";
 import { listarComunicados } from "../../api/comunicados";
+import { obtenerPerfil } from "../../api/perfiles";
 import { listarMiembrosServidor } from "../../api/miembrosServidor";
 import { listarServidores } from "../../api/servidores";
 import { listarDestinatarios } from "../../api/comunicadosDestinatarios";
@@ -13,7 +14,6 @@ import { listarRelaciones } from "../../api/relacionesUsuario";
 import useComunicadosNoLeidos from "../../hooks/useComunicadosNoLeidos";
 import { useAuth } from "../../context/AuthContext";
 import { useNotificaciones } from "../../context/NotificacionesContext";
-import { obtenerPerfil } from "../../api/perfiles";
 import "./Dashboard.css";
 
 const accesos = [
@@ -32,12 +32,20 @@ export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [fotoPerfil, setFotoPerfil] = useState("");
+  const [nombreCompleto, setNombreCompleto] = useState("");
 
   useEffect(() => {
     if (!user?.id_usuario) return;
     obtenerPerfil(user.id_usuario)
-      .then((perfil) => setFotoPerfil(perfil?.foto_perfil || ""))
-      .catch(() => setFotoPerfil(""));
+      .then((perfil) => {
+        setFotoPerfil(perfil?.foto_perfil || "");
+        const nombre = [perfil?.nombres, perfil?.apellidos].filter(Boolean).join(" ").trim();
+        setNombreCompleto(nombre || user?.nombre_usuario || "");
+      })
+      .catch(() => {
+        setFotoPerfil("");
+        setNombreCompleto(user?.nombre_usuario || "");
+      });
   }, [user?.id_usuario]);
 
   const { totalNoLeidos, setTotalNoLeidos, revisionComunicados } = useNotificaciones();
@@ -205,7 +213,7 @@ export default function Dashboard() {
 
         <div className="dash-hero__info">
           <p className="dash-hero__saludo">Panel de inicio</p>
-          <h1 className="dash-hero__nombre">Hola, {user?.nombre_usuario ?? "..."}</h1>
+          <h1 className="dash-hero__nombre">Hola, {nombreCompleto || user?.nombre_usuario || "..."}</h1>
           <div className="dash-hero__meta">
             {misRoles.length > 0 && <span className="dash-hero__tag">{misRoles.join(" · ")}</span>}
             {servidor && <span className="dash-hero__tag">{servidor.nombre}</span>}

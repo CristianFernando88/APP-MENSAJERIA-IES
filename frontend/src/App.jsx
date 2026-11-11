@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useLocation } from "react-router-dom";
 import Layout from "./components/Layout/Layout";
 import RequireAuth from "./components/RequireAuth/RequireAuth";
 import { NotificacionesProvider } from "./context/NotificacionesContext"; // NUEVO
@@ -19,6 +19,9 @@ import NoAutorizado from "./pages/NoAutorizado/NoAutorizado";
 import CambiarPasswordInicial from "./pages/CambiarPasswordInicial/CambiarPasswordInicial";
 
 export default function App() {
+  const location = useLocation();
+  const esLogin = location.pathname === "/login";
+
   return (
     <>
       {/* Ruta pública */}
@@ -26,72 +29,74 @@ export default function App() {
         <Route path="/login" element={<Login />} />
       </Routes>
 
-      {/* Provider único para todas las rutas protegidas */}
-      <NotificacionesProvider>
-        <Routes>
-          <Route
-            path="/cambiar-password-inicial"
-            element={
-              <RequireAuth>
-                <CambiarPasswordInicial />
-              </RequireAuth>
-            }
-          />
-          {/* Rutas protegidas - Todos los usuarios logueados */}
-          <Route
-            path="/"
-            element={<RequireAuth><Layout><Dashboard /></Layout></RequireAuth>}
-          />
-          <Route
-            path="/calendario"
-            element={<RequireAuth><Layout><Calendario /></Layout></RequireAuth>}
-          />
-          <Route
-            path="/mensajes"
-            element={<RequireAuth><Layout><Mensajes /></Layout></RequireAuth>}
-          />
-          <Route
-            path="/comunicados"
-            element={<RequireAuth><Layout><Comunicados /></Layout></RequireAuth>}
-          />
-          <Route
-            path="/perfil"
-            element={<RequireAuth><Layout><Perfil /></Layout></RequireAuth>}
-          />
+      {/* Provider y rutas protegidas - solo se renderizan fuera del login */}
+      {!esLogin && (
+        <NotificacionesProvider>
+          <Routes>
+            <Route
+              path="/cambiar-password-inicial"
+              element={
+                <RequireAuth>
+                  <CambiarPasswordInicial />
+                </RequireAuth>
+              }
+            />
+            {/* Rutas protegidas - Todos los usuarios logueados */}
+            <Route
+              path="/"
+              element={<RequireAuth><Layout><Dashboard /></Layout></RequireAuth>}
+            />
+            <Route
+              path="/calendario"
+              element={<RequireAuth><Layout><Calendario /></Layout></RequireAuth>}
+            />
+            <Route
+              path="/mensajes"
+              element={<RequireAuth><Layout><Mensajes /></Layout></RequireAuth>}
+            />
+            <Route
+              path="/comunicados"
+              element={<RequireAuth><Layout><Comunicados /></Layout></RequireAuth>}
+            />
+            <Route
+              path="/perfil"
+              element={<RequireAuth><Layout><Perfil /></Layout></RequireAuth>}
+            />
 
-          {/* Rutas protegidas por rol */}
-          <Route
-            path="/servidores"
-            element={<RequireAuth roles={["admin", "super_admin", "director"]}><Layout><Servidores /></Layout></RequireAuth>}
-          />
-          <Route
-            path="/categorias"
-            element={<RequireAuth roles={["admin", "super_admin", "director"]}><Layout><Categorias /></Layout></RequireAuth>}
-          />
-          <Route
-            path="/canales"
-            element={<RequireAuth roles={["admin", "super_admin", "director", "profesor"]}><Layout><Canales /></Layout></RequireAuth>}
-          />
-          <Route
-            path="/miembros"
-            element={<RequireAuth roles={["admin", "super_admin", "director", "profesor"]}><Layout><Miembros /></Layout></RequireAuth>}
-          />
-          <Route
-            path="/usuarios"
-            element={<RequireAuth roles={["admin", "super_admin"]}><Layout><Usuarios /></Layout></RequireAuth>}
-          />
-          <Route
-            path="/admin"
-            element={<RequireAuth roles={["admin", "super_admin"]}><Layout><PanelAdmin /></Layout></RequireAuth>}
-          />
+            {/* Rutas protegidas por rol */}
+            <Route
+              path="/servidores"
+              element={<RequireAuth roles={["admin", "super_admin", "director"]}><Layout><Servidores /></Layout></RequireAuth>}
+            />
+            <Route
+              path="/categorias"
+              element={<RequireAuth roles={["admin", "super_admin", "director"]}><Layout><Categorias /></Layout></RequireAuth>}
+            />
+            <Route
+              path="/canales"
+              element={<RequireAuth roles={["admin", "super_admin", "director", "profesor"]}><Layout><Canales /></Layout></RequireAuth>}
+            />
+            <Route
+              path="/miembros"
+              element={<RequireAuth roles={["admin", "super_admin", "director", "profesor"]}><Layout><Miembros /></Layout></RequireAuth>}
+            />
+            <Route
+              path="/usuarios"
+              element={<RequireAuth roles={["admin", "super_admin"]}><Layout><Usuarios /></Layout></RequireAuth>}
+            />
+            <Route
+              path="/admin"
+              element={<RequireAuth roles={["admin", "super_admin"]}><Layout><PanelAdmin /></Layout></RequireAuth>}
+            />
 
-          {/* Página 403 */}
-          <Route path="/no-autorizado" element={<NoAutorizado />} />
+            {/* Página 403 */}
+            <Route path="/no-autorizado" element={<NoAutorizado />} />
 
-          {/* 404 */}
-          <Route path="*" element={<Layout><NotFound /></Layout>} />
-        </Routes>
-      </NotificacionesProvider>
+            {/* 404 */}
+            <Route path="*" element={<Layout><NotFound /></Layout>} />
+          </Routes>
+        </NotificacionesProvider>
+      )}
     </>
   );
 }
