@@ -7,6 +7,7 @@ import {
   Megaphone,
   Calendar,
   ShieldCheck,
+  Lightbulb,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
@@ -42,6 +43,7 @@ const NAV_LINKS = [
   },
   { to: "/mensajes", label: "Mensajes", icon: MessageSquare, roles: null },
   { to: "/comunicados", label: "Comunicados", icon: Megaphone, roles: null },
+  { to: "/sugerencias", label: "Sugerencias", icon: Lightbulb, roles: null },
 ];
 
 export default function SideBar({ isOpen, onClose }) {
