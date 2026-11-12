@@ -18,6 +18,10 @@ import {
 } from "../../api/miembrosServidor";
 import useConfirmacion from "../../hooks/useConfirmacion";
 import { useAuth } from "../../context/AuthContext";
+import {
+  listarRelacionesUsuario, crearRelacionUsuario, eliminarRelacionUsuario,
+} from "../../api/relacionesUsuario";
+import UsuarioDetalle, { nombreCompleto } from "./UsuarioDetalle";
 
 const POR_PAGINA = 10;
 
@@ -53,6 +57,21 @@ export default function UsuariosTab({
   const [enviandoId, setEnviandoId] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(false);
+
+  const [detalleUsuario, setDetalleUsuario] = useState(null);
+  const [relaciones, setRelaciones] = useState([]);
+
+  const recargarRelaciones = async () => {
+    try {
+      setRelaciones(await listarRelacionesUsuario());
+    } catch {
+      setRelaciones([]);
+    }
+  };
+
+  useEffect(() => {
+    recargarRelaciones();
+  }, []);
   
   const [todosLosMiembros, setTodosLosMiembros] = useState([]);
 
@@ -134,6 +153,23 @@ export default function UsuariosTab({
     setFormClave({ nueva: "", repetir: "", usuario: u });
     setVerClave(false);
     setModalClave(true);
+  };
+
+  const abrirDetalle = (u) => {
+    setError("");
+    setMensaje("");
+    setDetalleUsuario(u);
+  };
+
+  const handleCrearVinculo = async (datos) => {
+    const nueva = await crearRelacionUsuario(datos);
+    if (nueva?.id_relacion) setRelaciones((prev) => [...prev, nueva]);
+    else await recargarRelaciones();
+  };
+
+  const handleEliminarVinculo = async (idRelacion) => {
+    await eliminarRelacionUsuario(idRelacion);
+    setRelaciones((prev) => prev.filter((r) => r.id_relacion !== idRelacion));
   };
 
   const handleEnviarCredenciales = async (u) => {
@@ -406,6 +442,13 @@ export default function UsuariosTab({
                     >
                       <Mail size={14} />
                     </button>
+                    <button
+                      className="admin-icon-btn"
+                      title="Ver detalle del usuario"
+                      onClick={() => abrirDetalle(u)}
+                    >
+                      <Eye size={14} />
+                    </button>
                     <button className={`admin-icon-btn${u.activo ? " admin-icon-btn--warn" : ""}`} title={u.activo ? "Desactivar usuario" : "Activar usuario"} onClick={() => handleToggleActivo(u)}><Power size={14} /></button>
                     <button className="admin-icon-btn admin-icon-btn--danger" title="Eliminar usuario" onClick={() => handleEliminar(u)}><Trash2 size={14} /></button>
                   </div>
@@ -460,6 +503,26 @@ export default function UsuariosTab({
               <Button type="submit" disabled={guardando}>{guardando ? "Guardando..." : "Cambiar contraseña"}</Button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* MODAL DETALLE DE USUARIO */}
+      {detalleUsuario && (
+        <Modal
+          title={`Detalle de ${nombreCompleto(detalleUsuario)}`}
+          onClose={() => setDetalleUsuario(null)}
+        >
+          <UsuarioDetalle
+            usuario={detalleUsuario}
+            asignaciones={asignaciones}
+            roles={roles}
+            servidores={servidores}
+            membresias={todosLosMiembros}
+            relaciones={relaciones}
+            usuarios={usuarios}
+            onCrearVinculo={handleCrearVinculo}
+            onEliminarVinculo={handleEliminarVinculo}
+          />
         </Modal>
       )}
 
