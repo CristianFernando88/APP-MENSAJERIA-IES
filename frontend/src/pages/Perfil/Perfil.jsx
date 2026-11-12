@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { obtenerUsuario, actualizarUsuario } from "../../api/usuarios";
-import Input from "../../components/ui/Input/Input";
+import { obtenerUsuario } from "../../api/usuarios";
 import Button from "../../components/ui/Button/Button";
 import Badge from "../../components/ui/Badge/Badge";
 import "./Perfil.css";
@@ -13,24 +12,15 @@ export default function Perfil() {
   const [perfil, setPerfil] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [mensaje, setMensaje] = useState("");
-  const [editando, setEditando] = useState(false);
-  const [guardando, setGuardando] = useState(false);
 
   const [datosPerfil, setDatosPerfil] = useState(null);
   const [archivoFoto, setArchivoFoto] = useState(null);
   const [fotoPreview, setFotoPreview] = useState("");
   const [subiendoFoto, setSubiendoFoto] = useState(false);
 
-  const [form, setForm] = useState({
-    nombre_usuario: "",
-    email: "",
-    password: "",
-    activo: true,
-    biografia: "",
-  });
+  const [biografia, setBiografia] = useState("");
+  const [guardandoBio, setGuardandoBio] = useState(false);
 
-  
   useEffect(() => {
     if (!user?.id_usuario) return;
 
@@ -46,13 +36,7 @@ export default function Perfil() {
 
         setPerfil(data);
         setDatosPerfil(dataPerfil);
-        setForm({
-          nombre_usuario: data.nombre_usuario || "",
-          email: data.email || "",
-          password: "",
-          activo: data.activo ?? true,
-          biografia: dataPerfil?.biografia || "",
-        });
+        setBiografia(dataPerfil?.biografia || "");
       } catch (err) {
         if (!cancelado) setError(err?.message || "No se pudo cargar el perfil");
       } finally {
@@ -66,18 +50,12 @@ export default function Perfil() {
     };
   }, [user]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  
+  // --- Foto (editable) ---
   const handleSeleccionarFoto = (e) => {
     const archivo = e.target.files?.[0];
 
     if (!archivo) return;
 
-    setMensaje("");
     setError("");
 
     const formatosPermitidos = ["image/jpeg", "image/png", "image/webp"];
@@ -102,19 +80,14 @@ export default function Perfil() {
     if (!user?.id_usuario || !archivoFoto) return;
 
     setSubiendoFoto(true);
-    setMensaje("");
     setError("");
 
     try {
-      const actualizado = await subirFotoPerfil(
-        user.id_usuario,
-        archivoFoto
-      );
+      const actualizado = await subirFotoPerfil(user.id_usuario, archivoFoto);
 
       setDatosPerfil(actualizado);
       setFotoPreview(actualizado.foto_perfil || "");
       setArchivoFoto(null);
-      setMensaje("Foto de perfil actualizada correctamente.");
     } catch (err) {
       setError(err?.message || "No se pudo subir la foto.");
     } finally {
@@ -125,14 +98,12 @@ export default function Perfil() {
   const handleQuitarFoto = async () => {
     if (!user?.id_usuario) return;
     setSubiendoFoto(true);
-    setMensaje("");
     setError("");
     try {
       const actualizado = await eliminarFotoPerfil(user.id_usuario);
       setDatosPerfil(actualizado);
       setFotoPreview("");
       setArchivoFoto(null);
-      setMensaje("Foto de perfil eliminada correctamente.");
     } catch (err) {
       setError(err?.message || "No se pudo quitar la foto.");
     } finally {
@@ -140,59 +111,39 @@ export default function Perfil() {
     }
   };
 
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  // --- Biografía (editable) ---
+  const handleGuardarBiografia = async () => {
     if (!user?.id_usuario) return;
 
-    setGuardando(true);
-    setMensaje("");
+    setGuardandoBio(true);
     setError("");
 
     try {
-      const payload = {
-        nombre_usuario: form.nombre_usuario.trim(),
-        email: form.email.trim(),
-      };
-
-    
-      if (form.password.trim()) {
-        payload.password = form.password.trim();
-      }
-
-      const actualizado = await actualizarUsuario(user.id_usuario, payload);
-
-      const biografiaFinal =
-        form.biografia && form.biografia.trim()
-          ? form.biografia.trim()
-          : null;
+      const biografiaFinal = biografia && biografia.trim() ? biografia.trim() : null;
 
       const actualizadoPerfil = await actualizarPerfil(user.id_usuario, {
         biografia: biografiaFinal,
       });
 
-      setPerfil(actualizado);
       setDatosPerfil(actualizadoPerfil);
-      setForm((prev) => ({
-        ...prev,
-        nombre_usuario: actualizado.nombre_usuario,
-        email: actualizado.email,
-        password: "",
-        biografia: biografiaFinal || "",
-      }));
-
-      setMensaje("Perfil actualizado correctamente.");
-      setEditando(false);
+      setBiografia(actualizadoPerfil?.biografia || "");
     } catch (err) {
-      setError(err?.message || "No se pudo actualizar el perfil");
+      setError(err?.message || "No se pudo actualizar la biografía");
     } finally {
-      setGuardando(false);
+      setGuardandoBio(false);
     }
   };
 
   const iniciales = perfil?.nombre_usuario
     ? perfil.nombre_usuario.slice(0, 2).toUpperCase()
     : "??";
+
+  const campoSoloLectura = (etiqueta, valor) => (
+    <div className="perfil__campo">
+      <span className="perfil__campo-etiqueta">{etiqueta}</span>
+      <span className="perfil__campo-valor">{valor || "-"}</span>
+    </div>
+  );
 
   if (loading) {
     return <p className="cargando">Cargando perfil...</p>;
@@ -217,25 +168,16 @@ export default function Perfil() {
         </div>
 
         <div>
-          <h1 className="perfil__nombre">{perfil?.nombre_usuario}</h1>
-          <p className="perfil__username">{perfil?.email}</p>
+          <h1 className="perfil__nombre">
+            {datosPerfil?.nombres || datosPerfil?.apellidos
+              ? `${datosPerfil?.nombres || ""} ${datosPerfil?.apellidos || ""}`.trim()
+              : perfil?.nombre_usuario}
+          </h1>
+          <p className="perfil__username">@{perfil?.nombre_usuario}</p>
 
           <Badge variant={perfil?.activo ? "success" : "danger"}>
             {perfil?.activo ? "Activo" : "Inactivo"}
           </Badge>
-
-          {datosPerfil?.biografia && (
-            <p
-              style={{
-                fontSize: "13px",
-                color: "#475569",
-                margin: "8px 0 0 0",
-                lineHeight: 1.5,
-              }}
-            >
-              {datosPerfil.biografia}
-            </p>
-          )}
         </div>
       </div>
 
@@ -275,87 +217,37 @@ export default function Perfil() {
         )}
       </div>
 
-      {mensaje && <p className="perfil__mensaje-exito">{mensaje}</p>}
       {error && <p className="perfil__mensaje-error">{error}</p>}
 
-      <form className="perfil__form" onSubmit={handleSubmit}>
-        <h2 className="perfil__section-title">Datos de la cuenta</h2>
-
-        <div className="perfil__grid">
-          <Input
-            label="Nombre de usuario"
-            name="nombre_usuario"
-            value={form.nombre_usuario}
-            onChange={handleChange}
-            disabled={!editando}
-          />
-          <Input
-            label="Email"
-            name="email"
-            type="email"
-            value={form.email}
-            onChange={handleChange}
-            disabled={!editando}
-          />
-        </div>
-
-        {editando && (
-          <div className="perfil__grid">
-            <Input
-              label="Nueva contraseña (opcional)"
-              name="password"
-              type="password"
-              value={form.password}
-              onChange={handleChange}
-              placeholder="Dejar vacío para no cambiarla"
-            />
-          </div>
-        )}
-
-        {editando && (
-          <div className="perfil__grid">
-            <div style={{ gridColumn: "1 / -1", width: "100%" }}>
-              <label
-                htmlFor="biografia"
-                style={{
-                  display: "block",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  marginBottom: "6px",
-                  color: "#334155",
-                }}
-              >
-                Biografía
-              </label>
-              <textarea
-                id="biografia"
-                name="biografia"
-                value={form.biografia || ""}
-                onChange={handleChange}
-                placeholder="Contá tu biografía..."
-                rows={3}
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: "10px",
-                  border: "1px solid #CBD5E1",
-                  fontSize: "14px",
-                  fontFamily: "inherit",
-                  resize: "vertical",
-                }}
-              />
-            </div>
-          </div>
-        )}
-
-        <p className="perfil__meta">
-          Miembro desde {perfil?.fecha_registro
-            ? new Date(perfil.fecha_registro).toLocaleDateString("es-AR")
-            : "-"}
+      <div className="perfil__bloque">
+        <h2 className="perfil__section-title">Datos personales</h2>
+        <p className="perfil__nota">
+          Estos datos solo pueden ser cargados por un administrador.
         </p>
+        <div className="perfil__campos">
+          {campoSoloLectura("Nombres", datosPerfil?.nombres)}
+          {campoSoloLectura("Apellidos", datosPerfil?.apellidos)}
+          {campoSoloLectura("DNI", datosPerfil?.dni)}
+        </div>
+      </div>
 
+      <div className="perfil__bloque">
+        <h2 className="perfil__section-title">Datos de la cuenta</h2>
+        <div className="perfil__campos">
+          {campoSoloLectura("Nombre de usuario", perfil?.nombre_usuario)}
+          {campoSoloLectura("Email", perfil?.email)}
+          {campoSoloLectura(
+            "Miembro desde",
+            perfil?.fecha_registro
+              ? new Date(perfil.fecha_registro).toLocaleDateString("es-AR")
+              : "-"
+          )}
+        </div>
+      </div>
+
+      <div className="perfil__bloque">
         <h2 className="perfil__section-title">Roles</h2>
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "1rem" }}>
+        <div className="perfil__roles">
           {user?.roles?.length ? (
             user.roles.map((rol) => (
               <Badge key={rol.id_rol || rol.nombre} variant="default">
@@ -366,37 +258,29 @@ export default function Perfil() {
             <span>Sin roles asignados</span>
           )}
         </div>
+      </div>
 
+      <div className="perfil__bloque">
+        <h2 className="perfil__section-title">Biografía</h2>
+        <textarea
+          id="biografia"
+          name="biografia"
+          className="perfil__textarea"
+          value={biografia || ""}
+          onChange={(e) => setBiografia(e.target.value)}
+          placeholder="Contá tu biografía..."
+          rows={3}
+        />
         <div className="perfil__actions">
-          {editando ? (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setEditando(false);
-                  setForm({
-                    nombre_usuario: perfil?.nombre_usuario || "",
-                    email: perfil?.email || "",
-                    password: "",
-                    activo: perfil?.activo ?? true,
-                    biografia: datosPerfil?.biografia || "",
-                  });
-                }}
-              >
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={guardando}>
-                {guardando ? "Guardando..." : "Guardar cambios"}
-              </Button>
-            </>
-          ) : (
-            <Button type="button" onClick={() => setEditando(true)}>
-              Editar perfil
-            </Button>
-          )}
+          <Button
+            type="button"
+            onClick={handleGuardarBiografia}
+            disabled={guardandoBio}
+          >
+            {guardandoBio ? "Guardando..." : "Guardar biografía"}
+          </Button>
         </div>
-      </form>
+      </div>
     </section>
   );
 }

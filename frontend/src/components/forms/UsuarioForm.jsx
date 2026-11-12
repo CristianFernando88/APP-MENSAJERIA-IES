@@ -22,6 +22,7 @@ export default function UsuarioForm({
     activo: usuarioInicial ? String(usuarioInicial.activo) : "true",
     nombres: usuarioInicial?.perfil?.nombres || "",
     apellidos: usuarioInicial?.perfil?.apellidos || "",
+    dni: usuarioInicial?.perfil?.dni || "",
     roles_ids: usuarioInicial?.roles_asignados || [],
     servidores_ids: usuarioInicial?.servidores_actuales || [], // Agregado para múltiples servidores
   });
@@ -66,6 +67,9 @@ export default function UsuarioForm({
     if (form.nombre_usuario.trim().length < 3) return setError("El nombre debe tener al menos 3 caracteres.");
     if (!form.email.trim()) return setError("El email es obligatorio.");
     if (!form.nombres.trim() || !form.apellidos.trim()) return setError("Nombre y apellido son obligatorios.");
+    if (form.dni.trim() && !/^\d{7,8}$/.test(form.dni.trim())) {
+      return setError("El DNI debe tener solo números (7 u 8 dígitos).");
+    }
     
     // Si es nuevo, la contraseña es obligatoria. Si es edición, es opcional.
     if (usuarioInicial && form.password) {
@@ -134,6 +138,7 @@ export default function UsuarioForm({
       
       <Input label="Nombres" name="nombres" value={form.nombres} onChange={handleChange} placeholder="Ej: Juan Carlos" />
       <Input label="Apellidos" name="apellidos" value={form.apellidos} onChange={handleChange} placeholder="Ej: Pérez" />
+      <Input label="DNI (opcional)" name="dni" value={form.dni} onChange={handleChange} placeholder="Ej: 40123456" />
 
       <div className="admin-grupo" style={{ marginTop: "1rem" }}>
         <span className="admin-grupo-label" style={{ fontWeight: "bold", fontSize: "14px", display: "block", marginBottom: "8px" }}>Roles</span>
