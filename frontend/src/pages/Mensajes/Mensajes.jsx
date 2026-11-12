@@ -77,10 +77,16 @@ function rolPrincipalDe(usuarioObj, rolesExtra = []) {
   return principal ? nombres[principal] : null;
 }
 
+const EMOJIS = [
+  "😀","😂","😊","😍","🤔","😎","👍","👎","❤️","🔥","🎉","👏",
+  "🙌","🙏","✅","❌","⭐","💡","📌","📎","📅","⏰","📎","💬",
+  "📢","🔔","📝","📚","🎓","🏆","🎯","💪","🤝","👋","👀","🤔",
+];
+
 export default function Mensajes() {
   const { user, hasRole, asignaciones, miembroCanalDe, invalidarMiembroCanal } = useAuth();
   // NUEVO: Traemos setPausarNotificaciones
-  const { setTotalNoLeidos, setPausarNotificaciones } = useNotificaciones();
+  const { setTotalNoLeidos, setPausarNotificaciones, setChatActivoActual } = useNotificaciones();
   
   const [canales, setCanales] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
@@ -91,6 +97,7 @@ export default function Mensajes() {
   const [chatActivo, setChatActivo] = useState(null); 
   const [mensajes, setMensajes] = useState([]);
   const [texto, setTexto] = useState("");
+  const [mostrarEmojis, setMostrarEmojis] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   
@@ -180,6 +187,16 @@ export default function Mensajes() {
   useEffect(() => {
     chatActivoRef.current = chatActivo;
   }, [chatActivo]);
+
+  // Sincroniza el chat activo con el contexto de notificaciones para suprimir
+  // el toast cuando el mensaje viene del chat/canal que se está viendo.
+  useEffect(() => {
+    if (!chatActivo) {
+      setChatActivoActual(null);
+      return;
+    }
+    setChatActivoActual({ tipo: chatActivo.tipo, id: chatActivo.id });
+  }, [chatActivo, setChatActivoActual]);
 
   // NUEVO: Limpiamos el contador global y pausamos las notificaciones al entrar
   useEffect(() => {
@@ -1117,6 +1134,45 @@ export default function Mensajes() {
 
               {puedeEscribirActivo || chatActivo.tipo !== "canal" ? (
                 <form className="mensajes__input-row" onSubmit={handleEnviar}>
+                  <button
+                    type="button"
+                    className="mensajes__emoji-btn"
+                    onClick={() => setMostrarEmojis((v) => !v)}
+                    aria-label="Emojis"
+                  >
+                    😊
+                  </button>
+                  <div className="mensajes__emoji-panel" style={{ display: mostrarEmojis ? "grid" : "none" }}>
+                      {EMOJIS.map((e, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          className="mensajes__emoji-item"
+                          onClick={() => {
+                            setTexto((t) => t + e);
+                            setMostrarEmojis(false);
+                          }}
+                        >
+                          {e}
+                        </button>
+                      ))}
+                    </div>
+                  <button
+                    type="button"
+                    className="mensajes__emoji-btn"
+                    onClick={() => archivoInputRef.current?.click()}
+                    disabled={subiendoArchivo}
+                    aria-label="Adjuntar archivo"
+                    title="Adjuntar imagen o archivo"
+                  >
+                    {subiendoArchivo ? "…" : <Paperclip size={16} />}
+                  </button>
+                  <input
+                    ref={archivoInputRef}
+                    type="file"
+                    hidden
+                    onChange={handleAdjuntarArchivo}
+                  />
                   <input type="text" placeholder="Escribí un mensaje..." value={texto} onChange={(e) => setTexto(e.target.value)} />
                   <button type="submit" disabled={!texto.trim()}><Send size={18} /></button>
                 </form>
