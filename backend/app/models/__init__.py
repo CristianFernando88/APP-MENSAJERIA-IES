@@ -18,6 +18,7 @@ from app.models.comunicado_visto import ComunicadoVisto
 from app.models.mensaje_visto import MensajeVisto
 from app.models.relacion_usuario import RelacionUsuario
 from app.models.comunicado_adjunto import ComunicadoAdjunto
+from app.models.sugerencia import Sugerencia
 
 __all__ = [
     "Usuario",
@@ -39,4 +40,5 @@ __all__ = [
     "ComunicadoAdjunto",
     "MensajeVisto",
     "RelacionUsuario",
+    "Sugerencia",
 ]
