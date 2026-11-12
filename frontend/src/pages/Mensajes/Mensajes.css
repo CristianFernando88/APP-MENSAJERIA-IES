@@ -277,6 +277,7 @@
   padding: var(--space-sm) var(--space-md);
   background-color: var(--color-blanco);
   border-top: 1px solid var(--color-gris-azulado);
+  position: relative;
 }
 
 .mensajes__input-row input {
@@ -727,4 +728,45 @@
 
 .mensajes__tutor-fila:last-child {
   border-bottom: none;
+}
+
+/* Emoji picker */
+.mensajes__emoji-btn {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  position: relative;
+}
+.mensajes__emoji-btn:hover {
+  background-color: var(--color-gris-azulado, #eef2f7);
+}
+.mensajes__emoji-panel {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 6px;
+  background: var(--color-blanco, #fff);
+  border: 1px solid var(--color-gris-azulado, #dfe3ea);
+  border-radius: 8px;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  max-width: 260px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  z-index: 100;
+}
+.mensajes__emoji-item {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+}
+.mensajes__emoji-item:hover {
+  background-color: var(--color-gris-azulado, #eef2f7);
 }

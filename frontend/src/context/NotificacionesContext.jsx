@@ -38,6 +38,7 @@ export function NotificacionesProvider({ children }) {
   
   
   const [pausarNotificaciones, setPausarNotificaciones] = useState(false);
+  const [chatActivoActual, setChatActivoActual] = useState(null);
   
   
   const pausarRef = useRef(pausarNotificaciones);
@@ -132,25 +133,27 @@ export function NotificacionesProvider({ children }) {
 
   useWebSocket(user?.id_usuario ? `directo/${user.id_usuario}` : null, (data) => {
     if (data && data.emisor_id && Number(data.emisor_id) !== Number(user.id_usuario)) {
-      
+      const mismoChat = chatActivoActual?.tipo === "directo" && Number(chatActivoActual?.id) === Number(data.emisor_id);
+      if (mismoChat) return; // no notificación si estoy en ese chat
+      reproducirSonido();
+      mostrarToastGlobal("Nuevo mensaje", "Has recibido un mensaje directo", "mensaje", "/mensajes");
+      registrarAvisoMensaje("Nuevo mensaje", data);
       if (!pausarRef.current) {
-        reproducirSonido();
-        mostrarToastGlobal("Nuevo mensaje", "Has recibido un mensaje directo", "mensaje", "/mensajes");
-        registrarAvisoMensaje("Nuevo mensaje", data);
         setTotalNoLeidos(prev => prev + 1);
       }
     }
   });
 
   const handleNuevoMensajeCanal = (data) => {
-    if (pausarRef.current) return; 
+    const mismoChat = chatActivoActual?.tipo === "canal" && Number(chatActivoActual?.id) === Number(data.canal_id);
+    if (mismoChat) return;
     console.log("[CONTEXTO] Nuevo mensaje en canal, disparando Toast");
     reproducirSonido();
-    if (window.location.pathname !== "/mensajes") {
-      mostrarToastGlobal("Nuevo mensaje", "Has recibido un mensaje en un canal", "mensaje", "/mensajes");
-    }
-    setTotalNoLeidos(prev => prev + 1);
+    mostrarToastGlobal("Nuevo mensaje", "Has recibido un mensaje en un canal", "mensaje", "/mensajes");
     registrarAvisoMensaje("Nuevo mensaje en un canal", data);
+    if (!pausarRef.current) {
+      setTotalNoLeidos(prev => prev + 1);
+    }
   };
 
   const limpiarContador = (cantidad = 1) => {
@@ -268,6 +271,7 @@ export function NotificacionesProvider({ children }) {
       limpiarContador, 
       setTotalNoLeidos,
       setPausarNotificaciones,
+      setChatActivoActual,
       mostrarToastGlobal,
       refrescarComunicados,
       revisionComunicados,

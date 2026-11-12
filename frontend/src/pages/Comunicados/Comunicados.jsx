@@ -103,6 +103,25 @@ const fechaLarga = (iso) =>
     day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit",
   });
 
+const descargarAdjunto = async (url, nombre) => {
+  try {
+    const respuesta = await fetch(url, { mode: "cors" });
+    if (!respuesta.ok) throw new Error("No se pudo descargar el archivo");
+    const blob = await respuesta.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const enlace = document.createElement("a");
+    enlace.href = objectUrl;
+    enlace.download = nombre || "archivo";
+    document.body.appendChild(enlace);
+    enlace.click();
+    document.body.removeChild(enlace);
+    URL.revokeObjectURL(objectUrl);
+  } catch (err) {
+    // Fallback: abrir en nueva pestaña si el fetch falla (ej. CORS)
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+};
+
 export default function Comunicados() {
   const { user, hasRole, accesos } = useAuth();
   const { revisionComunicados } = useNotificaciones();
@@ -598,7 +617,8 @@ export default function Comunicados() {
   };
 
   const handleEliminarDefinitivo = async (comunicado) => {
-    const ok = await pedir({
+  
+   const ok = await pedir({
       titulo: "Eliminar definitivamente",
       mensaje: `Se va a borrar "${comunicado.titulo}" para siempre, junto con sus destinatarios, registros de lectura y adjuntos. Esta acción NO se puede deshacer.`,
       textoConfirmar: "Eliminar para siempre",
@@ -1109,15 +1129,13 @@ export default function Comunicados() {
                                     </span>
                                   </span>
 
-                                  <a
+                                  <button
+                                    type="button"
                                     className="comunicados__archivo-descargar"
-                                    href={adj.url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    download={adj.nombre_original}
+                                    onClick={() => descargarAdjunto(adj.url, adj.nombre_original)}
                                   >
                                     <Download size={14} /> Descargar
-                                  </a>
+                                  </button>
                                 </div>
                               );
                             })}
