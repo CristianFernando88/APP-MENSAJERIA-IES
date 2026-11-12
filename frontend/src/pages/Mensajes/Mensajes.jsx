@@ -1157,22 +1157,6 @@ export default function Mensajes() {
                         </button>
                       ))}
                     </div>
-                  <button
-                    type="button"
-                    className="mensajes__emoji-btn"
-                    onClick={() => archivoInputRef.current?.click()}
-                    disabled={subiendoArchivo}
-                    aria-label="Adjuntar archivo"
-                    title="Adjuntar imagen o archivo"
-                  >
-                    {subiendoArchivo ? "…" : <Paperclip size={16} />}
-                  </button>
-                  <input
-                    ref={archivoInputRef}
-                    type="file"
-                    hidden
-                    onChange={handleAdjuntarArchivo}
-                  />
                   <input type="text" placeholder="Escribí un mensaje..." value={texto} onChange={(e) => setTexto(e.target.value)} />
                   <button type="submit" disabled={!texto.trim()}><Send size={18} /></button>
                 </form>
