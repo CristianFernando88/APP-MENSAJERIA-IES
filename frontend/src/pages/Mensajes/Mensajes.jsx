@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Send, Search, Hash, ChevronLeft, ChevronDown, Plus, Users, UserPlus, X } from "lucide-react";
+import { Send, Search, Hash, ChevronLeft, ChevronDown, Plus, Users, UserPlus, X, Paperclip, Download, File, FileText, ImageIcon } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useNotificaciones } from "../../context/NotificacionesContext";
 import { useWebSocket } from "../../hooks/useWebSocket";
-import { listarMensajes } from "../../api/mensajes";
+import { listarMensajes, subirArchivoMensaje } from "../../api/mensajes";
 import { listarUsuarioRol } from "../../api/usuarioRol";
 import { listarRoles } from "../../api/roles";
 import { listarMensajesDirectos, actualizarMensajeDirecto, getContactosPermitidos } from "../../api/mensajesDirectos";
@@ -83,6 +83,51 @@ const EMOJIS = [
   "📢","🔔","📝","📚","🎓","🏆","🎯","💪","🤝","👋","👀","🤔",
 ];
 
+const descargarAdjunto = async (url, nombre) => {
+  // Intento 1: fetch como blob (preserva formato y nombre exacto)
+  try {
+    const respuesta = await fetch(url, { mode: "cors" });
+    if (!respuesta.ok) throw new Error("fetch failed");
+    const blob = await respuesta.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const enlace = document.createElement("a");
+    enlace.href = objectUrl;
+    enlace.download = nombre || "archivo";
+    document.body.appendChild(enlace);
+    enlace.click();
+    document.body.removeChild(enlace);
+    URL.revokeObjectURL(objectUrl);
+    return;
+  } catch (err) {
+    // Intento 2: Cloudinary fl_attachment fuerza Content-Disposition: attachment
+    const urlDescarga = url.replace(/\/upload\//, "/upload/fl_attachment/");
+    window.open(urlDescarga, "_blank", "noopener,noreferrer");
+  }
+};
+
+const nombreDeArchivoDeUrl = (url) => {
+  if (typeof url !== "string") return "archivo";
+  try {
+    const pathname = new URL(url).pathname;
+    const segmento = pathname.split("/").pop() || "";
+    const decodificado = decodeURIComponent(segmento);
+    return decodificado || "archivo";
+  } catch {
+    const segmento = url.split("/").pop().split("?")[0];
+    return decodeURIComponent(segmento) || "archivo";
+  }
+};
+
+const extensionDe = (nombre) => (nombre || "").split(".").pop()?.toLowerCase() || "";
+
+const iconoDeArchivo = (tipoMime, nombre) => {
+  if (tipoMime?.startsWith("image/")) return ImageIcon;
+  const ext = extensionDe(nombre);
+  if (["jpg", "jpeg", "png", "webp", "gif"].includes(ext)) return ImageIcon;
+  if (["pdf", "doc", "docx", "txt"].includes(ext)) return FileText;
+  return File;
+};
+
 export default function Mensajes() {
   const { user, hasRole, asignaciones, miembroCanalDe, invalidarMiembroCanal } = useAuth();
   // NUEVO: Traemos setPausarNotificaciones
@@ -98,6 +143,9 @@ export default function Mensajes() {
   const [mensajes, setMensajes] = useState([]);
   const [texto, setTexto] = useState("");
   const [mostrarEmojis, setMostrarEmojis] = useState(false);
+  const [subiendoArchivo, setSubiendoArchivo] = useState(false);
+  const [archivoPendiente, setArchivoPendiente] = useState(null);
+  const archivoInputRef = useRef(null);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   
@@ -290,7 +338,7 @@ export default function Mensajes() {
     }
   };
 
-  // 1. Cargar datos iniciales
+  
   useEffect(() => {
     async function cargarDatos() {
       try {
@@ -519,47 +567,75 @@ export default function Mensajes() {
   // 4. ENVIAR MENSAJE (Usa el sendCanal o sendDirecto según corresponda)
   const handleEnviar = (e) => {
     e.preventDefault();
-    if (!texto.trim() || !chatActivo) return;
+    if (!chatActivo) return;
     // NUEVO: bloquea el envío antes de usar los WebSockets conservados
     if (chatActivo.tipo === "canal" && !puedeEscribirActivo) return;
 
-    const textoAEnviar = texto.trim();
+    const tieneArchivo = !!archivoPendiente;
+    const textoTrim = texto.trim();
+    if (!textoTrim && !tieneArchivo) return;
+
+    const infoArchivo = archivoPendiente
+      ? { tipo: "archivo", url: archivoPendiente.url, nombre: archivoPendiente.nombre, tipo_mime: archivoPendiente.tipo_mime }
+      : null;
+    const contenidoEnviar = infoArchivo ? JSON.stringify(infoArchivo) : textoTrim;
+
     setTexto("");
+    setArchivoPendiente(null);
 
     if (chatActivo.tipo === "canal") {
-      const enviado = sendCanal({ contenido: textoAEnviar, usuario_id: user.id_usuario });
+      const enviado = sendCanal({ contenido: contenidoEnviar, usuario_id: user.id_usuario });
       if (enviado === false) {
         mostrarToast("Error de conexión: el mensaje no se pudo enviar", "error");
         return;
       }
-      
+
       const mensajeTemporal = {
         id_mensaje: `temp-${Date.now()}`,
-        contenido: textoAEnviar,
+        contenido: contenidoEnviar,
         usuario_id: user.id_usuario,
         canal_id: chatActivo.id,
         fecha_envio: new Date().toISOString(),
-        editado: false
+        editado: false,
       };
       setMensajes(prev => [...prev, mensajeTemporal]);
-      
+
     } else {
-      const enviado = sendDirecto({ contenido: textoAEnviar, receptor_id: chatActivo.id });
+      const enviado = sendDirecto({ contenido: contenidoEnviar, receptor_id: chatActivo.id });
       if (enviado === false) {
         mostrarToast("Error de conexión: el mensaje no se pudo enviar", "error");
         return;
       }
-      
+
       const mensajeTemporal = {
         id_mensaje_directo: `temp-${Date.now()}`,
-        contenido: textoAEnviar,
+        contenido: contenidoEnviar,
         emisor_id: user.id_usuario,
         receptor_id: chatActivo.id,
         fecha_envio: new Date().toISOString(),
-        leido: false
+        leido: false,
       };
       setMensajes(prev => [...prev, mensajeTemporal]);
       setMensajesDirectos(prev => [...prev, mensajeTemporal]);
+    }
+  };
+
+  const handleAdjuntarArchivo = async (e) => {
+    const archivo = e.target.files?.[0];
+    if (!archivo || !chatActivo) return;
+    e.target.value = "";
+    setSubiendoArchivo(true);
+    try {
+      const resultado = await subirArchivoMensaje(archivo);
+      setArchivoPendiente({
+        url: resultado.url,
+        nombre: resultado.nombre || archivo.name,
+        tipo_mime: resultado.tipo_mime || archivo.type,
+      });
+    } catch (err) {
+      mostrarToast(err?.message || "No se pudo subir el archivo", "error");
+    } finally {
+      setSubiendoArchivo(false);
     }
   };
 
@@ -1124,7 +1200,37 @@ export default function Mensajes() {
                       {!esMio && chatActivo.tipo === "canal" && (
                         <span style={{ fontSize: "0.75rem", fontWeight: "bold", display: "block", marginBottom: "4px", color: "var(--color-azul-petroleo)" }}>{getNombre(m.usuario_id)}</span>
                       )}
-                      <p>{m.contenido}</p>
+                      {(() => {
+                        let parsed = null;
+                        try { parsed = JSON.parse(m.contenido); } catch {}
+                        const url = parsed?.url || (typeof m.contenido === "string" && /^https?:\/\//.test(m.contenido) ? m.contenido : null);
+                        const nombre = parsed?.nombre || (url ? nombreDeArchivoDeUrl(url) : null);
+                        const tipoMime = parsed?.tipo_mime || "";
+                        if (url) {
+                          const esImg = /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/i.test(url);
+                          const Icono = iconoDeArchivo(tipoMime, nombre);
+                          return esImg ? (
+                            <img src={url} alt={nombre} style={{ maxWidth: "100%", borderRadius: 8, display: "block" }} />
+                          ) : (
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", background: "rgba(0,0,0,0.06)", borderRadius: 8 }}>
+                              <Icono size={20} />
+                              <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+                                <span style={{ fontSize: "0.85rem", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nombre || "Archivo adjunto"}</span>
+                                <span style={{ fontSize: "0.7rem", opacity: 0.7 }}>{extensionDe(nombre).toUpperCase() || "ARCHIVO"}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => descargarAdjunto(url, nombre || "archivo")}
+                                style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", padding: 4, flexShrink: 0 }}
+                                title="Descargar"
+                              >
+                                <Download size={16} />
+                              </button>
+                            </div>
+                          );
+                        }
+                        return <p>{m.contenido}</p>;
+                      })()}
                       <span className="mensajes__bubble-time">{formatearHora(m.fecha_envio)}</span>
                     </div>
                   );
@@ -1133,7 +1239,17 @@ export default function Mensajes() {
               </div>
 
               {puedeEscribirActivo || chatActivo.tipo !== "canal" ? (
-                <form className="mensajes__input-row" onSubmit={handleEnviar}>
+                <>
+                  {archivoPendiente && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", background: "rgba(0,0,0,0.06)", borderRadius: 8, margin: "0 12px 4px", fontSize: "0.85rem" }}>
+                      <Paperclip size={14} />
+                      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{archivoPendiente.nombre}</span>
+                      <button type="button" onClick={() => setArchivoPendiente(null)} style={{ background: "none", border: "none", cursor: "pointer", padding: 2 }} aria-label="Quitar archivo">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
+                  <form className="mensajes__input-row" onSubmit={handleEnviar}>
                   <button
                     type="button"
                     className="mensajes__emoji-btn"
@@ -1157,9 +1273,26 @@ export default function Mensajes() {
                         </button>
                       ))}
                     </div>
+                  <input
+                    ref={archivoInputRef}
+                    type="file"
+                    hidden
+                    onChange={handleAdjuntarArchivo}
+                  />
+                  <button
+                    type="button"
+                    className="mensajes__emoji-btn"
+                    onClick={() => archivoInputRef.current?.click()}
+                    disabled={subiendoArchivo}
+                    aria-label="Adjuntar archivo"
+                    title="Adjuntar imagen o archivo"
+                  >
+                    {subiendoArchivo ? "…" : <Paperclip size={16} />}
+                  </button>
                   <input type="text" placeholder="Escribí un mensaje..." value={texto} onChange={(e) => setTexto(e.target.value)} />
-                  <button type="submit" disabled={!texto.trim()}><Send size={18} /></button>
+                  <button type="submit" disabled={!texto.trim() && !archivoPendiente}><Send size={18} /></button>
                 </form>
+                </>
               ) : (
                 <div className="mensajes__readonly">🔒 Solo lectura — {motivoBloqueo}</div>
               )}

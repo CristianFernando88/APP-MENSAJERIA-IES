@@ -1,7 +1,7 @@
 import json
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Query, status, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, File, HTTPException, Query, status, UploadFile, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db, SessionLocal 
@@ -10,6 +10,7 @@ from app.core.deps import get_usuario_actual
 from app.core.ws_manager import manager  # Importamos el manager global
 from . import repository as repo
 from .schemas import MensajeCreate, MensajeUpdate, MensajeResponse
+from cloudinary.uploader import upload
 
 router = APIRouter(prefix="/mensajes", tags=["Mensajes"])
 
@@ -82,6 +83,38 @@ def eliminar(
         raise HTTPException(status_code=403, detail="Solo el autor puede eliminar el mensaje")
     repo.delete(db, mensaje_id)
     return None
+
+# ==========================================
+# 1.5 UPLOAD DE ARCHIVOS (imágenes/documentos)
+# ==========================================
+@router.post("/upload", status_code=status.HTTP_201_CREATED)
+async def subir_archivo_mensaje(
+    archivo: UploadFile = File(...),
+    usuario: object = Depends(get_usuario_actual),
+):
+    content_type = archivo.content_type or ""
+    resource_type = "image" if content_type.startswith("image/") else "raw"
+
+    try:
+        resultado = upload(
+            archivo.file,
+            folder="mensajes",
+            resource_type=resource_type,
+            use_filename=True,
+            unique_filename=True,
+        )
+        return {
+            "url": resultado["secure_url"],
+            "nombre": archivo.filename or "archivo",
+            "tipo_mime": content_type,
+        }
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail="No se pudo subir el archivo",
+        ) from error
+    finally:
+        archivo.file.close()
 
 # ==========================================
 # 2. WEBSOCKET (Solo para Canales)

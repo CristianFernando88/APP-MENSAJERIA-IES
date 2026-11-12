@@ -104,9 +104,10 @@ const fechaLarga = (iso) =>
   });
 
 const descargarAdjunto = async (url, nombre) => {
+  // Intento 1: fetch como blob (preserva formato y nombre exacto)
   try {
     const respuesta = await fetch(url, { mode: "cors" });
-    if (!respuesta.ok) throw new Error("No se pudo descargar el archivo");
+    if (!respuesta.ok) throw new Error("fetch failed");
     const blob = await respuesta.blob();
     const objectUrl = URL.createObjectURL(blob);
     const enlace = document.createElement("a");
@@ -116,9 +117,11 @@ const descargarAdjunto = async (url, nombre) => {
     enlace.click();
     document.body.removeChild(enlace);
     URL.revokeObjectURL(objectUrl);
+    return;
   } catch (err) {
-    // Fallback: abrir en nueva pestaña si el fetch falla (ej. CORS)
-    window.open(url, "_blank", "noopener,noreferrer");
+    // Intento 2: Cloudinary fl_attachment fuerza Content-Disposition: attachment
+    const urlDescarga = url.replace(/\/upload\//, "/upload/fl_attachment/");
+    window.open(urlDescarga, "_blank", "noopener,noreferrer");
   }
 };
 

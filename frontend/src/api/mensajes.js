@@ -1,5 +1,4 @@
-// src/api/mensajes.js
-import { apiGet, apiPost } from "./apiClient";
+import { apiGet, apiPost, apiUpload } from "./apiClient";
 
 export function listarMensajes(canalId) {
   const query = canalId ? `?canal_id=${canalId}` : "";
@@ -8,4 +7,8 @@ export function listarMensajes(canalId) {
 
 export function crearMensaje(data) {
   return apiPost("/mensajes/", data);
+}
+
+export function subirArchivoMensaje(archivo) {
+  return apiUpload("/mensajes/upload", archivo);
 }
