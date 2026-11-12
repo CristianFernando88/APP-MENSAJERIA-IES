@@ -282,6 +282,7 @@
 
 .mensajes__input-row input {
   flex: 1;
+  min-width: 0;
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-pill);
   border: 1px solid var(--color-celeste-gris);
@@ -769,4 +770,21 @@
 }
 .mensajes__emoji-item:hover {
   background-color: var(--color-gris-azulado, #eef2f7);
+}
+
+
+/* Móviles angostos: input row compacto para que el botón Enviar no se corte */
+@media (max-width: 480px) {
+  .mensajes__input-row {
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+  }
+  .mensajes__input-row button {
+    width: 36px;
+    height: 36px;
+  }
+  .mensajes__emoji-btn {
+    padding: 2px 4px;
+    font-size: 1rem;
+  }
 }
