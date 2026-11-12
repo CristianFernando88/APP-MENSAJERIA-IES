@@ -24,6 +24,10 @@ import { listarCanales } from "../../api/canales";
 import { crearPerfil, actualizarPerfil } from "../../api/perfiles";
 import useConfirmacion from "../../hooks/useConfirmacion";
 import { useAuth } from "../../context/AuthContext";
+import {
+  listarRelacionesUsuario, crearRelacionUsuario, eliminarRelacionUsuario,
+} from "../../api/relacionesUsuario";
+import UsuarioDetalle, { nombreCompleto as nombreCompletoDetalle } from "../PanelAdmin/UsuarioDetalle";
 import "./Usuarios.css";
 
 const ROLES_NECESITAN_CANAL = ["alumno", "tutor"];
@@ -91,6 +95,33 @@ export default function Usuarios() {
   const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(true);
 
+  const [detalleUsuario, setDetalleUsuario] = useState(null);
+  const [relaciones, setRelaciones] = useState([]);
+
+  const recargarRelaciones = async () => {
+    try {
+      setRelaciones(await listarRelacionesUsuario());
+    } catch {
+      setRelaciones([]);
+    }
+  };
+
+  const abrirDetalle = (u) => {
+    setError("");
+    setDetalleUsuario(u);
+  };
+
+  const handleCrearVinculo = async (datos) => {
+    const nueva = await crearRelacionUsuario(datos);
+    if (nueva?.id_relacion) setRelaciones((prev) => [...prev, nueva]);
+    else await recargarRelaciones();
+  };
+
+  const handleEliminarVinculo = async (idRelacion) => {
+    await eliminarRelacionUsuario(idRelacion);
+    setRelaciones((prev) => prev.filter((r) => r.id_relacion !== idRelacion));
+  };
+
   const cargarUsuarios = async (query = "") => {
     try {
       setError("");
@@ -116,6 +147,7 @@ export default function Usuarios() {
       }
     };
     cargar();
+    recargarRelaciones();
   }, []);
 
   useEffect(() => {
@@ -620,6 +652,14 @@ export default function Usuarios() {
                         </button>
 
                         <button
+                          className="usuarios__icon-btn"
+                          onClick={() => abrirDetalle(u)}
+                          title="Ver detalle del usuario"
+                        >
+                          <Eye size={15} />
+                        </button>
+
+                        <button
                           className="usuarios__icon-btn usuarios__icon-btn--key"
                           onClick={() => handleEnviarCredenciales(u)}
                           title="Enviar credenciales"
@@ -882,6 +922,25 @@ export default function Usuarios() {
               </Button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {detalleUsuario && (
+        <Modal
+          title={`Detalle de ${nombreCompletoDetalle(detalleUsuario)}`}
+          onClose={() => setDetalleUsuario(null)}
+        >
+          <UsuarioDetalle
+            usuario={detalleUsuario}
+            asignaciones={asignaciones}
+            roles={roles}
+            servidores={servidores}
+            membresias={miembrosServidor}
+            relaciones={relaciones}
+            usuarios={usuarios}
+            onCrearVinculo={handleCrearVinculo}
+            onEliminarVinculo={handleEliminarVinculo}
+          />
         </Modal>
       )}
 

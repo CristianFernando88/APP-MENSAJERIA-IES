@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   Search, Plus, Pencil, Trash2, Loader2, Eye, EyeOff,
-  Power, KeyRound, ChevronLeft, ChevronRight, X,
+  Power, KeyRound, ChevronLeft, ChevronRight, X, Mail,
 } from "lucide-react";
 import Badge from "../../components/ui/Badge/Badge";
 import Button from "../../components/ui/Button/Button";
@@ -9,7 +9,7 @@ import Input from "../../components/ui/Input/Input";
 import Modal from "../../components/ui/Modal/Modal";
 import UsuarioForm from "../../components/forms/UsuarioForm";
 import {
-  listarUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario,
+  listarUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario, enviarCredenciales,
 } from "../../api/usuarios";
 import { crearPerfil, actualizarPerfil } from "../../api/perfiles";
 import { crearUsuarioRol, eliminarUsuarioRol } from "../../api/usuarioRol";
@@ -18,6 +18,10 @@ import {
 } from "../../api/miembrosServidor";
 import useConfirmacion from "../../hooks/useConfirmacion";
 import { useAuth } from "../../context/AuthContext";
+import {
+  listarRelacionesUsuario, crearRelacionUsuario, eliminarRelacionUsuario,
+} from "../../api/relacionesUsuario";
+import UsuarioDetalle, { nombreCompleto } from "./UsuarioDetalle";
 
 const POR_PAGINA = 10;
 
@@ -49,8 +53,25 @@ export default function UsuariosTab({
   const [verClave, setVerClave] = useState(false);
 
   const [error, setError] = useState("");
+  const [mensaje, setMensaje] = useState("");
+  const [enviandoId, setEnviandoId] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(false);
+
+  const [detalleUsuario, setDetalleUsuario] = useState(null);
+  const [relaciones, setRelaciones] = useState([]);
+
+  const recargarRelaciones = async () => {
+    try {
+      setRelaciones(await listarRelacionesUsuario());
+    } catch {
+      setRelaciones([]);
+    }
+  };
+
+  useEffect(() => {
+    recargarRelaciones();
+  }, []);
   
   const [todosLosMiembros, setTodosLosMiembros] = useState([]);
 
@@ -134,6 +155,44 @@ export default function UsuariosTab({
     setModalClave(true);
   };
 
+  const abrirDetalle = (u) => {
+    setError("");
+    setMensaje("");
+    setDetalleUsuario(u);
+  };
+
+  const handleCrearVinculo = async (datos) => {
+    const nueva = await crearRelacionUsuario(datos);
+    if (nueva?.id_relacion) setRelaciones((prev) => [...prev, nueva]);
+    else await recargarRelaciones();
+  };
+
+  const handleEliminarVinculo = async (idRelacion) => {
+    await eliminarRelacionUsuario(idRelacion);
+    setRelaciones((prev) => prev.filter((r) => r.id_relacion !== idRelacion));
+  };
+
+  const handleEnviarCredenciales = async (u) => {
+    const ok = await pedir({
+      titulo: "Enviar credenciales",
+      mensaje: `¿Generar una nueva contraseña temporal y enviarla por correo a "${u.nombre_usuario}" (${u.email})? La contraseña anterior dejará de ser válida.`,
+      textoConfirmar: "Enviar",
+    });
+    if (!ok) return;
+
+    setEnviandoId(u.id_usuario);
+    setError("");
+    setMensaje("");
+    try {
+      await enviarCredenciales(u.id_usuario);
+      setMensaje(`Credenciales enviadas correctamente a ${u.email}.`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setEnviandoId(null);
+    }
+  };
+
   const handleToggleActivo = async (u) => {
     const activar = !u.activo;
     const ok = await pedir({
@@ -212,13 +271,13 @@ export default function UsuariosTab({
       // 2. Crear o Actualizar Perfil
       try {
         if (editandoId) {
-          await actualizarPerfil(editandoId, { nombres: datos.nombres, apellidos: datos.apellidos });
+          await actualizarPerfil(editandoId, { nombres: datos.nombres, apellidos: datos.apellidos, dni: datos.dni.trim() || null });
         } else {
-          await crearPerfil({ usuario_id: userId, nombres: datos.nombres, apellidos: datos.apellidos });
+          await crearPerfil({ usuario_id: userId, nombres: datos.nombres, apellidos: datos.apellidos, dni: datos.dni.trim() || null });
         }
       } catch (perfilErr) {
         if (perfilErr.message.includes("no encontrado") || perfilErr.message.includes("404")) {
-          await crearPerfil({ usuario_id: userId, nombres: datos.nombres, apellidos: datos.apellidos });
+          await crearPerfil({ usuario_id: userId, nombres: datos.nombres, apellidos: datos.apellidos, dni: datos.dni.trim() || null });
         } else {
           throw perfilErr;
         }
@@ -329,6 +388,21 @@ export default function UsuariosTab({
       </div>
 
       {error && <div className="admin-tab__error">{error}</div>}
+      {mensaje && (
+        <div
+          style={{
+            color: "#166534",
+            background: "#EAF7EE",
+            border: "1px solid #BBE7C7",
+            padding: "8px 10px",
+            borderRadius: "4px",
+            fontSize: "14px",
+            marginBottom: "8px",
+          }}
+        >
+          {mensaje}
+        </div>
+      )}
 
       <div className="admin-tabla-wrap">
         <table className="admin-tabla">
@@ -358,10 +432,25 @@ export default function UsuariosTab({
                 <td>{u.fecha_registro ? new Date(u.fecha_registro).toLocaleDateString("es-AR") : "—"}</td>
                 <td>
                   <div className="admin-acciones">
-                    <button className="admin-icon-btn" onClick={() => abrirEditar(u)}><Pencil size={14} /></button>
-                    <button className="admin-icon-btn admin-icon-btn--key" onClick={() => abrirCambiarClave(u)}><KeyRound size={14} /></button>
-                    <button className={`admin-icon-btn${u.activo ? " admin-icon-btn--warn" : ""}`} onClick={() => handleToggleActivo(u)}><Power size={14} /></button>
-                    <button className="admin-icon-btn admin-icon-btn--danger" onClick={() => handleEliminar(u)}><Trash2 size={14} /></button>
+                    <button className="admin-icon-btn" title="Editar usuario" onClick={() => abrirEditar(u)}><Pencil size={14} /></button>
+                    <button className="admin-icon-btn admin-icon-btn--key" title="Cambiar contraseña" onClick={() => abrirCambiarClave(u)}><KeyRound size={14} /></button>
+                    <button
+                      className="admin-icon-btn admin-icon-btn--mail"
+                      title="Enviar credenciales por correo"
+                      onClick={() => handleEnviarCredenciales(u)}
+                      disabled={enviandoId === u.id_usuario}
+                    >
+                      <Mail size={14} />
+                    </button>
+                    <button
+                      className="admin-icon-btn"
+                      title="Ver detalle del usuario"
+                      onClick={() => abrirDetalle(u)}
+                    >
+                      <Eye size={14} />
+                    </button>
+                    <button className={`admin-icon-btn${u.activo ? " admin-icon-btn--warn" : ""}`} title={u.activo ? "Desactivar usuario" : "Activar usuario"} onClick={() => handleToggleActivo(u)}><Power size={14} /></button>
+                    <button className="admin-icon-btn admin-icon-btn--danger" title="Eliminar usuario" onClick={() => handleEliminar(u)}><Trash2 size={14} /></button>
                   </div>
                 </td>
               </tr>
@@ -414,6 +503,26 @@ export default function UsuariosTab({
               <Button type="submit" disabled={guardando}>{guardando ? "Guardando..." : "Cambiar contraseña"}</Button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* MODAL DETALLE DE USUARIO */}
+      {detalleUsuario && (
+        <Modal
+          title={`Detalle de ${nombreCompleto(detalleUsuario)}`}
+          onClose={() => setDetalleUsuario(null)}
+        >
+          <UsuarioDetalle
+            usuario={detalleUsuario}
+            asignaciones={asignaciones}
+            roles={roles}
+            servidores={servidores}
+            membresias={todosLosMiembros}
+            relaciones={relaciones}
+            usuarios={usuarios}
+            onCrearVinculo={handleCrearVinculo}
+            onEliminarVinculo={handleEliminarVinculo}
+          />
         </Modal>
       )}
 

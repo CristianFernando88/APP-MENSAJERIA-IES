@@ -54,3 +54,49 @@ Equipo IES Connect
         timeout=15,
     )
     respuesta.raise_for_status()
+
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def enviar_sugerencia(
+    nombres: str,
+    apellidos: str,
+    email_usuario: str,
+    mensaje: str,
+) -> None:
+    api_key = os.getenv("BREVO_API_KEY")
+    remitente = os.getenv("SENDER_EMAIL")
+    destinatario = os.getenv("ADMIN_EMAIL", remitente)
+
+    if not api_key or not remitente or not destinatario:
+        logger.warning("Brevo no configurado; la sugerencia quedó guardada.")
+        return
+
+    cuerpo = {
+        "sender": {"name": "IES Connect", "email": remitente},
+        "to": [{"email": destinatario}],
+        "replyTo": {
+            "email": email_usuario,
+            "name": f"{nombres} {apellidos}",
+        },
+        "subject": f"Nueva sugerencia de {nombres} {apellidos}",
+        "textContent": (
+            f"Nombre: {nombres} {apellidos}\n"
+            f"Email: {email_usuario}\n\n"
+            f"Sugerencia:\n{mensaje}\n"
+        ),
+    }
+
+    try:
+        respuesta = httpx.post(
+            BREVO_API_URL,
+            headers={"api-key": api_key, "content-type": "application/json"},
+            json=cuerpo,
+            timeout=15,
+        )
+        respuesta.raise_for_status()
+    except Exception:
+        logger.exception("No se pudo enviar la notificación por Brevo")

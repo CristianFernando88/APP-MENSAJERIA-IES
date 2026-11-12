@@ -29,6 +29,7 @@ from app.api.v1.comunicado_visto.router import router as comunicado_visto_router
 from app.api.v1.comunicado_adjunto.router import router as comunicado_adjunto_router
 from app.api.v1.mensaje_visto.router import router as mensaje_visto_router
 from app.api.v1.relacion_usuario.router import router as relacion_usuario_router
+from app.api.v1.sugerencias.router import router as sugerencias_router
 
 
 app = FastAPI(
@@ -77,6 +78,7 @@ app.include_router(comunicado_visto_router, prefix="/api/v1", dependencies=[Depe
 app.include_router(comunicado_adjunto_router, prefix="/api/v1", dependencies=[Depends(get_usuario_actual)])
 app.include_router(mensaje_visto_router, prefix="/api/v1", dependencies=[Depends(get_usuario_actual)])
 app.include_router(relacion_usuario_router, prefix="/api/v1", dependencies=[Depends(get_usuario_actual)])
+app.include_router(sugerencias_router, prefix="/api/v1")
 
 
 # ============================================
