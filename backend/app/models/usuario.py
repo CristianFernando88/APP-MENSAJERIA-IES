@@ -35,3 +35,4 @@ class Usuario(Base):
     relacionados = relationship("RelacionUsuario", foreign_keys="RelacionUsuario.relacionado_id", back_populates="relacionado", cascade="all, delete-orphan")
     notificaciones = relationship("Notificacion", back_populates="usuario", cascade="all, delete-orphan")
     recordatorios = relationship("Recordatorio", back_populates="usuario", cascade="all, delete-orphan")
+    sugerencias = relationship("Sugerencia", back_populates="usuario", cascade="all, delete-orphan")
