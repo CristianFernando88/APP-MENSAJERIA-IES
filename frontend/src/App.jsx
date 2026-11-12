@@ -10,6 +10,7 @@ import Usuarios from "./pages/Usuarios/Usuarios";
 import Mensajes from "./pages/Mensajes/Mensajes";
 import Calendario from "./pages/Calendario/Calendario";
 import Comunicados from "./pages/Comunicados/Comunicados";
+import Sugerencias from "./pages/Sugerencias/Sugerencias";
 import Perfil from "./pages/Perfil/Perfil";
 import Miembros from "./pages/Miembros/Miembros";
 import PanelAdmin from "./pages/PanelAdmin/PanelAdmin";
@@ -57,6 +58,10 @@ export default function App() {
             <Route
               path="/comunicados"
               element={<RequireAuth><Layout><Comunicados /></Layout></RequireAuth>}
+            />
+            <Route
+              path="/sugerencias"
+              element={<RequireAuth><Layout><Sugerencias /></Layout></RequireAuth>}
             />
             <Route
               path="/perfil"
